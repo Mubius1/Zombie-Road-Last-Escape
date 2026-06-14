@@ -14,6 +14,23 @@ const ATTACH_DAMAGE_INTERVAL = 1600;
 const ATTACH_DAMAGE_AMOUNT = 14;
 const MISSION_DIST = 18000;
 const GIANT_SPAWN_INTERVAL = 22000;
+const BOSS_TRIGGER = 0.82; // % missione a cui appare il boss
+
+type BossType = 'mega_mutant' | 'giant_worm' | 'armored_colossus' | 'radioactive_beast';
+
+interface BossConfig {
+  name: string; hp: number; speed: number; scaleX: number; scaleY: number;
+  tint: number; bodyW: number; bodyH: number; reward: number;
+}
+
+const BOSS_CONFIG: Record<BossType, BossConfig> = {
+  mega_mutant:       { name: 'Mega Mutante',      hp: 80,  speed: 55, scaleX: 2.8, scaleY: 2.8, tint: 0x22cc22, bodyW: 48, bodyH: 66, reward: 400 },
+  giant_worm:        { name: 'Verme Gigante',      hp: 110, speed: 40, scaleX: 3.8, scaleY: 1.8, tint: 0xcc8822, bodyW: 80, bodyH: 38, reward: 500 },
+  armored_colossus:  { name: 'Colosso Corazzato',  hp: 150, speed: 28, scaleX: 3.0, scaleY: 3.2, tint: 0x7788aa, bodyW: 52, bodyH: 70, reward: 650 },
+  radioactive_beast: { name: 'Bestia Radioattiva', hp: 95,  speed: 50, scaleX: 2.6, scaleY: 2.6, tint: 0x88ff22, bodyW: 50, bodyH: 58, reward: 450 },
+};
+
+const BOSS_ORDER: BossType[] = ['mega_mutant', 'giant_worm', 'armored_colossus', 'radioactive_beast'];
 
 interface EnvConfig {
   name: string;
@@ -113,6 +130,16 @@ export default class GameScene extends Phaser.Scene {
 
   private sfx: SoundManager | null = null;
 
+  // Boss system
+  private bossActive = false;
+  private bossSpawned = false;
+  private bossSprite: Phaser.Physics.Arcade.Sprite | null = null;
+  private bossMaxHp = 0;
+  private bossGroup!: Phaser.Physics.Arcade.Group;
+  private bossProjectiles!: Phaser.Physics.Arcade.Group;
+  private bossHudObjects: Phaser.GameObjects.GameObject[] = [];
+  private bossHudFill?: Phaser.GameObjects.Rectangle;
+
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private spaceKey!: Phaser.Input.Keyboard.Key;
 
@@ -151,6 +178,11 @@ export default class GameScene extends Phaser.Scene {
     this.giantTimer = GIANT_SPAWN_INTERVAL;
     this.envIndex = (missionNum - 1) % ENVIRONMENTS.length;
     this.currentWeapon = this.registry.get('currentWeapon') ?? 'mg';
+    this.bossActive = false;
+    this.bossSpawned = false;
+    this.bossSprite = null;
+    this.bossHudObjects = [];
+    this.bossHudFill = undefined;
 
     const def = { engine: 100, wheels: 100, tank: 100, turret: 100, armor: 100 };
     const c = savedComp ?? def;
@@ -194,6 +226,7 @@ export default class GameScene extends Phaser.Scene {
     this.updateDistance(dt);
     this.updateZombieSpawning(delta);
     this.updateGiantSpawning(delta);
+    this.updateBoss(delta);
     this.updateAttachedZombies(delta);
     this.checkBulletsVsAttached();
     this.updateToxicClouds(delta);
@@ -490,11 +523,13 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private buildGroups() {
-    this.zombies     = this.physics.add.group();
-    this.bullets     = this.physics.add.group();
-    this.rockets     = this.physics.add.group();
-    this.fuelCans    = this.physics.add.group();
-    this.toxicClouds = this.physics.add.group();
+    this.zombies         = this.physics.add.group();
+    this.bullets         = this.physics.add.group();
+    this.rockets         = this.physics.add.group();
+    this.fuelCans        = this.physics.add.group();
+    this.toxicClouds     = this.physics.add.group();
+    this.bossGroup       = this.physics.add.group();
+    this.bossProjectiles = this.physics.add.group();
   }
 
   private buildColliders() {
@@ -508,6 +543,14 @@ export default class GameScene extends Phaser.Scene {
       (_v,c) => this.onVehicleHitCloud(c as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.rockets, this.zombies,
       (r,z) => this.onRocketHitZombie(r as Phaser.Physics.Arcade.Sprite, z as Phaser.Physics.Arcade.Sprite));
+    this.physics.add.overlap(this.bullets, this.bossGroup,
+      (b,boss) => this.onBulletHitBoss(b as Phaser.Physics.Arcade.Sprite, boss as Phaser.Physics.Arcade.Sprite));
+    this.physics.add.overlap(this.rockets, this.bossGroup,
+      (r,boss) => this.onRocketHitBoss(r as Phaser.Physics.Arcade.Sprite, boss as Phaser.Physics.Arcade.Sprite));
+    this.physics.add.overlap(this.vehicle, this.bossGroup,
+      (_v,boss) => this.onVehicleHitBoss(boss as Phaser.Physics.Arcade.Sprite));
+    this.physics.add.overlap(this.vehicle, this.bossProjectiles,
+      (_v,p) => this.onBossProjectileHitVehicle(p as Phaser.Physics.Arcade.Sprite));
   }
 
   private buildHUD(missionNum: number) {
@@ -596,10 +639,15 @@ export default class GameScene extends Phaser.Scene {
 
   private updateDistance(dt: number) {
     this.distance += SCROLL_SPEED * dt;
+    if (!this.bossSpawned && this.distance >= MISSION_DIST * BOSS_TRIGGER) {
+      this.spawnBoss();
+    }
+    if (this.bossActive) return;
     if (this.distance >= MISSION_DIST) this.triggerMissionComplete();
   }
 
   private updateZombieSpawning(delta: number) {
+    if (this.bossActive) return;
     this.spawnTimer -= delta;
     if (this.spawnTimer <= 0) {
       this.spawnZombie();
@@ -609,6 +657,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private updateGiantSpawning(delta: number) {
+    if (this.bossActive) return;
     this.giantTimer -= delta;
     if (this.giantTimer <= 0) {
       this.spawnGiant();
@@ -736,7 +785,8 @@ export default class GameScene extends Phaser.Scene {
     clean(this.zombies,    -100, W+100);
     clean(this.fuelCans,   -80,  W+80);
     clean(this.toxicClouds,-80,  W+80);
-    clean(this.rockets,    -20,  W+60);
+    clean(this.rockets,         -20,  W+60);
+    clean(this.bossProjectiles, -80,  W+80);
     // Bullets respect per-projectile maxX (lanciafiamme ha range breve)
     (this.bullets.getChildren() as Phaser.Physics.Arcade.Sprite[]).forEach(s => {
       if (!s.active) return;
@@ -1114,6 +1164,8 @@ export default class GameScene extends Phaser.Scene {
     this.registry.set('upgrades', {});
     this.registry.set('vehicle', 'civilian_car');
     this.registry.set('ownedVehicles', ['civilian_car']);
+    this.registry.set('ownedWeapons', ['mg']);
+    this.registry.set('currentWeapon', 'mg');
     this.registry.set('components', null);
 
     this.sfx?.playGameOver();
@@ -1135,6 +1187,244 @@ export default class GameScene extends Phaser.Scene {
       this.add.text(cx,cy+10,`Punteggio: ${this.score}`,{fontSize:'22px',color:'#ffffff'}).setOrigin(0.5).setDepth(31);
       this.add.text(cx,cy+44,`Distanza: ${Math.floor(this.distance/100)} km`,{fontSize:'16px',color:'#aaaaff'}).setOrigin(0.5).setDepth(31);
       this.add.text(cx,cy+80,'[ SPAZIO ] per ricominciare',{fontSize:'14px',color:'#666666'}).setOrigin(0.5).setDepth(31);
+    });
+  }
+
+  // ─── Boss system ─────────────────────────────────────────────────────────────
+
+  private spawnBoss() {
+    this.bossSpawned = true;
+    this.bossActive  = true;
+
+    const missionNum: number = this.registry.get('missionNumber') ?? 1;
+    const bossType = BOSS_ORDER[(missionNum - 1) % BOSS_ORDER.length];
+    const cfg = BOSS_CONFIG[bossType];
+    this.bossMaxHp = cfg.hp;
+
+    // Alert
+    const warn = this.add.text(W / 2, H / 2, `⚠  ${cfg.name.toUpperCase()}  ⚠`, {
+      fontSize: '28px', color: '#ff4400', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 5,
+    }).setOrigin(0.5).setDepth(28).setAlpha(0);
+    this.tweens.add({
+      targets: warn, alpha: 1, duration: 250, yoyo: true, hold: 800,
+      onComplete: () => {
+        this.tweens.add({ targets: warn, alpha: 0, y: H / 2 - 60, duration: 1200, onComplete: () => warn.destroy() });
+      },
+    });
+    this.cameras.main.shake(300, 0.016);
+    this.sfx?.playExplosion();
+
+    // Sprite boss (riusa zombie_giant scalato e tintato)
+    const boss = this.bossGroup.create(W + 90, ROAD_CENTER, 'zombie_giant') as Phaser.Physics.Arcade.Sprite;
+    boss.setScale(cfg.scaleX, cfg.scaleY).setTint(cfg.tint).setDepth(12);
+    boss.setData('bossType', bossType);
+    boss.setData('hp', cfg.hp);
+    const t1init = bossType === 'armored_colossus' ? 3000
+                 : bossType === 'giant_worm'       ? 4000
+                 : bossType === 'radioactive_beast' ? 2500
+                 : 8000;
+    boss.setData('timer1', t1init);
+    boss.setData('lastVehicleHit', 0);
+    (boss.body as Phaser.Physics.Arcade.Body).setSize(cfg.bodyW, cfg.bodyH);
+    this.bossSprite = boss;
+
+    this.showBossHUD(cfg.name);
+  }
+
+  private updateBoss(delta: number) {
+    if (!this.bossSprite || !this.bossActive) return;
+    const boss = this.bossSprite;
+    if (!boss.active) { this.bossActive = false; return; }
+
+    const bossType = boss.getData('bossType') as BossType;
+    const cfg = BOSS_CONFIG[bossType];
+    const body = boss.body as Phaser.Physics.Arcade.Body;
+    const targetX = 560;
+
+    // Avanzamento e stop
+    if (boss.x > targetX) {
+      body.setVelocityX(-cfg.speed);
+    } else {
+      body.setVelocityX(0);
+      boss.x = targetX;
+    }
+
+    // Comportamento per tipo
+    let t1 = (boss.getData('timer1') as number) - delta;
+    boss.setData('timer1', t1);
+
+    switch (bossType) {
+      case 'mega_mutant':
+        boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER + Math.sin(this.time.now / 800) * 90, 0.04);
+        if (t1 <= 0) {
+          boss.setData('timer1', 8000);
+          this.spawnZombieAt('common', W - 80, boss.y - 44);
+          this.spawnZombieAt('common', W - 80, boss.y + 44);
+        }
+        break;
+
+      case 'giant_worm':
+        boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER + Math.sin(this.time.now / 600) * 105, 0.05);
+        if (t1 <= 0) {
+          boss.setData('timer1', 4000);
+          this.spawnToxicCloud(boss.x - 24, boss.y);
+        }
+        break;
+
+      case 'armored_colossus':
+        boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER, 0.03);
+        if (t1 <= 0) {
+          boss.setData('timer1', 3000);
+          this.fireBossProjectile(boss.x - 32, boss.y);
+        }
+        break;
+
+      case 'radioactive_beast':
+        boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER + Math.sin(this.time.now / 700) * 75, 0.04);
+        if (t1 <= 0) {
+          boss.setData('timer1', 2500);
+          this.spawnToxicCloud(boss.x - 10, boss.y);
+          if (Math.random() < 0.5)
+            this.spawnToxicCloud(boss.x + 20, boss.y + Phaser.Math.Between(-40, 40));
+        }
+        break;
+    }
+
+    boss.y = Phaser.Math.Clamp(boss.y, ROAD_TOP + 40, ROAD_BOTTOM - 40);
+
+    // Aggiorna barra HP
+    const hp = boss.getData('hp') as number;
+    if (this.bossHudFill) {
+      this.bossHudFill.displayWidth = Math.max(0, (hp / this.bossMaxHp) * 440);
+      const pct = hp / this.bossMaxHp;
+      this.bossHudFill.setFillStyle(pct < 0.25 ? 0xff2200 : pct < 0.55 ? 0xff8800 : 0xcc0000);
+    }
+  }
+
+  private spawnZombieAt(type: ZombieType, x: number, y: number) {
+    const stats = ZOMBIE_STATS[type];
+    const z = this.zombies.create(
+      x, Phaser.Math.Clamp(y, ROAD_TOP + 22, ROAD_BOTTOM - 22), `zombie_${type}`
+    ) as Phaser.Physics.Arcade.Sprite;
+    z.setScale(stats.scale).setData('hp', stats.hp).setData('type', type);
+    z.setVelocityX(-(stats.speed + SCROLL_SPEED)).setDepth(9);
+    (z.body as Phaser.Physics.Arcade.Body).setSize(20, 28);
+  }
+
+  private fireBossProjectile(x: number, fromY: number) {
+    const p = this.bossProjectiles.create(x, fromY, 'bullet') as Phaser.Physics.Arcade.Sprite;
+    const dy = Phaser.Math.Clamp(this.vehicle.y - fromY, -80, 80);
+    p.setVelocityX(-200).setVelocityY(dy);
+    p.setScale(2.4, 1.6).setTint(0x8844ff).setDepth(9);
+    (p.body as Phaser.Physics.Arcade.Body).setSize(16, 6);
+  }
+
+  private onBulletHitBoss(bullet: Phaser.Physics.Arcade.Sprite, boss: Phaser.Physics.Arcade.Sprite) {
+    if (!bullet.active || !boss.active) return;
+    const dmg = (bullet.getData('damage') as number) ?? 1;
+    bullet.destroy();
+    const bossType = boss.getData('bossType') as BossType;
+    this.damageBoss(boss, dmg);
+    boss.setTint(0xffffff);
+    this.time.delayedCall(60, () => { if (boss?.active) boss.setTint(BOSS_CONFIG[bossType].tint); });
+  }
+
+  private onRocketHitBoss(rocket: Phaser.Physics.Arcade.Sprite, boss: Phaser.Physics.Arcade.Sprite) {
+    if (!rocket.active || !boss.active) return;
+    const rx = rocket.x, ry = rocket.y;
+    rocket.destroy();
+    this.damageBoss(boss, WEAPONS.rockets.damage * 3);
+    this.spawnHitParticles(rx, ry);
+    this.spawnHitParticles(rx + 10, ry - 8);
+    this.sfx?.playExplosion();
+    this.cameras.main.shake(120, 0.009);
+  }
+
+  private onVehicleHitBoss(boss: Phaser.Physics.Arcade.Sprite) {
+    if (!boss.active) return;
+    const lastHit = (boss.getData('lastVehicleHit') as number) ?? 0;
+    if (this.time.now - lastHit < 800) return;
+    boss.setData('lastVehicleHit', this.time.now);
+    this.dealDamage(20);
+    this.damageComponent('armor', 25);
+    this.cameras.main.shake(200, 0.016);
+    this.sfx?.playExplosion();
+  }
+
+  private onBossProjectileHitVehicle(p: Phaser.Physics.Arcade.Sprite) {
+    if (!p.active) return;
+    p.destroy();
+    this.dealDamage(12);
+    this.damageComponent('turret', 8);
+    this.cameras.main.shake(90, 0.006);
+    this.sfx?.playImpact();
+  }
+
+  private damageBoss(boss: Phaser.Physics.Arcade.Sprite, amount: number) {
+    const hp = (boss.getData('hp') as number) - amount;
+    boss.setData('hp', hp);
+    if (hp <= 0) this.killBoss();
+  }
+
+  private killBoss() {
+    if (!this.bossSprite || !this.bossActive) return;
+    this.bossActive = false;
+    const bossType = this.bossSprite.getData('bossType') as BossType;
+    const cfg = BOSS_CONFIG[bossType];
+    const bx = this.bossSprite.x, by = this.bossSprite.y;
+
+    // Esplosioni a catena
+    for (let i = 0; i < 7; i++) {
+      this.time.delayedCall(i * 130, () => {
+        this.spawnHitParticles(bx + Phaser.Math.Between(-40, 40), by + Phaser.Math.Between(-30, 30));
+        this.spawnHitParticles(bx + Phaser.Math.Between(-40, 40), by + Phaser.Math.Between(-30, 30));
+        this.sfx?.playExplosion();
+      });
+    }
+
+    this.bossSprite.destroy();
+    this.bossSprite = null;
+    this.cameras.main.shake(500, 0.022);
+
+    const earned = cfg.reward;
+    this.score += 500;
+    this.registry.set('money', (this.registry.get('money') ?? 0) + earned);
+    this.hideBossHUD();
+
+    const vt = this.add.text(W / 2, H / 2 - 10, `BOSS SCONFITTO!  +${earned} monete`, {
+      fontSize: '24px', color: '#ffee00', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 5,
+    }).setOrigin(0.5).setDepth(28);
+    this.tweens.add({ targets: vt, alpha: 0, y: H / 2 - 80, duration: 2200, onComplete: () => vt.destroy() });
+    this.sfx?.playMissionComplete();
+
+    this.time.delayedCall(2200, () => this.triggerMissionComplete());
+  }
+
+  private showBossHUD(name: string) {
+    const cx = W / 2, barW = 440, y = 96;
+    const bg    = this.add.rectangle(cx, y, barW + 8, 20, 0x000000, 0.85).setDepth(22).setAlpha(0);
+    const fill  = this.add.rectangle(cx - barW / 2, y, barW, 14, 0xcc0000).setOrigin(0, 0.5).setDepth(23).setAlpha(0);
+    const label = this.add.text(cx, y - 14, name.toUpperCase(), {
+      fontSize: '13px', color: '#ff6666', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(23).setAlpha(0);
+
+    this.bossHudObjects = [bg, fill, label];
+    this.bossHudFill = fill;
+    this.tweens.add({ targets: this.bossHudObjects, alpha: 1, duration: 400 });
+  }
+
+  private hideBossHUD() {
+    if (!this.bossHudObjects.length) return;
+    this.tweens.add({
+      targets: this.bossHudObjects, alpha: 0, duration: 500,
+      onComplete: () => {
+        this.bossHudObjects.forEach(o => (o as Phaser.GameObjects.GameObject & { destroy(): void }).destroy());
+        this.bossHudObjects = [];
+        this.bossHudFill = undefined;
+      },
     });
   }
 
