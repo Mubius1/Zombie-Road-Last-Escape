@@ -45,7 +45,7 @@ export const WEAPONS: Record<WeaponType, WeaponData> = {
   double_mg:    { name: 'Doppia MG',      desc: 'Due proiettili in parallelo', price: 200, cooldown: 310, damage: 1, speed: 680, color: 0xffdd44, range: 9999 },
   rifle:        { name: 'Fucile Auto',    desc: 'Cadenza alta, danno doppio',  price: 350, cooldown: 140, damage: 2, speed: 720, color: 0x44ff88, range: 9999 },
   rockets:      { name: 'Razzi',          desc: 'Esplosione AoE r=90px',       price: 550, cooldown: 900, damage: 5, speed: 340, color: 0xff4400, range: 9999 },
-  flamethrower: { name: 'Lanciafiamme',   desc: 'Corto raggio, continuo',      price: 400, cooldown: 70,  damage: 1, speed: 480, color: 0xff6600, range: 270  },
+  flamethrower: { name: 'Lanciafiamme',   desc: 'Corto raggio, continuo',      price: 400, cooldown: 70,  damage: 1, speed: 480, color: 0xff6600, range: 440  },
 };
 
 export const WEAPON_KEYS: WeaponType[] = ['mg', 'double_mg', 'rifle', 'rockets', 'flamethrower'];

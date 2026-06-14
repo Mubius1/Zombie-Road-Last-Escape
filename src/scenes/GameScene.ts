@@ -251,294 +251,321 @@ export default class GameScene extends Phaser.Scene {
     if (scene.textures.exists('zombie_common')) return;
     const G = (_w: number, _h: number) => scene.make.graphics({ add: false } as any) as Phaser.GameObjects.Graphics & { generateTexture(k:string,w:number,h:number):void };
 
-    // ── ZOMBIE COMMON (30×44) ─────────────────────────────────────────────────
+    // ── ZOMBIE COMMON (30×44) — cadavere ambulante ───────────────────────────
     {
       const g = G(30,44);
-      // Shadow
-      g.fillStyle(0x000000,0.25); g.fillEllipse(15,43,20,5);
-      // Boots
-      g.fillStyle(0x1a0f00); g.fillRect(5,38,8,5); g.fillRect(17,38,8,5);
-      // Legs
-      g.fillStyle(0x2a4a2a); g.fillRect(6,26,7,14); g.fillRect(17,26,7,14);
-      g.fillStyle(0x3a6a3a); g.fillRect(7,29,4,5); g.fillRect(18,29,4,5);
-      // Torso (torn shirt)
-      g.fillStyle(0x142814); g.fillRect(8,14,14,14);
-      g.fillStyle(0x2a4a2a); g.fillRect(9,15,4,4); g.fillRect(18,17,3,5);
-      // Blood on torso
-      g.fillStyle(0x880000); g.fillRect(10,18,4,4); g.fillRect(17,22,3,4);
-      // Arms outstretched (zombie pose)
-      g.fillStyle(0x2a7a2a);
-      g.fillRect(-5,16,13,5); g.fillRect(22,16,13,5);
-      g.fillStyle(0x3a9a3a); g.fillRect(-7,17,5,3); g.fillRect(32,17,5,3);
-      // Hands
-      g.fillStyle(0x3a9a3a); g.fillCircle(-7,18,4); g.fillCircle(37,18,4);
-      g.fillStyle(0x111111);
-      [-3,0,3].forEach(d => g.fillRect(-12,16+d,5,2));
-      [-3,0,3].forEach(d => g.fillRect(37,16+d,5,2));
-      // Neck
-      g.fillStyle(0x3a9a3a); g.fillRect(12,8,6,7);
-      // Head base
-      g.fillStyle(0x3a9a3a); g.fillRect(7,1,16,14); g.fillCircle(15,3,8);
-      // Hair (dark, matted)
-      g.fillStyle(0x0f0a00); g.fillRect(7,0,16,7); g.fillCircle(15,1,8);
-      g.fillRect(6,1,3,10); g.fillRect(21,1,3,10);
-      // Eye sockets
-      g.fillStyle(0x111111); g.fillRect(8,7,6,5); g.fillRect(16,7,6,5);
-      // Eyes glowing red
-      g.fillStyle(0xff2200); g.fillRect(9,8,4,3); g.fillRect(17,8,4,3);
-      g.fillStyle(0xff8866); g.fillRect(10,8,2,2); g.fillRect(18,8,2,2);
-      // Mouth
-      g.fillStyle(0x440000); g.fillRect(8,13,14,3);
-      g.fillStyle(0x990000); g.fillRect(9,14,12,1);
-      g.fillStyle(0xbbaa88); [9,11,14,16,18].forEach(x => g.fillRect(x,13,2,3));
-      // Head wound
-      g.fillStyle(0x770000); g.fillRect(19,3,3,6); g.fillStyle(0xaa0000); g.fillRect(20,4,2,4);
+      const skin=0x6f8a5f, skinL=0x8aa676, skinD=0x4d6440, skinDD=0x33442c;
+      const shirt=0x3b4156, shirtL=0x4d5570, shirtD=0x282c3c;
+      const pants=0x34322b, blood=0x8a1212, bloodB=0xc21d1d, bone=0xd9cba6;
+      g.fillStyle(0x000000,0.28); g.fillEllipse(15,42,22,6);
+      // Scarpe
+      g.fillStyle(0x191510); g.fillEllipse(10,40,9,5); g.fillEllipse(20,39,9,5);
+      // Gambe
+      g.fillStyle(pants); g.fillRoundedRect(8,27,6,13,3); g.fillRoundedRect(16,26,6,14,3);
+      g.fillStyle(0x201e18); g.fillRect(8,33,6,1); g.fillRect(16,33,6,1);
+      // Braccia protese ai lati
+      g.fillStyle(skinD); g.fillRoundedRect(-3,16,9,5,2); g.fillRoundedRect(24,16,9,5,2);
+      g.fillStyle(skin);  g.fillRoundedRect(-3,16,8,4,2); g.fillRoundedRect(25,16,8,4,2);
+      g.fillStyle(skinL); g.fillRect(-2,16,6,1); g.fillRect(26,16,6,1);
+      g.fillStyle(skin);  g.fillCircle(-2,18,3); g.fillCircle(28,18,3);
+      g.fillStyle(0x9aae86);
+      g.fillTriangle(-4,15,-7,16,-4,18); g.fillTriangle(28,15,31,16,28,18);
+      // Torso (maglietta strappata)
+      g.fillStyle(shirtD); g.fillRoundedRect(6,14,18,15,6);
+      g.fillStyle(shirt);  g.fillRoundedRect(7,15,16,13,5);
+      g.fillStyle(shirtL); g.fillRoundedRect(8,16,6,8,3);
+      // Pancia esposta
+      g.fillStyle(skin);  g.fillEllipse(15,27,10,7);
+      g.fillStyle(skinD); g.fillRect(11,26,8,1); g.fillRect(12,28,6,1);
+      // Sangue
+      g.fillStyle(blood);  g.fillEllipse(12,20,6,5); g.fillEllipse(18,23,3,3);
+      g.fillStyle(bloodB); g.fillEllipse(12,19,3,2);
+      // Collo
+      g.fillStyle(skinD); g.fillRoundedRect(12,10,6,6,2);
+      // Testa
+      g.fillStyle(skin);  g.fillCircle(15,7,7); g.fillEllipse(15,10,12,9);
+      g.fillStyle(skinL); g.fillEllipse(12,5,7,6);
+      g.fillStyle(skinD); g.fillEllipse(19,10,6,7);
+      // Capelli radi
+      g.fillStyle(0x241c12); g.fillEllipse(15,3,13,6);
+      g.fillTriangle(8,3,10,11,11,3); g.fillTriangle(22,3,20,10,19,3);
+      // Occhiaie + occhi
+      g.fillStyle(skinDD); g.fillEllipse(11,7,5,4); g.fillEllipse(19,7,5,4);
+      g.fillStyle(0xff2a10); g.fillEllipse(11,7,3,2.4); g.fillEllipse(19,7,3,2.4);
+      g.fillStyle(0xffc7a0); g.fillCircle(10,6,1); g.fillCircle(18,6,1);
+      // Naso
+      g.fillStyle(skinDD); g.fillTriangle(15,8,13,11,17,11);
+      // Bocca + denti
+      g.fillStyle(0x2a0a0a); g.fillEllipse(15,13,9,4);
+      g.fillStyle(bone); g.fillTriangle(11,11,13,11,12,14); g.fillTriangle(14,11,16,11,15,14); g.fillTriangle(17,11,19,11,18,14);
+      g.fillRect(12,14,7,1);
+      g.fillStyle(0x88aa66,0.6); g.fillRect(15,14,1,5);
+      // Ferita tempia
+      g.fillStyle(blood); g.fillEllipse(20,4,4,3); g.fillStyle(bloodB); g.fillEllipse(20,4,2,1.5);
       g.generateTexture('zombie_common', 30, 44);
       g.destroy();
     }
 
-    // ── ZOMBIE RUNNER (26×42) ─────────────────────────────────────────────────
+    // ── ZOMBIE RUNNER (26×42) — corridore emaciato ──────────────────────────
     {
       const g = G(26,42);
-      g.fillStyle(0x000000,0.2); g.fillEllipse(13,41,18,4);
-      // Feet (forward thrust)
-      g.fillStyle(0x111111); g.fillRect(2,37,8,4); g.fillRect(14,35,8,4);
-      // Lean legs
-      g.fillStyle(0x6a1a1a); g.fillRect(3,24,6,14); g.fillRect(15,22,6,14);
-      g.fillStyle(0x8a3333); g.fillRect(4,27,3,5); g.fillRect(16,25,3,5);
-      // Lean torso (forward hunched)
-      g.fillStyle(0x3a0808); g.fillRect(7,13,12,13);
-      g.fillStyle(0x6a1a1a); g.fillRect(8,14,4,4); g.fillRect(14,16,3,5);
-      // Arms swept back
-      g.fillStyle(0x8a2222);
-      g.fillRect(-4,17,11,4); // right arm back
-      g.fillRect(19,14,10,4); // left arm forward
-      g.fillStyle(0xaa3333); g.fillCircle(-4,19,3); g.fillCircle(29,16,3);
-      g.fillStyle(0x111111);
-      [-2,0,2].forEach(d => g.fillRect(-8,17+d,4,2));
-      [-2,0,2].forEach(d => g.fillRect(29,14+d,4,2));
-      // Neck
-      g.fillStyle(0xaa3333); g.fillRect(10,7,6,7);
-      // Head (angular)
-      g.fillStyle(0xaa3333); g.fillRect(6,1,14,13); g.fillCircle(13,3,7);
-      g.fillStyle(0x110000); g.fillRect(7,0,13,6); g.fillCircle(13,2,7);
-      // Eyes (orange-red, intense)
-      g.fillStyle(0x110000); g.fillRect(7,5,5,5); g.fillRect(14,5,5,5);
-      g.fillStyle(0xff5500); g.fillRect(8,6,3,3); g.fillRect(15,6,3,3);
-      g.fillStyle(0xffaa44); g.fillRect(9,6,1,2); g.fillRect(16,6,1,2);
-      // Snarl
-      g.fillStyle(0x330000); g.fillRect(8,10,10,3);
-      g.fillStyle(0x991111); g.fillRect(9,11,8,1);
-      g.fillStyle(0xbbaa88); [9,11,13,16].forEach(x => g.fillRect(x,10,2,3));
+      const skin=0x9c8c7b, skinL=0xb6a695, skinD=0x6f6253, skinDD=0x4a4136;
+      const rag=0x55303a, blood=0x7a1414, eye=0xff6410, bone=0xd9cba6;
+      g.fillStyle(0x000000,0.22); g.fillEllipse(13,40,18,5);
+      // Gamba posteriore (spinta indietro)
+      g.fillStyle(skinD); g.fillRoundedRect(3,24,5,14,2);
+      g.fillStyle(skin);  g.fillRoundedRect(3,24,4,12,2);
+      g.fillStyle(0x191510); g.fillEllipse(4,38,7,4);
+      // Gamba anteriore (slanciata avanti)
+      g.fillStyle(skinD); g.fillRoundedRect(14,22,5,15,2);
+      g.fillStyle(skin);  g.fillRoundedRect(14,22,4,13,2);
+      g.fillStyle(skinL); g.fillRect(15,24,2,7);
+      g.fillStyle(0x191510); g.fillEllipse(17,37,8,4);
+      // Braccio posteriore
+      g.fillStyle(skinD); g.fillRoundedRect(-4,18,11,4,2);
+      g.fillStyle(skin);  g.fillCircle(-3,20,3);
+      // Torso magro, proteso
+      g.fillStyle(rag);   g.fillRoundedRect(7,12,12,14,4);
+      g.fillStyle(0x44262e); g.fillRoundedRect(8,13,5,8,2);
+      // Costole sporgenti
+      g.fillStyle(skin);  g.fillEllipse(13,22,9,6);
+      g.fillStyle(skinD); g.fillRect(9,20,8,1); g.fillRect(9,22,8,1); g.fillRect(10,24,6,1);
+      g.fillStyle(blood); g.fillEllipse(11,16,4,3);
+      // Braccio anteriore ad artiglio
+      g.fillStyle(skinD); g.fillRoundedRect(18,13,11,4,2);
+      g.fillStyle(skin);  g.fillRoundedRect(18,13,10,3,2);
+      g.fillStyle(skinL); g.fillRect(19,13,7,1);
+      g.fillStyle(skin);  g.fillCircle(29,15,3);
+      g.fillStyle(0xb6a695);
+      g.fillTriangle(30,12,33,12,30,15); g.fillTriangle(30,15,33,16,30,18);
+      // Collo teso
+      g.fillStyle(skinD); g.fillRoundedRect(11,7,7,6,2);
+      // Testa angolosa, protesa
+      g.fillStyle(skin);  g.fillEllipse(13,6,13,11);
+      g.fillStyle(skinL); g.fillEllipse(11,4,7,6);
+      g.fillStyle(skinD); g.fillEllipse(17,8,6,7);
+      g.fillStyle(0x2a221a); g.fillEllipse(12,2,10,4);
+      // Occhi folli
+      g.fillStyle(skinDD); g.fillEllipse(9,6,5,4); g.fillEllipse(17,6,5,4);
+      g.fillStyle(eye);    g.fillEllipse(9,6,3,2.4); g.fillEllipse(17,6,3,2.4);
+      g.fillStyle(0xffd28a); g.fillCircle(8,5,1); g.fillCircle(16,5,1);
+      // Bocca spalancata che ringhia
+      g.fillStyle(0x1a0000); g.fillEllipse(13,11,8,5);
+      g.fillStyle(bone);
+      [8,11,14,17].forEach(x => g.fillTriangle(x,9,x+2,9,x+1,12));
+      [9,12,15].forEach(x => g.fillTriangle(x,14,x+2,14,x+1,11));
+      g.fillStyle(blood); g.fillRect(13,13,2,4);
       g.generateTexture('zombie_runner', 26, 42);
       g.destroy();
     }
 
-    // ── ZOMBIE ARMORED (38×48) ─────────────────────────────────────────────────
+    // ── ZOMBIE ARMORED (38×48) — corazzato da sommossa ──────────────────────
     {
       const g = G(38,48);
-      g.fillStyle(0x000000,0.35); g.fillEllipse(19,47,28,6);
-      // Heavy boots
-      g.fillStyle(0x1a1a1a); g.fillRect(4,41,12,7); g.fillRect(22,41,12,7);
-      g.fillStyle(0x333333); g.fillRect(4,41,12,3); g.fillRect(22,41,12,3);
-      // Armored legs
-      g.fillStyle(0x667788); g.fillRect(5,28,12,15); g.fillRect(21,28,12,15);
-      g.fillStyle(0x778899); g.fillRect(6,29,10,6); g.fillRect(22,29,10,6);
-      g.fillStyle(0x445566); g.fillRect(5,34,12,2); g.fillRect(21,34,12,2);
-      // Chest plate
-      g.fillStyle(0x778899); g.fillRect(4,14,30,16);
-      g.fillStyle(0x8899aa); g.fillRect(5,15,28,13);
-      g.fillStyle(0x667788); g.fillRect(5,20,28,2); g.fillRect(18,14,2,16);
-      // Bolt rivets
-      g.fillStyle(0xaabbcc);
-      [[6,15],[30,15],[6,24],[30,24]].forEach(([x,y]) => g.fillRect(x,y,2,2));
-      // Shoulder pads
-      g.fillStyle(0x8899aa); g.fillRect(-2,13,9,12); g.fillRect(31,13,9,12);
-      g.fillStyle(0x9aabbb); g.fillRect(-1,14,7,9); g.fillRect(32,14,7,9);
-      // Armored arms
-      g.fillStyle(0x667788); g.fillRect(-8,20,10,7); g.fillRect(36,20,10,7);
-      g.fillStyle(0x8899aa); g.fillRect(-9,21,9,5); g.fillRect(37,21,9,5);
-      // Gauntlets
-      g.fillStyle(0x8899aa); g.fillRect(-11,23,8,8); g.fillRect(41,23,8,8);
-      g.fillStyle(0x555555);
-      [-2,0,2].forEach(d => g.fillRect(-14,22+d,4,2));
-      [-2,0,2].forEach(d => g.fillRect(48,22+d,4,2));
-      // Neck guard
-      g.fillStyle(0x667788); g.fillRect(14,8,10,8);
-      // Helmet
-      g.fillStyle(0x556677); g.fillRect(7,0,24,16); g.fillCircle(19,3,12);
-      g.fillStyle(0x667788); g.fillRect(8,1,22,13); g.fillCircle(19,3,11);
-      // Visor (slit)
-      g.fillStyle(0x0a1520); g.fillRect(9,8,20,7);
-      g.fillStyle(0x1a3040,0.8); g.fillRect(10,9,18,5);
-      // Eyes behind visor
-      g.fillStyle(0xffffff); g.fillRect(11,10,5,3); g.fillRect(22,10,5,3);
-      // Mouth grille
-      g.fillStyle(0x445566); g.fillRect(12,14,14,4);
-      [13,16,19,22].forEach(x => g.fillRect(x,14,2,4));
+      const steel=0x6c7a8a, steelL=0x9aa8b8, steelD=0x49545f, steelDD=0x2f363e;
+      const eye=0xffcc22, rust=0x7a4a2a;
+      g.fillStyle(0x000000,0.35); g.fillEllipse(19,46,30,6);
+      // Stivali corazzati
+      g.fillStyle(0x16181c); g.fillEllipse(11,43,12,7); g.fillEllipse(27,43,12,7);
+      g.fillStyle(steelD);   g.fillRoundedRect(6,40,10,4,2); g.fillRoundedRect(22,40,10,4,2);
+      // Gambe a piastre
+      g.fillStyle(steelD); g.fillRoundedRect(6,28,11,14,3); g.fillRoundedRect(21,28,11,14,3);
+      g.fillStyle(steel);  g.fillRoundedRect(7,29,9,11,3); g.fillRoundedRect(22,29,9,11,3);
+      g.fillStyle(steelL); g.fillRect(8,30,3,7); g.fillRect(23,30,3,7);
+      // Spallacci
+      g.fillStyle(steelD); g.fillEllipse(4,17,12,11); g.fillEllipse(34,17,12,11);
+      g.fillStyle(steel);  g.fillEllipse(4,16,9,8);  g.fillEllipse(34,16,9,8);
+      g.fillStyle(steelL); g.fillEllipse(2,14,4,4);  g.fillEllipse(32,14,4,4);
+      // Braccia + guanti
+      g.fillStyle(steelD); g.fillRoundedRect(-7,20,11,7,3); g.fillRoundedRect(34,20,11,7,3);
+      g.fillStyle(steel);  g.fillRoundedRect(-7,20,10,5,2); g.fillRoundedRect(35,20,10,5,2);
+      g.fillStyle(steelDD); g.fillCircle(-7,24,4); g.fillCircle(45,24,4);
+      // Corazza pettorale
+      g.fillStyle(steelDD); g.fillRoundedRect(6,13,26,18,6);
+      g.fillStyle(steel);   g.fillRoundedRect(7,14,24,16,5);
+      g.fillStyle(steelL);  g.fillRoundedRect(9,15,9,6,3);
+      g.fillStyle(steelDD); g.fillRect(8,22,22,1); g.fillRect(19,14,1,16);
+      // Rivetti
+      g.fillStyle(0xb8c6d4);
+      [[9,16],[29,16],[9,28],[29,28]].forEach(([x,y]) => g.fillCircle(x,y,1.3));
+      // Ruggine / sangue secco
+      g.fillStyle(rust,0.7); g.fillEllipse(24,24,6,4);
+      g.fillStyle(0x6a1414,0.6); g.fillEllipse(13,27,5,3);
+      // Collo + casco
+      g.fillStyle(steelD); g.fillRoundedRect(13,7,12,8,3);
+      g.fillStyle(steelDD); g.fillEllipse(19,7,26,15);
+      g.fillStyle(steel);   g.fillEllipse(19,6,23,13);
+      g.fillStyle(steelL);  g.fillEllipse(13,2,9,5);
+      // Visiera
+      g.fillStyle(0x0a1118); g.fillRoundedRect(8,7,22,7,3);
+      g.fillStyle(0x1c3550,0.7); g.fillRoundedRect(9,8,20,3,2);
+      // Occhi dietro la visiera
+      g.fillStyle(eye); g.fillEllipse(13,10,4,2.4); g.fillEllipse(25,10,4,2.4);
+      g.fillStyle(0xffffcc); g.fillCircle(12,10,1); g.fillCircle(24,10,1);
+      // Grata bocca
+      g.fillStyle(steelDD); g.fillRoundedRect(12,14,14,5,2);
+      g.fillStyle(0x14181e); [13,16,19,22].forEach(x => g.fillRect(x,15,2,4));
       g.generateTexture('zombie_armored', 38, 48);
       g.destroy();
     }
 
-    // ── ZOMBIE JUMPER (32×46) ─────────────────────────────────────────────────
+    // ── ZOMBIE JUMPER (32×46) — saltatore agile ─────────────────────────────
     {
       const g = G(32,46);
-      g.fillStyle(0x000000,0.3); g.fillEllipse(16,45,24,5);
-      // Crouched/bent legs
-      g.fillStyle(0x6a5500);
-      g.fillRect(5,24,8,10);  g.fillRect(19,24,8,10); // thighs
-      g.fillRect(3,32,8,11);  g.fillRect(21,32,8,11); // shins (angled out)
-      // Feet with clawed toes
-      g.fillStyle(0x3a2a00); g.fillRect(0,41,12,4); g.fillRect(20,41,12,4);
-      g.fillStyle(0x111111);
-      [0,3,6].forEach(x => g.fillRect(x,42,2,3));
-      [21,24,27].forEach(x => g.fillRect(x,42,2,3));
-      // Leg muscle highlight
-      g.fillStyle(0x9a8800); g.fillRect(6,25,5,7); g.fillRect(20,25,5,7);
-      // Coiled torso
-      g.fillStyle(0x3a2a00); g.fillRect(9,12,14,14);
-      g.fillStyle(0x6a5500); g.fillRect(10,13,4,5); g.fillRect(18,15,3,5);
-      // Arms raised high (ready to grab)
-      g.fillStyle(0x8a7700);
-      g.fillRect(-6,10,14,5); g.fillRect(24,10,14,5);
-      g.fillRect(-8,6,7,10); g.fillRect(33,6,7,10);
-      // Claws
-      g.fillStyle(0xaaaa00); g.fillCircle(-6,9,4); g.fillCircle(38,9,4);
-      g.fillStyle(0x111111);
-      [-4,-1,2].forEach(d => g.fillRect(-10,7+d,5,2));
-      [-4,-1,2].forEach(d => g.fillRect(37,7+d,5,2));
-      // Neck
-      g.fillStyle(0xaaaa00); g.fillRect(13,6,6,7);
-      // Head
-      g.fillStyle(0xaaaa00); g.fillRect(8,0,16,12); g.fillCircle(16,2,8);
-      g.fillStyle(0x3a2a00); g.fillRect(8,-1,16,6); g.fillCircle(16,0,8);
-      g.fillRect(7,0,3,10); g.fillRect(22,0,3,10);
-      // Eyes (intense yellow)
-      g.fillStyle(0x111100); g.fillRect(9,3,7,5); g.fillRect(16,3,7,5);
-      g.fillStyle(0xffee00); g.fillRect(10,4,5,3); g.fillRect(17,4,5,3);
-      g.fillStyle(0xffffff); g.fillRect(11,4,2,2); g.fillRect(18,4,2,2);
-      // Snarl
-      g.fillStyle(0x221100); g.fillRect(9,9,14,3);
-      g.fillStyle(0xbb8800); g.fillRect(10,10,12,1);
-      g.fillStyle(0xddcc88); [10,12,15,17,19].forEach(x => g.fillRect(x,9,2,3));
+      const skin=0xa89436, skinL=0xc8b24e, skinD=0x77692a, skinDD=0x4f461d;
+      const eye=0xfff000, claw=0xe8e0c0, blood=0x7a1414;
+      g.fillStyle(0x000000,0.3); g.fillEllipse(16,44,22,5);
+      // Cosce a molla
+      g.fillStyle(skinD); g.fillRoundedRect(5,23,8,9,4); g.fillRoundedRect(19,23,8,9,4);
+      g.fillStyle(skin);  g.fillEllipse(8,26,6,7); g.fillEllipse(24,26,6,7);
+      // Stinchi
+      g.fillStyle(skinD); g.fillRoundedRect(3,30,7,11,3); g.fillRoundedRect(22,30,7,11,3);
+      g.fillStyle(skin);  g.fillRoundedRect(3,30,5,9,3); g.fillRoundedRect(22,30,5,9,3);
+      g.fillStyle(skinL); g.fillRect(4,31,2,6); g.fillRect(23,31,2,6);
+      // Piedi artigliati
+      g.fillStyle(skinDD); g.fillEllipse(5,41,9,4); g.fillEllipse(27,41,9,4);
+      g.fillStyle(claw);
+      [1,4,7].forEach(x => g.fillTriangle(x,42,x+2,42,x+1,45));
+      [23,26,29].forEach(x => g.fillTriangle(x,42,x+2,42,x+1,45));
+      // Torso teso
+      g.fillStyle(skinD); g.fillEllipse(16,17,15,15);
+      g.fillStyle(skin);  g.fillEllipse(16,17,13,13);
+      g.fillStyle(skinL); g.fillEllipse(12,13,6,6);
+      g.fillStyle(skinDD); g.fillRect(11,18,10,1); g.fillRect(12,21,8,1);
+      g.fillStyle(blood); g.fillEllipse(19,20,4,3);
+      // Braccia alzate
+      g.fillStyle(skinD); g.fillRoundedRect(-5,9,13,5,2); g.fillRoundedRect(24,9,13,5,2);
+      g.fillStyle(skin);  g.fillRoundedRect(-6,5,6,8,3); g.fillRoundedRect(32,5,6,8,3);
+      g.fillStyle(skinL); g.fillRect(-5,6,2,5); g.fillRect(33,6,2,5);
+      // Artigli
+      g.fillStyle(claw);
+      [-7,-4,-1].forEach(x => g.fillTriangle(x,3,x+2,3,x+1,0));
+      [33,36,39].forEach(x => g.fillTriangle(x,3,x+2,3,x+1,0));
+      // Collo
+      g.fillStyle(skinD); g.fillRoundedRect(13,5,6,6,2);
+      // Testa
+      g.fillStyle(skin);  g.fillEllipse(16,5,14,11);
+      g.fillStyle(skinL); g.fillEllipse(13,3,7,6);
+      g.fillStyle(skinD); g.fillEllipse(20,7,6,6);
+      // Occhi gialli
+      g.fillStyle(skinDD); g.fillEllipse(11,5,5,4); g.fillEllipse(20,5,5,4);
+      g.fillStyle(eye);    g.fillEllipse(11,5,3,2.6); g.fillEllipse(20,5,3,2.6);
+      g.fillStyle(0xffffff); g.fillCircle(10,4,1); g.fillCircle(19,4,1);
+      // Ghigno con zanne
+      g.fillStyle(0x1a1400); g.fillEllipse(16,10,9,4);
+      g.fillStyle(claw);
+      [12,15,18].forEach(x => g.fillTriangle(x,8,x+2,8,x+1,11));
+      [13,16].forEach(x => g.fillTriangle(x,13,x+2,13,x+1,10));
       g.generateTexture('zombie_jumper', 32, 46);
       g.destroy();
     }
 
-    // ── ZOMBIE TOXIC (30×48) ─────────────────────────────────────────────────
+    // ── ZOMBIE TOXIC (30×48) — mutante tossico ──────────────────────────────
     {
       const g = G(30,48);
-      // Toxic pool glow
-      g.fillStyle(0x004400,0.4); g.fillEllipse(15,47,28,7);
-      // Feet (dripping)
-      g.fillStyle(0x002200); g.fillRect(4,43,9,5); g.fillRect(17,43,9,5);
-      g.fillStyle(0x00aa22,0.6); g.fillRect(5,47,3,2); g.fillRect(20,46,3,3);
-      // Bloated legs
-      g.fillStyle(0x1a5522); g.fillRect(4,30,9,15); g.fillRect(17,30,9,15);
-      // Toxic veins on legs
-      g.fillStyle(0x00ee44); g.fillRect(5,33,2,9); g.fillRect(19,35,2,7);
-      // Swollen torso
-      g.fillStyle(0x0a3311); g.fillEllipse(15,21,26,22);
-      g.fillStyle(0x1a5522); g.fillEllipse(15,21,24,20);
-      // Blisters
-      g.fillStyle(0x00dd33);
-      g.fillCircle(8,18,4); g.fillCircle(21,19,5); g.fillCircle(13,24,3); g.fillCircle(20,25,3);
-      g.fillStyle(0x00ff44,0.5);
-      g.fillCircle(8,18,2); g.fillCircle(21,19,3);
-      // Arms (dripping slime)
-      g.fillStyle(0x1a5522);
-      g.fillRect(-7,17,13,7); g.fillRect(24,17,13,7);
-      g.fillStyle(0x00aa22,0.5); g.fillRect(-7,22,13,3); g.fillRect(24,22,13,3);
-      g.fillStyle(0x2a7733); g.fillCircle(-6,20,4); g.fillCircle(36,20,4);
-      g.fillStyle(0x00ff33);
-      [-3,0,3].forEach(d => g.fillRect(-11,18+d,4,2));
-      [-3,0,3].forEach(d => g.fillRect(37,18+d,4,2));
-      // Slime drips hanging
-      g.fillStyle(0x00cc33,0.7);
-      g.fillRect(-4,26,2,5); g.fillRect(1,28,2,4); g.fillRect(26,25,2,6); g.fillRect(31,27,2,5);
-      // Swollen head
-      g.fillStyle(0x2a7733); g.fillEllipse(15,5,24,16); g.fillStyle(0x1a5522); g.fillEllipse(15,5,22,14);
-      // Cracked skull
-      g.fillStyle(0x0a3311); g.fillRect(11,-1,2,6); g.fillRect(17,0,2,5); g.fillRect(7,2,2,5);
-      // Glowing eyes
-      g.fillStyle(0x002200); g.fillRect(6,1,8,7); g.fillRect(16,1,8,7);
-      g.fillStyle(0x00ff44); g.fillRect(7,2,6,5); g.fillRect(17,2,6,5);
-      g.fillStyle(0x88ffaa); g.fillRect(8,2,3,3); g.fillRect(18,2,3,3);
-      // Leaking mouth
-      g.fillStyle(0x001a00); g.fillRect(8,8,14,4);
-      g.fillStyle(0x00cc22,0.8); g.fillRect(8,8,14,4);
-      g.fillStyle(0x00ff44,0.6); g.fillRect(10,12,3,6); g.fillRect(16,11,3,7);
-      // Aura glow
-      g.fillStyle(0x00ff44,0.1); g.fillCircle(15,20,20);
+      const skin=0x3f7a33, skinL=0x5fa84a, skinD=0x265020, skinDD=0x16320f;
+      const ooze=0x6cff3a, oozeD=0x2cbb2a, eye=0x9dff5a;
+      // Alone tossico
+      g.fillStyle(0x33ff33,0.08); g.fillCircle(15,24,21);
+      g.fillStyle(0x004400,0.4);  g.fillEllipse(15,46,26,7);
+      // Piedi
+      g.fillStyle(skinDD); g.fillEllipse(8,44,9,5); g.fillEllipse(22,44,9,5);
+      // Gambe gonfie
+      g.fillStyle(skinD); g.fillEllipse(9,36,9,16); g.fillEllipse(21,36,9,16);
+      g.fillStyle(skin);  g.fillEllipse(9,35,7,13); g.fillEllipse(21,35,7,13);
+      g.fillStyle(oozeD); g.fillEllipse(8,33,2,8); g.fillEllipse(22,36,2,6);
+      // Torso enorme e gonfio
+      g.fillStyle(skinD); g.fillEllipse(15,22,27,24);
+      g.fillStyle(skin);  g.fillEllipse(15,22,24,21);
+      g.fillStyle(skinL); g.fillEllipse(10,15,9,8);
+      // Pustole
+      g.fillStyle(oozeD);
+      g.fillCircle(8,20,4); g.fillCircle(22,18,5); g.fillCircle(13,27,4); g.fillCircle(21,28,3);
+      g.fillStyle(ooze);
+      g.fillCircle(8,20,2.2); g.fillCircle(22,18,3); g.fillCircle(13,27,2);
+      g.fillStyle(0xcaffb0); g.fillCircle(7,19,1); g.fillCircle(21,17,1.2);
+      // Braccia colanti
+      g.fillStyle(skinD); g.fillEllipse(-2,22,12,7); g.fillEllipse(32,22,12,7);
+      g.fillStyle(skin);  g.fillEllipse(-1,21,9,5);  g.fillEllipse(31,21,9,5);
+      g.fillStyle(skinDD); g.fillCircle(-4,24,4); g.fillCircle(34,24,4);
+      // Gocce di melma
+      g.fillStyle(ooze,0.8);
+      g.fillEllipse(-4,29,3,4); g.fillEllipse(34,30,3,4); g.fillEllipse(15,40,3,5);
+      g.fillStyle(oozeD,0.6); g.fillEllipse(6,42,2,3); g.fillEllipse(24,41,2,3);
+      // Testa gonfia
+      g.fillStyle(skinD); g.fillEllipse(15,7,22,16);
+      g.fillStyle(skin);  g.fillEllipse(15,7,19,13);
+      g.fillStyle(skinL); g.fillEllipse(10,3,7,6);
+      // Cranio crepato
+      g.fillStyle(skinDD); g.fillRect(14,0,2,5); g.fillTriangle(9,1,11,6,12,1);
+      // Occhi luminosi
+      g.fillStyle(0x062006); g.fillEllipse(10,7,6,5); g.fillEllipse(20,7,6,5);
+      g.fillStyle(eye);      g.fillEllipse(10,7,3.5,3); g.fillEllipse(20,7,3.5,3);
+      g.fillStyle(0xeaffd6); g.fillCircle(9,6,1.2); g.fillCircle(19,6,1.2);
+      // Bocca che cola
+      g.fillStyle(0x051a05); g.fillEllipse(15,13,11,5);
+      g.fillStyle(ooze,0.85); g.fillEllipse(15,13,9,3);
+      g.fillStyle(ooze,0.7); g.fillEllipse(13,17,2,4); g.fillEllipse(17,16,2,4);
       g.generateTexture('zombie_toxic', 30, 48);
       g.destroy();
     }
 
-    // ── ZOMBIE GIANT (48×66) ─────────────────────────────────────────────────
+    // ── ZOMBIE GIANT (48×66) — colosso bruto ────────────────────────────────
     {
       const g = G(48,66);
-      g.fillStyle(0x000000,0.4); g.fillEllipse(24,65,44,8);
-      // Massive boots
-      g.fillStyle(0x100a00); g.fillRect(4,57,16,9); g.fillRect(28,57,16,9);
-      g.fillStyle(0x221500); g.fillRect(4,57,16,4); g.fillRect(28,57,16,4);
-      // Thick legs
-      g.fillStyle(0x4a2811); g.fillRect(5,36,16,23); g.fillRect(27,36,16,23);
-      // Leg muscle highlight
-      g.fillStyle(0x6a4022); g.fillRect(7,38,8,12); g.fillRect(29,38,8,12);
-      // Leg wounds
-      g.fillStyle(0x660000); g.fillRect(6,44,5,8); g.fillRect(35,46,4,6);
-      g.fillStyle(0xaa0000); g.fillRect(7,45,3,6); g.fillRect(36,47,2,5);
-      // Massive torso
-      g.fillStyle(0x3a2011); g.fillRect(3,16,42,22);
-      g.fillStyle(0x4a2811); g.fillRect(4,17,40,20);
-      // Belly bulge
-      g.fillStyle(0x5a3822); g.fillEllipse(24,30,36,18);
-      g.fillStyle(0x4a2811); g.fillEllipse(24,29,32,14);
-      // Rib scarring
-      g.fillStyle(0x3a2011); [18,22,26,30,34].forEach(y => g.fillRect(6,y,14,2));
-      // Huge arms
-      g.fillStyle(0x4a2811); g.fillRect(-12,14,18,12); g.fillRect(42,14,18,12);
-      g.fillStyle(0x6a4022); g.fillRect(-10,15,14,8); g.fillRect(44,15,14,8);
-      // Forearms
-      g.fillStyle(0x5a3020); g.fillRect(-16,19,10,8); g.fillRect(54,19,10,8);
-      // Fists
-      g.fillStyle(0x5a3020); g.fillRect(-20,20,12,10); g.fillRect(56,20,12,10);
-      g.fillStyle(0x3a1a00);
-      g.fillRect(-20,20,12,3); g.fillRect(56,20,12,3);
-      // Knuckles
-      g.fillStyle(0x7a5033);
-      [-18,-14,-10,-6].forEach(x => g.fillRect(x,20,3,4));
-      [57,61,65,69].forEach(x => g.fillRect(x,20,3,4));
-      // Neck (massive)
-      g.fillStyle(0x5a3822); g.fillRect(17,8,14,10);
-      g.fillStyle(0x3a2011); g.fillRect(17,8,3,10); g.fillRect(28,8,3,10);
-      // Head
-      g.fillStyle(0x5a3822); g.fillRect(10,0,28,14); g.fillEllipse(24,3,30,14);
-      g.fillStyle(0x4a2811); g.fillRect(11,1,26,12); g.fillEllipse(24,3,28,12);
-      // Skull ridges
-      g.fillStyle(0x3a1a00); g.fillRect(12,0,24,5); g.fillEllipse(24,1,28,8);
-      [13,17,21,25,29,33].forEach(x => g.fillRect(x,0,3,4));
-      // Deep eye sockets
-      g.fillStyle(0x0a0000); g.fillRect(12,4,10,8); g.fillRect(26,4,10,8);
-      // Glowing red eyes
-      g.fillStyle(0xcc1100); g.fillRect(13,5,8,6); g.fillRect(27,5,8,6);
-      g.fillStyle(0xff4422); g.fillRect(14,6,6,4); g.fillRect(28,6,6,4);
-      g.fillStyle(0xff9977); g.fillRect(15,6,3,3); g.fillRect(29,6,3,3);
-      // Nose (crushed)
-      g.fillStyle(0x3a1a00); g.fillRect(20,9,8,4);
-      g.fillStyle(0x0a0000); g.fillCircle(22,12,2); g.fillCircle(26,12,2);
-      // Massive jaw
-      g.fillStyle(0x1a0000); g.fillRect(13,12,22,6);
-      g.fillStyle(0x550000); g.fillRect(14,13,20,4);
-      // Broken teeth
-      g.fillStyle(0xbbaa88); [14,17,21,24,28,31].forEach(x => g.fillRect(x,12,3,6));
-      g.fillStyle(0x777755); [16,23,30].forEach(x => g.fillRect(x,12,2,4));
-      // Blood drips from mouth
-      g.fillStyle(0x880000);
-      g.fillRect(18,17,3,8); g.fillRect(25,18,2,6); g.fillRect(31,16,3,9);
-      g.fillStyle(0xaa0000); g.fillRect(19,17,1,7); g.fillRect(32,17,1,8);
-      // Face scar
-      g.fillStyle(0x550000); g.fillRect(35,2,3,13); g.fillStyle(0x880000); g.fillRect(36,3,1,11);
+      const skin=0x6a4326, skinL=0x8a5e38, skinD=0x472c18, skinDD=0x2e1c10;
+      const blood=0x7a1010, bloodB=0xb01818, bone=0xd9c8a0, eye=0xff2a10;
+      g.fillStyle(0x000000,0.4); g.fillEllipse(24,64,44,8);
+      // Piedi
+      g.fillStyle(0x120c06); g.fillEllipse(13,60,16,8); g.fillEllipse(35,60,16,8);
+      // Gambe massicce
+      g.fillStyle(skinD); g.fillRoundedRect(6,38,16,22,7); g.fillRoundedRect(26,38,16,22,7);
+      g.fillStyle(skin);  g.fillRoundedRect(7,38,13,20,6); g.fillRoundedRect(28,38,13,20,6);
+      g.fillStyle(skinL); g.fillEllipse(12,44,5,11); g.fillEllipse(33,44,5,11);
+      g.fillStyle(blood); g.fillEllipse(9,50,5,7); g.fillStyle(bloodB); g.fillEllipse(9,50,2,4);
+      // Braccia enormi
+      g.fillStyle(skinD); g.fillEllipse(4,22,18,14); g.fillEllipse(44,22,18,14);
+      g.fillStyle(skin);  g.fillEllipse(5,21,14,11); g.fillEllipse(43,21,14,11);
+      g.fillStyle(skinL); g.fillEllipse(3,18,6,5); g.fillEllipse(45,18,6,5);
+      // Avambracci + pugni
+      g.fillStyle(skinD); g.fillEllipse(3,30,13,12); g.fillEllipse(45,30,13,12);
+      g.fillStyle(skin);  g.fillEllipse(4,30,10,10); g.fillEllipse(44,30,10,10);
+      g.fillStyle(skinDD);
+      [1,4,7].forEach(x => g.fillCircle(x,27,1.6));
+      [41,44,47].forEach(x => g.fillCircle(x,27,1.6));
+      // Torso colossale
+      g.fillStyle(skinD); g.fillRoundedRect(3,15,42,26,10);
+      g.fillStyle(skin);  g.fillRoundedRect(5,16,38,23,9);
+      g.fillStyle(skinL); g.fillEllipse(15,21,12,8); g.fillEllipse(33,21,12,8);
+      g.fillStyle(skinD); g.fillRect(24,18,1,20);
+      // Pancia squarciata (costole + sangue)
+      g.fillStyle(skinDD); g.fillEllipse(24,33,18,9);
+      g.fillStyle(bone); [16,20,24,28,32].forEach(x => g.fillRect(x,29,2,8));
+      g.fillStyle(blood); g.fillEllipse(24,35,12,4);
+      // Collo taurino
+      g.fillStyle(skinD); g.fillRoundedRect(16,8,16,11,4);
+      g.fillStyle(skin);  g.fillRoundedRect(17,8,14,9,3);
+      // Testa
+      g.fillStyle(skinD); g.fillEllipse(24,5,28,15);
+      g.fillStyle(skin);  g.fillEllipse(24,5,24,12);
+      g.fillStyle(skinL); g.fillEllipse(18,1,9,6);
+      // Cresta ossea
+      g.fillStyle(skinDD); g.fillEllipse(24,0,22,6);
+      [14,19,24,29,34].forEach(x => g.fillTriangle(x,0,x+3,0,x+1.5,3));
+      // Occhi rossi infossati
+      g.fillStyle(0x100000); g.fillEllipse(17,5,8,6); g.fillEllipse(31,5,8,6);
+      g.fillStyle(eye);      g.fillEllipse(17,5,4.5,3.5); g.fillEllipse(31,5,4.5,3.5);
+      g.fillStyle(0xff9977); g.fillCircle(16,4,1.4); g.fillCircle(30,4,1.4);
+      // Mascella + zanne
+      g.fillStyle(0x180000); g.fillEllipse(24,11,20,6);
+      g.fillStyle(bone);
+      [15,19,24,29,33].forEach(x => g.fillTriangle(x,8,x+3,8,x+1.5,13));
+      [17,22,27,31].forEach(x => g.fillTriangle(x,15,x+3,15,x+1.5,10));
+      // Sangue dalla bocca
+      g.fillStyle(blood); g.fillRect(20,13,3,7); g.fillRect(28,13,2,6);
+      g.fillStyle(bloodB); g.fillRect(21,13,1,5);
+      // Cicatrice
+      g.fillStyle(skinDD); g.fillRect(33,0,1,11);
       g.generateTexture('zombie_giant', 48, 66);
       g.destroy();
     }
@@ -655,78 +682,322 @@ export default class GameScene extends Phaser.Scene {
     const dark    = GameScene.mixColor(base, 0x000000, 0.34);
     const darker  = GameScene.mixColor(base, 0x000000, 0.58);
 
+    const metal = 0x4a4a52, metalL = 0x70707a, metalD = 0x26262c;
     const g = scene.make.graphics({ add: false } as any) as Phaser.GameObjects.Graphics & { generateTexture(k:string,w:number,h:number):void };
 
-    // Ombra a terra
     g.fillStyle(0x000000, 0.22); g.fillEllipse(50, 25, 96, 40);
 
-    // Pneumatici (arrotondati, sporgono sopra/sotto la carrozzeria)
-    const wheels: Array<[number, number]> = [[16, 2], [62, 2], [16, 31], [62, 31]];
-    g.fillStyle(0x141414); wheels.forEach(([x, y]) => g.fillRoundedRect(x, y, 22, 11, 4));
-    g.fillStyle(0x2c2c2c); wheels.forEach(([x, y]) => [5, 10, 15].forEach(o => g.fillRect(x + o, y + 2, 2, 7)));
+    if (vehicleKey === 'civilian_car') {
+      // ── BERLINA CIVILE ──────────────────────────────────────────────────────
+      const wh: [number,number][] = [[16,2],[62,2],[16,31],[62,31]];
+      g.fillStyle(0x141414); wh.forEach(([x,y]) => g.fillRoundedRect(x,y,22,11,4));
+      g.fillStyle(0x2c2c2c); wh.forEach(([x,y]) => [5,10,15].forEach(o => g.fillRect(x+o,y+2,2,7)));
+      g.fillStyle(darker); g.fillRoundedRect(7,6,86,32,{tl:8,bl:8,tr:16,br:16});
+      g.fillStyle(base);   g.fillRoundedRect(8,7,84,30,{tl:7,bl:7,tr:15,br:15});
+      g.fillStyle(dark);   g.fillRoundedRect(10,29,80,7,{tl:4,bl:4,tr:8,br:8});
+      g.fillStyle(light);  g.fillRoundedRect(12,8,74,9,{tl:5,bl:2,tr:9,br:2});
+      g.fillStyle(dark);  g.fillRect(64,15,22,1); g.fillRect(64,28,22,1);
+      g.fillStyle(light); g.fillRect(66,21,18,2);
+      g.fillStyle(0x0e1d29);
+      g.fillPoints([{x:52,y:10},{x:64,y:14},{x:64,y:30},{x:52,y:34}],true);
+      g.fillStyle(0x2c5470,0.5);
+      g.fillPoints([{x:53,y:12},{x:60,y:14},{x:58,y:19},{x:53,y:17}],true);
+      g.fillStyle(light);   g.fillRoundedRect(33,11,20,22,6);
+      g.fillStyle(lighter); g.fillRoundedRect(35,13,16,8,4);
+      g.fillStyle(dark);    g.fillRect(33,21,20,1);
+      g.fillStyle(0x0e1d29);
+      g.fillPoints([{x:24,y:12},{x:33,y:11},{x:33,y:33},{x:24,y:32}],true);
+      g.fillStyle(0x2c5470,0.4);
+      g.fillPoints([{x:25,y:13},{x:31,y:13},{x:30,y:18},{x:25,y:17}],true);
+      g.fillStyle(dark); g.fillRect(20,9,1,26); g.fillRect(11,12,8,1); g.fillRect(11,31,8,1);
+      g.fillStyle(base);     g.fillRoundedRect(49,3,7,4,2); g.fillRoundedRect(49,37,7,4,2);
+      g.fillStyle(0x0e1d29); g.fillRect(50,4,4,2); g.fillRect(50,38,4,2);
+      g.fillStyle(0xfff4bc); g.fillRoundedRect(85,9,6,5,2); g.fillRoundedRect(85,30,6,5,2);
+      g.fillStyle(0xffffff); g.fillRect(86,10,3,3); g.fillRect(86,31,3,3);
+      g.fillStyle(0xfff4bc,0.3); g.fillRect(90,10,4,3); g.fillRect(90,31,4,3);
+      g.fillStyle(0xcc1111); g.fillRoundedRect(8,10,4,5,1); g.fillRoundedRect(8,29,4,5,1);
+      g.fillStyle(0xff4444); g.fillRect(9,11,2,3); g.fillRect(9,30,2,3);
+      g.fillStyle(lighter); g.fillRoundedRect(89,16,4,12,2);
+      g.fillStyle(metalD); g.fillCircle(58,22,9); g.fillStyle(metal); g.fillCircle(58,22,7);
+      g.fillStyle(metalL); g.fillCircle(56,20,2.5); g.fillStyle(metalD); g.fillCircle(58,22,2);
+      g.fillStyle(metalD); g.fillRect(58,18,42,8); g.fillStyle(metal); g.fillRect(58,19,42,6);
+      g.fillStyle(metalL); g.fillRect(58,20,38,2);
+      g.fillStyle(metalD); g.fillRect(90,17,10,10);
+      g.fillStyle(0x000000); g.fillRect(91,19,8,2); g.fillRect(91,23,8,2);
+      g.fillStyle(0xffffff,0.10); g.fillRoundedRect(16,7,58,3,2);
 
-    // Carrozzeria — bordo scuro + corpo, angoli anteriori (dx) più arrotondati
-    g.fillStyle(darker); g.fillRoundedRect(7, 6, 86, 32, { tl: 8, bl: 8, tr: 16, br: 16 });
-    g.fillStyle(base);   g.fillRoundedRect(8, 7, 84, 30, { tl: 7, bl: 7, tr: 15, br: 15 });
-    // Ombra fianco inferiore + luce fianco superiore (luce dall'alto)
-    g.fillStyle(dark);   g.fillRoundedRect(10, 29, 80, 7, { tl: 4, bl: 4, tr: 8, br: 8 });
-    g.fillStyle(light);  g.fillRoundedRect(12, 8, 74, 9, { tl: 5, bl: 2, tr: 9, br: 2 });
+    } else if (vehicleKey === 'pickup') {
+      // ── PICKUP — cabina (ant.) + pianale aperto con listoni (post.) ─────────
+      const wh: [number,number][] = [[10,1],[62,1],[10,32],[62,32]];
+      g.fillStyle(0x141414); wh.forEach(([x,y]) => g.fillRoundedRect(x,y,24,12,4));
+      g.fillStyle(0x2c2c2c); wh.forEach(([x,y]) => [5,11,17].forEach(o => g.fillRect(x+o,y+2,2,8)));
+      // pianale posteriore (sinistra) con listoni
+      g.fillStyle(darker); g.fillRect(7,6,42,32);
+      g.fillStyle(dark);   g.fillRect(8,7,40,30);
+      g.fillStyle(darker); g.fillRect(8,7,40,4); g.fillRect(8,33,40,4);
+      [14,20,26,32,38].forEach(x => { g.fillStyle(darker); g.fillRect(x,11,2,22); });
+      g.fillStyle(base); [15,21,27,33,39].forEach(x => g.fillRect(x,11,1,22));
+      // separatore cabina / pianale
+      g.fillStyle(darker); g.fillRect(48,4,4,36);
+      g.fillStyle(metalD); g.fillRect(49,4,2,36);
+      // cabina (destra — anteriore)
+      g.fillStyle(darker); g.fillRoundedRect(51,5,43,34,{tl:4,bl:4,tr:14,br:14});
+      g.fillStyle(base);   g.fillRoundedRect(52,6,41,32,{tl:3,bl:3,tr:13,br:13});
+      g.fillStyle(dark);   g.fillRoundedRect(54,29,37,8,{tl:2,bl:2,tr:8,br:8});
+      g.fillStyle(light);  g.fillRoundedRect(54,7,35,9,3);
+      // parabrezza cabina
+      g.fillStyle(0x0e1d29);
+      g.fillPoints([{x:67,y:9},{x:80,y:13},{x:80,y:31},{x:67,y:35}],true);
+      g.fillStyle(0x2c5470,0.5);
+      g.fillPoints([{x:68,y:11},{x:76,y:14},{x:74,y:19},{x:68,y:16}],true);
+      // finestrino laterale cabina
+      g.fillStyle(0x0e1d29);
+      g.fillPoints([{x:53,y:9},{x:67,y:9},{x:67,y:35},{x:53,y:35}],true);
+      g.fillStyle(0x2c5470,0.35); g.fillRect(55,11,10,11); g.fillRect(55,22,10,11);
+      // cofano ant.
+      g.fillStyle(dark); g.fillRect(80,15,12,1); g.fillRect(80,28,12,1);
+      g.fillStyle(light); g.fillRect(82,20,8,4);
+      g.fillStyle(0xfff4bc); g.fillRoundedRect(89,8,5,5,2); g.fillRoundedRect(89,31,5,5,2);
+      g.fillStyle(0xffffff); g.fillRect(90,9,2,3); g.fillRect(90,32,2,3);
+      g.fillStyle(0xfff4bc,0.3); g.fillRect(93,9,4,3); g.fillRect(93,32,4,3);
+      g.fillStyle(0xcc1111); g.fillRoundedRect(7,10,4,5,1); g.fillRoundedRect(7,29,4,5,1);
+      g.fillStyle(0xff4444); g.fillRect(8,11,2,3); g.fillRect(8,30,2,3);
+      g.fillStyle(lighter); g.fillRoundedRect(92,15,4,14,2);
+      // mitragliatrice montata sul pianale
+      g.fillStyle(metalD); g.fillCircle(28,22,8); g.fillStyle(metal); g.fillCircle(28,22,6);
+      g.fillStyle(metalL); g.fillCircle(26,20,2); g.fillStyle(metalD); g.fillCircle(28,22,2);
+      g.fillStyle(metalD); g.fillRect(28,19,22,6); g.fillStyle(metal); g.fillRect(28,20,22,4);
+      g.fillStyle(metalL); g.fillRect(29,21,18,2);
+      g.fillStyle(metalD); g.fillRect(48,18,4,8);
+      g.fillStyle(0x000000); g.fillRect(49,20,2,2); g.fillRect(49,24,2,2);
+      g.fillStyle(0xffffff,0.10); g.fillRoundedRect(53,6,38,3,2);
 
-    // Cofano (parte anteriore): pieghe lamiera
-    g.fillStyle(dark);  g.fillRect(64, 15, 22, 1); g.fillRect(64, 28, 22, 1);
-    g.fillStyle(light); g.fillRect(66, 21, 18, 2);
+    } else if (vehicleKey === 'armored_van') {
+      // ── FURGONE BLINDATO — corpo scatolato, piastre, rivetti, feritoie ─────
+      const wh: [number,number][] = [[11,1],[62,1],[11,32],[62,32]];
+      g.fillStyle(0x141414); wh.forEach(([x,y]) => g.fillRoundedRect(x,y,22,11,3));
+      g.fillStyle(0x2c2c2c); wh.forEach(([x,y]) => [4,9,14].forEach(o => g.fillRect(x+o,y+2,2,7)));
+      g.fillStyle(darker); g.fillRect(6,4,88,36);
+      g.fillStyle(base);   g.fillRect(7,5,86,34);
+      g.fillStyle(light);  g.fillRect(9,5,82,8);
+      g.fillStyle(dark);   g.fillRect(9,31,82,8);
+      // giunzioni piastre
+      g.fillStyle(darker);
+      [26,50,70].forEach(x => g.fillRect(x,5,3,34));
+      g.fillRect(7,20,86,3);
+      // rivetti
+      g.fillStyle(metalD);
+      [16,35,57,76].forEach(x => [9,17,27,35].forEach(y => g.fillCircle(x,y,2)));
+      // feritoie anteriori
+      g.fillStyle(0x0e1d29); g.fillRect(73,8,15,7); g.fillRect(73,29,15,7);
+      g.fillStyle(0x2c5470,0.5); g.fillRect(75,10,9,3); g.fillRect(75,31,9,3);
+      // feritoie laterali
+      g.fillStyle(0x0e1d29); g.fillRect(30,7,14,8); g.fillRect(30,29,14,8);
+      g.fillStyle(0x2c5470,0.35); g.fillRect(32,9,8,4); g.fillRect(32,31,8,4);
+      g.fillStyle(0xfff4bc); g.fillRect(88,8,5,4); g.fillRect(88,32,5,4);
+      g.fillStyle(0xffffff); g.fillRect(89,9,2,2); g.fillRect(89,33,2,2);
+      g.fillStyle(0xfff4bc,0.3); g.fillRect(92,9,3,2); g.fillRect(92,33,3,2);
+      g.fillStyle(0xcc1111); g.fillRect(7,9,4,5); g.fillRect(7,30,4,5);
+      g.fillStyle(0xff4444); g.fillRect(8,10,2,3); g.fillRect(8,31,2,3);
+      g.fillStyle(metalD); g.fillRect(91,8,5,28); g.fillStyle(metal); g.fillRect(92,9,3,26);
+      g.fillStyle(metalD); g.fillRect(6,9,3,26);
+      // torretta blindata (con scatola protettiva)
+      g.fillStyle(darker); g.fillRect(36,8,28,28);
+      g.fillStyle(base);   g.fillRect(37,9,26,26);
+      g.fillStyle(metalD); g.fillCircle(50,22,11); g.fillStyle(metal); g.fillCircle(50,22,9);
+      g.fillStyle(metalL); g.fillCircle(48,20,3); g.fillStyle(metalD); g.fillCircle(50,22,2);
+      g.fillStyle(metalD); g.fillRect(50,17,46,10); g.fillStyle(metal); g.fillRect(50,18,46,8);
+      g.fillStyle(metalL); g.fillRect(50,19,42,3);
+      g.fillStyle(metalD); g.fillRect(90,16,7,12); g.fillRect(94,15,4,14);
+      g.fillStyle(0x000000); g.fillRect(95,18,2,2); g.fillRect(95,23,2,2);
+      g.fillStyle(0xffffff,0.10); g.fillRect(9,5,78,3);
 
-    // Parabrezza (trapezio, vetro scuro con riflesso)
-    g.fillStyle(0x0e1d29);
-    g.fillPoints([{ x: 52, y: 10 }, { x: 64, y: 14 }, { x: 64, y: 30 }, { x: 52, y: 34 }], true);
-    g.fillStyle(0x2c5470, 0.5);
-    g.fillPoints([{ x: 53, y: 12 }, { x: 60, y: 14 }, { x: 58, y: 19 }, { x: 53, y: 17 }], true);
+    } else if (vehicleKey === 'military_suv') {
+      // ── SUV MILITARE — alto, boxy, ruote grandi, bull bar, antenna radio ────
+      const wh: [number,number][] = [[9,0],[60,0],[9,33],[60,33]];
+      g.fillStyle(0x141414); wh.forEach(([x,y]) => g.fillRoundedRect(x,y,25,13,4));
+      g.fillStyle(0x2c2c2c); wh.forEach(([x,y]) => [5,10,17].forEach(o => g.fillRect(x+o,y+2,2,9)));
+      g.fillStyle(0x555555); wh.forEach(([x,y]) => g.fillCircle(x+12,y+6,4));
+      // corpo alto e boxy
+      g.fillStyle(darker); g.fillRoundedRect(6,3,88,38,{tl:6,bl:6,tr:10,br:10});
+      g.fillStyle(base);   g.fillRoundedRect(7,4,86,36,{tl:5,bl:5,tr:9,br:9});
+      g.fillStyle(dark);   g.fillRoundedRect(9,32,80,7,{tl:3,bl:3,tr:7,br:7});
+      g.fillStyle(light);  g.fillRoundedRect(9,5,76,10,{tl:4,bl:2,tr:7,br:2});
+      // finestre militari (piccole e quadrate)
+      g.fillStyle(0x0e1d29); g.fillRect(55,8,22,12); g.fillRect(55,24,22,12);
+      g.fillStyle(0x2c5470,0.45); g.fillRect(57,10,14,6); g.fillRect(57,26,14,6);
+      g.fillStyle(0x0e1d29); g.fillRect(31,8,20,12); g.fillRect(31,24,20,12);
+      g.fillStyle(0x2c5470,0.35); g.fillRect(33,10,12,6); g.fillRect(33,26,12,6);
+      g.fillStyle(base); g.fillRect(51,5,6,34);
+      g.fillStyle(dark); g.fillRect(78,15,12,1); g.fillRect(78,28,12,1);
+      g.fillStyle(light); g.fillRect(80,20,8,4);
+      // bull bar anteriore
+      g.fillStyle(metalD); g.fillRoundedRect(88,9,6,26,3);
+      g.fillStyle(metal);  g.fillRect(89,12,4,20);
+      g.fillStyle(metalD); g.fillRect(89,7,3,5); g.fillRect(89,32,3,5);
+      g.fillStyle(0xfff4bc); g.fillRoundedRect(83,7,7,7,2); g.fillRoundedRect(83,30,7,7,2);
+      g.fillStyle(0xffffff); g.fillRect(84,8,4,5); g.fillRect(84,31,4,5);
+      g.fillStyle(0xfff4bc,0.3); g.fillRect(89,8,5,5); g.fillRect(89,31,5,5);
+      g.fillStyle(0xcc1111); g.fillRoundedRect(7,9,5,6,1); g.fillRoundedRect(7,29,5,6,1);
+      g.fillStyle(0xff4444); g.fillRect(8,10,2,4); g.fillRect(8,30,2,4);
+      g.fillStyle(base); g.fillRoundedRect(52,1,8,5,2); g.fillRoundedRect(52,38,8,5,2);
+      g.fillStyle(0x0e1d29); g.fillRect(53,2,5,3); g.fillRect(53,39,5,3);
+      // antenna radio
+      g.fillStyle(metalD); g.fillRect(18,3,2,5); g.fillStyle(metalL); g.fillRect(19,2,1,3);
+      g.fillStyle(metalD); g.fillRect(6,11,3,22);
+      // torretta
+      g.fillStyle(metalD); g.fillCircle(47,22,11); g.fillStyle(metal); g.fillCircle(47,22,9);
+      g.fillStyle(metalL); g.fillCircle(45,20,3); g.fillStyle(metalD); g.fillCircle(47,22,2);
+      g.fillStyle(metalD); g.fillRect(47,17,49,10); g.fillStyle(metal); g.fillRect(47,18,49,8);
+      g.fillStyle(metalL); g.fillRect(47,19,44,3);
+      g.fillStyle(metalD); g.fillRect(89,16,8,12); g.fillRect(93,15,5,14);
+      g.fillStyle(0x000000); g.fillRect(94,18,3,2); g.fillRect(94,23,3,2);
+      g.fillStyle(0xffffff,0.10); g.fillRoundedRect(15,4,68,3,2);
 
-    // Tettuccio cabina (punto più alto → più chiaro)
-    g.fillStyle(light);   g.fillRoundedRect(33, 11, 20, 22, 6);
-    g.fillStyle(lighter); g.fillRoundedRect(35, 13, 16, 8, 4);
-    g.fillStyle(dark);    g.fillRect(33, 21, 20, 1);
+    } else if (vehicleKey === 'armored_truck') {
+      // ── CAMION CORAZZATO — corpo enorme, 6 ruote (doppio assale post.) ──────
+      g.fillStyle(0x141414);
+      g.fillRoundedRect(62,0,26,13,4); g.fillRoundedRect(62,31,26,13,4);
+      g.fillRoundedRect(10,0,24,13,4); g.fillRoundedRect(34,0,24,13,4);
+      g.fillRoundedRect(10,31,24,13,4); g.fillRoundedRect(34,31,24,13,4);
+      g.fillStyle(0x2c2c2c);
+      ([[62,0],[10,0],[34,0],[62,31],[10,31],[34,31]] as [number,number][]).forEach(([x,y]) =>
+        [5,11,17].forEach(o => g.fillRect(x+o,y+3,2,7))
+      );
+      g.fillStyle(darker); g.fillRect(5,2,90,40);
+      g.fillStyle(base);   g.fillRect(6,3,88,38);
+      g.fillStyle(light);  g.fillRect(8,3,84,10);
+      g.fillStyle(dark);   g.fillRect(8,31,84,10);
+      g.fillStyle(darker);
+      g.fillRect(5,21,90,3);
+      [22,44,62].forEach(x => g.fillRect(x,2,3,40));
+      g.fillStyle(metalD);
+      [14,32,51,70,84].forEach(x => [8,15,29,36].forEach(y => g.fillCircle(x,y,2.5)));
+      g.fillStyle(0x0e1d29); g.fillRect(65,7,18,9); g.fillRect(65,28,18,9);
+      g.fillStyle(0x2c5470,0.4); g.fillRect(67,9,12,5); g.fillRect(67,30,12,5);
+      g.fillStyle(0xfff4bc); g.fillRect(87,7,5,5); g.fillRect(87,32,5,5);
+      g.fillStyle(0xffffff); g.fillRect(88,8,2,3); g.fillRect(88,33,2,3);
+      g.fillStyle(0xfff4bc,0.3); g.fillRect(91,8,4,3); g.fillRect(91,33,4,3);
+      g.fillStyle(0xcc1111); g.fillRect(6,8,5,5); g.fillRect(6,31,5,5);
+      g.fillStyle(0xff4444); g.fillRect(7,9,2,3); g.fillRect(7,32,2,3);
+      g.fillStyle(metalD); g.fillRect(91,6,6,32); g.fillStyle(metal); g.fillRect(92,7,4,30);
+      g.fillStyle(metalD); g.fillRect(5,7,3,30);
+      // torretta corazzata con scatola protettiva visibile
+      g.fillStyle(darker); g.fillRect(22,7,30,30);
+      g.fillStyle(base);   g.fillRect(23,8,28,28);
+      g.fillStyle(metalD); g.fillCircle(37,22,11); g.fillStyle(metal); g.fillCircle(37,22,9);
+      g.fillStyle(metalL); g.fillCircle(35,20,3); g.fillStyle(metalD); g.fillCircle(37,22,2);
+      g.fillStyle(metalD); g.fillRect(37,16,56,12); g.fillStyle(metal); g.fillRect(37,17,56,10);
+      g.fillStyle(metalL); g.fillRect(37,18,52,4);
+      g.fillStyle(metalD); g.fillRect(87,15,10,14); g.fillRect(92,13,6,18);
+      g.fillStyle(0x000000); g.fillRect(93,17,4,2); g.fillRect(93,24,4,2);
+      g.fillStyle(0xffffff,0.08); g.fillRect(8,3,80,3);
 
-    // Lunotto posteriore
-    g.fillStyle(0x0e1d29);
-    g.fillPoints([{ x: 24, y: 12 }, { x: 33, y: 11 }, { x: 33, y: 33 }, { x: 24, y: 32 }], true);
-    g.fillStyle(0x2c5470, 0.4);
-    g.fillPoints([{ x: 25, y: 13 }, { x: 31, y: 13 }, { x: 30, y: 18 }, { x: 25, y: 17 }], true);
+    } else if (vehicleKey === 'heavy_military') {
+      // ── MEZZO PESANTE — 6 ruote enormi, doppio cannone, corazza massima ─────
+      g.fillStyle(0x141414);
+      g.fillRoundedRect(60,0,28,14,4); g.fillRoundedRect(60,30,28,14,4);
+      g.fillRoundedRect(30,0,26,14,4); g.fillRoundedRect(30,30,26,14,4);
+      g.fillRoundedRect(4,0,22,14,4);  g.fillRoundedRect(4,30,22,14,4);
+      g.fillStyle(0x2c2c2c);
+      ([[60,0],[30,0],[4,0],[60,30],[30,30],[4,30]] as [number,number][]).forEach(([x,y]) =>
+        [5,11,17,22].forEach(o => g.fillRect(x+o,y+3,2,8))
+      );
+      g.fillStyle(0x555555);
+      ([[74,6],[44,6],[15,6],[74,37],[44,37],[15,37]] as [number,number][]).forEach(([x,y]) => g.fillCircle(x,y,5));
+      g.fillStyle(darker); g.fillRect(3,1,94,42);
+      g.fillStyle(base);   g.fillRect(4,2,92,40);
+      g.fillStyle(light);  g.fillRect(6,2,88,11);
+      g.fillStyle(dark);   g.fillRect(6,31,88,11);
+      g.fillStyle(darker);
+      g.fillRect(3,21,94,3);
+      [18,38,56,74].forEach(x => g.fillRect(x,1,3,42));
+      g.fillStyle(metalD);
+      [11,27,46,63,80,91].forEach(x => [8,15,29,36].forEach(y => g.fillCircle(x,y,2.5)));
+      g.fillStyle(0x0e1d29);
+      g.fillRect(60,5,16,8); g.fillRect(60,31,16,8);
+      g.fillRect(40,5,14,8); g.fillRect(40,31,14,8);
+      g.fillStyle(0x2c5470,0.4);
+      g.fillRect(62,7,10,4); g.fillRect(62,33,10,4);
+      g.fillRect(42,7,8,4);  g.fillRect(42,33,8,4);
+      g.fillStyle(0xfff4bc); g.fillRect(86,4,6,6); g.fillRect(86,34,6,6);
+      g.fillStyle(0xffffff); g.fillRect(87,5,3,4); g.fillRect(87,35,3,4);
+      g.fillStyle(0xfff4bc,0.3); g.fillRect(91,5,5,4); g.fillRect(91,35,5,4);
+      g.fillStyle(0xcc1111); g.fillRect(4,7,5,6); g.fillRect(4,31,5,6);
+      g.fillStyle(0xff4444); g.fillRect(5,8,2,4); g.fillRect(5,32,2,4);
+      g.fillStyle(metalD); g.fillRect(90,5,7,34); g.fillStyle(metal); g.fillRect(91,6,5,32);
+      g.fillStyle(metalD); g.fillRect(3,9,3,26); g.fillStyle(metal); g.fillRect(3,17,3,10);
+      // DOPPIO CANNONE
+      g.fillStyle(darker); g.fillRect(20,10,26,24);
+      g.fillStyle(base);   g.fillRect(21,11,24,22);
+      g.fillStyle(metalD); g.fillCircle(33,22,11); g.fillStyle(metal); g.fillCircle(33,22,9);
+      g.fillStyle(metalL); g.fillCircle(31,20,3.5); g.fillStyle(metalD); g.fillCircle(33,22,2);
+      g.fillStyle(metalD); g.fillRect(33,13,60,7); g.fillStyle(metal); g.fillRect(33,14,60,5);
+      g.fillStyle(metalL); g.fillRect(33,14,56,2);
+      g.fillStyle(metalD); g.fillRect(87,12,10,9);
+      g.fillStyle(0x000000); g.fillRect(88,14,7,2);
+      g.fillStyle(metalD); g.fillRect(33,24,60,7); g.fillStyle(metal); g.fillRect(33,25,60,5);
+      g.fillStyle(metalL); g.fillRect(33,25,56,2);
+      g.fillStyle(metalD); g.fillRect(87,23,10,9);
+      g.fillStyle(0x000000); g.fillRect(88,25,7,2);
+      g.fillStyle(0xffffff,0.07); g.fillRect(6,2,82,3);
 
-    // Cofano post. / giunzioni
-    g.fillStyle(dark); g.fillRect(20, 9, 1, 26); g.fillRect(11, 12, 8, 1); g.fillRect(11, 31, 8, 1);
-
-    // Specchietti
-    g.fillStyle(base);     g.fillRoundedRect(49, 3, 7, 4, 2); g.fillRoundedRect(49, 37, 7, 4, 2);
-    g.fillStyle(0x0e1d29); g.fillRect(50, 4, 4, 2); g.fillRect(50, 38, 4, 2);
-
-    // Fari anteriori
-    g.fillStyle(0xfff4bc); g.fillRoundedRect(85, 9, 6, 5, 2); g.fillRoundedRect(85, 30, 6, 5, 2);
-    g.fillStyle(0xffffff); g.fillRect(86, 10, 3, 3); g.fillRect(86, 31, 3, 3);
-    g.fillStyle(0xfff4bc, 0.3); g.fillRect(90, 10, 4, 3); g.fillRect(90, 31, 4, 3);
-
-    // Fari posteriori
-    g.fillStyle(0xcc1111); g.fillRoundedRect(8, 10, 4, 5, 1); g.fillRoundedRect(8, 29, 4, 5, 1);
-    g.fillStyle(0xff4444); g.fillRect(9, 11, 2, 3); g.fillRect(9, 30, 2, 3);
-
-    // Paraurti anteriore
-    g.fillStyle(lighter); g.fillRoundedRect(89, 16, 4, 12, 2);
-
-    // Torretta + cannone (al centro, punta a destra)
-    const metal = 0x4a4a52, metalL = 0x70707a, metalD = 0x26262c;
-    g.fillStyle(metalD); g.fillCircle(58, 22, 9);
-    g.fillStyle(metal);  g.fillCircle(58, 22, 7);
-    g.fillStyle(metalL); g.fillCircle(56, 20, 2.5);
-    g.fillStyle(metalD); g.fillCircle(58, 22, 2);
-    // Canna (arriva al bordo anteriore x=100)
-    g.fillStyle(metalD); g.fillRect(58, 18, 42, 8);
-    g.fillStyle(metal);  g.fillRect(58, 19, 42, 6);
-    g.fillStyle(metalL); g.fillRect(58, 20, 38, 2);
-    g.fillStyle(metalD); g.fillRect(90, 17, 10, 10);
-    g.fillStyle(0x000000); g.fillRect(91, 19, 8, 2); g.fillRect(91, 23, 8, 2);
-
-    // Riflesso superiore
-    g.fillStyle(0xffffff, 0.10); g.fillRoundedRect(16, 7, 58, 3, 2);
+    } else {
+      // ── VEICOLO SPERIMENTALE — futuristico, angolare, cannone a energia ──────
+      g.fillStyle(0x111122);
+      g.fillRoundedRect(11,2,20,10,5); g.fillRoundedRect(11,32,20,10,5);
+      g.fillRoundedRect(63,2,20,10,5); g.fillRoundedRect(63,32,20,10,5);
+      g.fillStyle(0x440088);
+      g.fillCircle(21,7,3);  g.fillCircle(21,37,3);
+      g.fillCircle(73,7,3);  g.fillCircle(73,37,3);
+      g.fillStyle(0x8833ff,0.8);
+      g.fillCircle(21,7,2);  g.fillCircle(21,37,2);
+      g.fillCircle(73,7,2);  g.fillCircle(73,37,2);
+      // corpo angolare a cunei
+      const body = [{x:8,y:11},{x:16,y:5},{x:82,y:5},{x:94,y:15},{x:94,y:29},{x:82,y:39},{x:16,y:39},{x:8,y:33}];
+      g.fillStyle(darker); g.fillPoints(body.map(p => ({x:p.x+1,y:p.y+1})),true);
+      g.fillStyle(base);   g.fillPoints(body,true);
+      g.fillStyle(light);
+      g.fillPoints([{x:16,y:6},{x:82,y:6},{x:82,y:12},{x:16,y:12}],true);
+      g.fillStyle(dark);
+      g.fillPoints([{x:16,y:32},{x:82,y:32},{x:82,y:38},{x:16,y:38}],true);
+      // trim viola caratteristico
+      g.fillStyle(0x8833ff,0.85);
+      g.fillRect(8,21,86,2); g.fillRect(8,10,86,1); g.fillRect(8,33,86,1);
+      // cabina vetro scuro angolare
+      g.fillStyle(0x060012);
+      g.fillPoints([{x:43,y:7},{x:74,y:9},{x:74,y:35},{x:43,y:37}],true);
+      g.fillStyle(0x3300aa,0.55);
+      g.fillPoints([{x:45,y:9},{x:68,y:11},{x:66,y:17},{x:45,y:15}],true);
+      // pannello laterale
+      g.fillStyle(0x060012);
+      g.fillPoints([{x:19,y:8},{x:43,y:7},{x:43,y:37},{x:19,y:36}],true);
+      g.fillStyle(0x220044,0.6); g.fillRect(21,10,18,10); g.fillRect(21,24,18,10);
+      // griglia anteriore ad energia
+      g.fillStyle(0x060012);
+      g.fillPoints([{x:74,y:9},{x:88,y:14},{x:88,y:30},{x:74,y:35}],true);
+      g.fillStyle(0x8833ff,0.45); g.fillRect(76,13,10,5); g.fillRect(76,26,10,5);
+      // fari anteriori energia viola
+      g.fillStyle(0xbb44ff); g.fillRoundedRect(86,8,7,6,2); g.fillRoundedRect(86,30,7,6,2);
+      g.fillStyle(0xffffff,0.8); g.fillRect(87,9,3,4); g.fillRect(87,31,3,4);
+      g.fillStyle(0xbb44ff,0.4); g.fillRect(92,9,5,4); g.fillRect(92,31,5,4);
+      // fari posteriori rosa energia
+      g.fillStyle(0xff22aa); g.fillRect(9,10,5,6); g.fillRect(9,28,5,6);
+      g.fillStyle(0xff88cc,0.5); g.fillRect(13,11,3,4); g.fillRect(13,29,3,4);
+      // CANNONE A ENERGIA
+      g.fillStyle(0x330066); g.fillCircle(47,22,11);
+      g.fillStyle(0x550099); g.fillCircle(47,22,9);
+      g.fillStyle(0x9955ee); g.fillCircle(45,20,3.5);
+      g.fillStyle(0x8833ff,0.9); g.fillCircle(47,22,5);
+      g.fillStyle(0xffffff,0.8); g.fillCircle(47,22,2);
+      g.fillStyle(0x330066); g.fillRect(47,18,46,8);
+      g.fillStyle(0x550099); g.fillRect(47,19,46,6);
+      g.fillStyle(0x8833ff,0.7); g.fillRect(49,20,40,4);
+      g.fillStyle(0x330066); g.fillRect(87,17,9,10);
+      g.fillStyle(0xffffff,0.9); g.fillRect(90,19,6,6);
+      g.fillStyle(0x8833ff,0.3); g.fillRect(49,17,38,10);
+      g.fillStyle(0xffffff,0.12); g.fillRoundedRect(17,6,52,3,2);
+    }
 
     g.generateTexture(key, 100, 44);
     g.destroy();
