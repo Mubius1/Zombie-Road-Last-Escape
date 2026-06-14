@@ -16,6 +16,22 @@ const ATTACH_DAMAGE_AMOUNT = 14;
 const MISSION_DIST = 18000;
 const GIANT_SPAWN_INTERVAL = 22000;
 
+interface EnvConfig {
+  name: string;
+  bgColor: number; skyColor: number; groundColor: number;
+  roadColor: number; lineColor: number; shoulderColor: number;
+}
+
+const ENVIRONMENTS: EnvConfig[] = [
+  { name: 'Città Distrutta',        bgColor: 0x12121e, skyColor: 0x16161e, groundColor: 0x1a1610, roadColor: 0x2a2a2a, lineColor: 0xddcc00, shoulderColor: 0x1e1e22 },
+  { name: 'Autostrada Abbandonata', bgColor: 0x14120e, skyColor: 0x1c180e, groundColor: 0x141208, roadColor: 0x323028, lineColor: 0xaaaa44, shoulderColor: 0x201e16 },
+  { name: 'Deserto',                bgColor: 0x1e1006, skyColor: 0x2e1a08, groundColor: 0x1e1408, roadColor: 0x4a3a1a, lineColor: 0xddaa00, shoulderColor: 0x2a2010 },
+  { name: 'Foresta Infestata',      bgColor: 0x040c04, skyColor: 0x040c04, groundColor: 0x020802, roadColor: 0x141c10, lineColor: 0x66cc22, shoulderColor: 0x0a100a },
+  { name: 'Zona Industriale',       bgColor: 0x0e0a08, skyColor: 0x120e0a, groundColor: 0x0c0806, roadColor: 0x1c1a18, lineColor: 0xff6600, shoulderColor: 0x181410 },
+  { name: 'Base Militare',          bgColor: 0x080e06, skyColor: 0x0c1008, groundColor: 0x080e06, roadColor: 0x202818, lineColor: 0x88bb44, shoulderColor: 0x101608 },
+  { name: 'Città Finale',           bgColor: 0x0c0612, skyColor: 0x100618, groundColor: 0x0c0612, roadColor: 0x180c22, lineColor: 0xcc44ff, shoulderColor: 0x140a1a },
+];
+
 type ZombieType = 'common' | 'runner' | 'armored' | 'jumper' | 'giant' | 'toxic';
 type ComponentKey = 'engine' | 'wheels' | 'tank' | 'turret' | 'armor';
 
@@ -82,6 +98,7 @@ export default class GameScene extends Phaser.Scene {
   private mechanicTimer = 0;
   private soldierTimer = 0;
   private giantTimer = 0;
+  private envIndex = 0;
 
   private hudHealthFill!: Phaser.GameObjects.Rectangle;
   private hudFuelFill!: Phaser.GameObjects.Rectangle;
@@ -129,6 +146,7 @@ export default class GameScene extends Phaser.Scene {
     this.mechanicTimer = 0;
     this.soldierTimer = 0;
     this.giantTimer = GIANT_SPAWN_INTERVAL;
+    this.envIndex = (missionNum - 1) % ENVIRONMENTS.length;
 
     const def = { engine: 100, wheels: 100, tank: 100, turret: 100, armor: 100 };
     const c = savedComp ?? def;
@@ -259,25 +277,196 @@ export default class GameScene extends Phaser.Scene {
   // ─── World & entities ────────────────────────────────────────────────────────
 
   private buildWorld() {
-    this.add.rectangle(W/2, H/2, W, H, 0x12121e);
-    const hills = this.add.graphics();
-    hills.fillStyle(0x1e1e2e);
-    const hd = [[0,55],[130,35],[280,65],[420,30],[560,50],[700,40],[850,60]];
-    for (let i = 0; i < hd.length - 1; i++) {
-      const [x1,h1] = hd[i], [x2,h2] = hd[i+1];
-      hills.fillTriangle(x1,ROAD_TOP,(x1+x2)/2,ROAD_TOP-Math.max(h1,h2),x2,ROAD_TOP);
-    }
-    this.add.rectangle(W/2,ROAD_TOP/2,W,ROAD_TOP,0x1a1a10);
-    this.add.rectangle(W/2,(ROAD_BOTTOM+H)/2,W,H-ROAD_BOTTOM,0x1e1a10);
-    this.add.rectangle(W/2,ROAD_CENTER,W,ROAD_BOTTOM-ROAD_TOP,0x333333);
-    this.add.rectangle(W/2,ROAD_TOP,W,4,0xddcc00);
-    this.add.rectangle(W/2,ROAD_BOTTOM,W,4,0xddcc00);
-    this.add.rectangle(W/2,ROAD_TOP-10,W,16,0x2a2a20);
-    this.add.rectangle(W/2,ROAD_BOTTOM+10,W,16,0x2a2a20);
-    const count = Math.ceil(W/STRIPE_GAP)+3;
+    const env = ENVIRONMENTS[this.envIndex];
+
+    // Sfondo + fasce
+    this.add.rectangle(W/2, H/2, W, H, env.bgColor);
+    this.add.rectangle(W/2, ROAD_TOP / 2, W, ROAD_TOP, env.skyColor);
+    this.add.rectangle(W/2, (ROAD_BOTTOM + H) / 2, W, H - ROAD_BOTTOM, env.groundColor);
+
+    // Decoratori ambiente (sopra e sotto la strada)
+    const dg = this.add.graphics();
+    this.drawDecorators(dg, this.envIndex);
+
+    // Strada
+    this.add.rectangle(W/2, ROAD_CENTER, W, ROAD_BOTTOM - ROAD_TOP, env.roadColor);
+    this.add.rectangle(W/2, ROAD_TOP,    W, 4, env.lineColor);
+    this.add.rectangle(W/2, ROAD_BOTTOM, W, 4, env.lineColor);
+    this.add.rectangle(W/2, ROAD_TOP    - 10, W, 16, env.shoulderColor);
+    this.add.rectangle(W/2, ROAD_BOTTOM + 10, W, 16, env.shoulderColor);
+
+    // Strisce centrali
+    const count = Math.ceil(W / STRIPE_GAP) + 3;
     for (let i = 0; i < count; i++) {
-      const r = this.add.rectangle(i*STRIPE_GAP,ROAD_CENTER,STRIPE_W,4,0xffffff,0.35).setDepth(1);
+      const r = this.add.rectangle(i * STRIPE_GAP, ROAD_CENTER, STRIPE_W, 4, 0xffffff, 0.3).setDepth(1);
       this.stripes.push(r);
+    }
+
+    // Banner nome ambiente (scompare dopo 2.5s)
+    const envLabel = this.add.text(W / 2, ROAD_TOP - 28, env.name.toUpperCase(), {
+      fontSize: '16px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(18).setAlpha(0);
+    this.tweens.add({
+      targets: envLabel,
+      alpha: { from: 0, to: 1 }, y: ROAD_TOP - 36,
+      duration: 400, ease: 'Power2', yoyo: false,
+      onComplete: () => {
+        this.time.delayedCall(1600, () =>
+          this.tweens.add({ targets: envLabel, alpha: 0, duration: 500, onComplete: () => envLabel.destroy() }));
+      },
+    });
+  }
+
+  private drawDecorators(g: Phaser.GameObjects.Graphics, idx: number) {
+    const SB = ROAD_TOP - 6;   // sky bottom (appoggio decorazioni sopra)
+    const GT = ROAD_BOTTOM + 6; // ground top
+
+    switch (idx) {
+      case 0: { // Città Distrutta
+        g.fillStyle(0x202028);
+        [20,80,150,230,320,430,540,650,730].forEach((x, i) => {
+          const bw = 48 + (i % 3) * 18;
+          const bh = 38 + (i % 4) * 22;
+          g.fillRect(x, SB - bh, bw, bh);
+          // finestre
+          g.fillStyle(0x0e0e22);
+          for (let wy = SB - bh + 6; wy < SB - 6; wy += 12)
+            for (let wx = x + 4; wx < x + bw - 4; wx += 12)
+              g.fillRect(wx, wy, 5, 7);
+          g.fillStyle(0x202028);
+        });
+        // macerie sotto
+        g.fillStyle(0x252520);
+        [20,110,200,330,470,590,700].forEach(x => g.fillRect(x, GT + 4, 35, 14));
+        break;
+      }
+      case 1: { // Autostrada Abbandonata
+        // alberi morti
+        g.fillStyle(0x2a2418);
+        [40,130,260,400,530,660,770].forEach((x, i) => {
+          const th = 48 + (i % 3) * 18;
+          g.fillRect(x, SB - th, 5, th);
+          g.fillRect(x - 14, SB - th + 6, 12, 4);
+          g.fillRect(x + 5,  SB - th + 14, 13, 4);
+        });
+        // guardrail sopra e sotto
+        g.fillStyle(0x3a3830);
+        g.fillRect(0, SB - 10, W, 4);
+        for (let x = 0; x < W; x += 38) g.fillRect(x, SB - 16, 4, 10);
+        g.fillRect(0, GT + 2,  W, 4);
+        g.fillRect(0, GT + 14, W, 3);
+        for (let x = 0; x < W; x += 38) g.fillRect(x, GT, 4, 18);
+        break;
+      }
+      case 2: { // Deserto
+        // dune sopra (approssimazione con rettangoli)
+        g.fillStyle(0x3a2c14);
+        for (let x = 0; x <= W; x += 2) {
+          const ht = Math.round(Math.sin(x / 120 * Math.PI) * 30 + Math.sin(x / 60 * Math.PI) * 12);
+          if (ht > 0) g.fillRect(x, SB - ht, 2, ht + 2);
+        }
+        // cactus
+        g.fillStyle(0x2a441a);
+        [70,220,370,530,680].forEach(x => {
+          g.fillRect(x + 4, SB - 52, 10, 52);
+          g.fillRect(x - 8,  SB - 38, 12, 8);
+          g.fillRect(x - 8,  SB - 50, 8,  14);
+          g.fillRect(x + 14, SB - 33, 12, 8);
+          g.fillRect(x + 20, SB - 45, 8,  14);
+        });
+        // dune sotto
+        g.fillStyle(0x3a2c12);
+        for (let x = 0; x <= W; x += 2) {
+          const ht = Math.round(Math.sin(x / 100 * Math.PI) * 18 + 6);
+          g.fillRect(x, GT, 2, ht);
+        }
+        break;
+      }
+      case 3: { // Foresta Infestata
+        g.fillStyle(0x0a1e08);
+        for (let x = 0; x < W + 10; x += 32) {
+          const th = 55 + (x % 5) * 8;
+          // triangolo albero
+          for (let dy = 0; dy < th; dy++) {
+            const hw = Math.round((dy / th) * 18);
+            g.fillRect(x + 18 - hw, SB - th + dy, hw * 2, 3);
+          }
+          g.fillRect(x + 14, SB - 8, 8, 10); // tronco
+        }
+        // sottobosco
+        g.fillStyle(0x0c1a08);
+        for (let x = 0; x < W; x += 48) g.fillRect(x, GT, 32, 8 + (x % 4) * 3);
+        break;
+      }
+      case 4: { // Zona Industriale
+        // ciminiere
+        g.fillStyle(0x2a2420);
+        [60,180,340,500,660].forEach((x, i) => {
+          const sh = 65 + (i % 3) * 22;
+          g.fillRect(x, SB - sh, 20, sh);
+          g.fillRect(x - 4, SB - sh, 28, 8); // bordo
+        });
+        // fabbrica (sfondo basso)
+        g.fillStyle(0x1e1c18);
+        g.fillRect(0, SB - 35, W, 35);
+        // fumo simulato
+        g.fillStyle(0x181614);
+        [60,180,340,500,660].forEach(x => {
+          g.fillCircle(x + 10, SB - 70, 10);
+          g.fillCircle(x + 16, SB - 80, 7);
+        });
+        // tubi sotto
+        g.fillStyle(0x302820);
+        g.fillRect(0, GT + 4, W, 10);
+        g.fillRect(0, GT + 20, W, 6);
+        for (let x = 0; x < W; x += 75) g.fillRect(x, GT, 14, 28);
+        break;
+      }
+      case 5: { // Base Militare
+        // torrette di guardia
+        g.fillStyle(0x1e2a14);
+        [90,340,590].forEach(x => {
+          g.fillRect(x + 4, SB - 75, 7, 75);
+          g.fillRect(x - 18, SB - 80, 46, 18);
+          g.fillRect(x - 20, SB - 86, 50, 8);
+          g.fillStyle(0x446644);
+          g.fillRect(x - 6, SB - 74, 5, 10);
+          g.fillStyle(0x1e2a14);
+        });
+        // recinzione sopra
+        g.fillStyle(0x2a3820);
+        g.fillRect(0, SB - 18, W, 4);
+        for (let x = 0; x < W; x += 14) g.fillRect(x, SB - 26, 3, 12);
+        // sacchi di sabbia sotto
+        g.fillStyle(0x2a2a1a);
+        for (let x = 0; x < W; x += 44) {
+          g.fillRect(x, GT + 2,  42, 14);
+          g.fillRect(x + 5, GT, 32, 10);
+        }
+        break;
+      }
+      case 6: { // Città Finale
+        // grattacieli drammatici
+        [0,52,115,185,260,340,430,515,595,660,730].forEach((x, i) => {
+          const bw = 44 + (i % 4) * 8;
+          const bh = 58 + (i % 6) * 16;
+          g.fillStyle(0x1a0c22);
+          g.fillRect(x, SB - bh, bw, bh);
+          // finestre illuminate (viola/rosa)
+          for (let wy = SB - bh + 5; wy < SB - 5; wy += 10)
+            for (let wx = x + 4; wx < x + bw - 4; wx += 9) {
+              g.fillStyle(Math.random() > 0.5 ? 0x4a1a6a : 0x0e060e);
+              g.fillRect(wx, wy, 4, 5);
+            }
+        });
+        // pavimento sotto — tinta drammatica
+        g.fillStyle(0x160820);
+        g.fillRect(0, GT, W, H - GT);
+        g.fillStyle(0x220c30);
+        [50,160,300,450,600,720].forEach(x => g.fillRect(x, GT, 50, 40));
+        break;
+      }
     }
   }
 
