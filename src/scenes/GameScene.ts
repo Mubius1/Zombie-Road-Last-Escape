@@ -240,83 +240,444 @@ export default class GameScene extends Phaser.Scene {
 
   private buildTextures() {
     if (this.textures.exists('vehicle')) return;
+    const G = (_w: number, _h: number) => this.make.graphics({ add: false } as any) as Phaser.GameObjects.Graphics & { generateTexture(k:string,w:number,h:number):void };
 
-    const vg = this.make.graphics({ add: false } as any);
-    vg.fillStyle(0x111111);
-    vg.fillRect(8,0,16,8); vg.fillRect(54,0,16,8);
-    vg.fillRect(8,28,16,8); vg.fillRect(54,28,16,8);
-    vg.fillStyle(0x4a6fa5); vg.fillRect(2,6,74,24);
-    vg.fillStyle(0x2c4f8a); vg.fillRect(18,10,34,16);
-    vg.fillStyle(0x88aadd); vg.fillRect(48,11,12,14);
-    vg.fillStyle(0x6688aa); vg.fillRect(72,7,4,22);
-    vg.fillStyle(0xffffaa); vg.fillRect(70,8,5,5); vg.fillRect(70,23,5,5);
-    vg.fillStyle(0xcc2222); vg.fillRect(4,8,5,5);  vg.fillRect(4,23,5,5);
-    vg.fillStyle(0x778899); vg.fillRect(74,16,18,4);
-    vg.generateTexture('vehicle', 94, 36);
-    vg.destroy();
-
-    const zombieConfigs: Array<[string, number]> = [
-      ['common',  0x3aaa3a],
-      ['runner',  0xcc3333],
-      ['armored', 0x778899],
-      ['jumper',  0xccaa00],
-      ['toxic',   0x44ee44],
-    ];
-    for (const [type, color] of zombieConfigs) {
-      const zg = this.make.graphics({ add: false } as any);
-      zg.fillStyle(color);
-      zg.fillCircle(14,6,6); zg.fillRect(7,12,14,14);
-      zg.fillRect(7,26,5,10); zg.fillRect(16,26,5,10);
-      zg.fillRect(1,12,6,10); zg.fillRect(21,12,6,10);
-      zg.fillStyle(0xff0000); zg.fillRect(10,4,3,3); zg.fillRect(16,4,3,3);
-      if (type === 'toxic') { zg.fillStyle(0x00ff00, 0.5); zg.fillCircle(14,18,8); }
-      if (type === 'jumper') { zg.fillStyle(0xffee00); zg.fillRect(6,24,16,4); }
-      zg.generateTexture(`zombie_${type}`, 28, 36);
-      zg.destroy();
+    // ── VEHICLE (100×44) ─────────────────────────────────────────────────────
+    {
+      const g = G(100,44);
+      // Tires
+      g.fillStyle(0x111111);
+      [14,84].forEach(x => { g.fillEllipse(x,38,20,14); g.fillEllipse(x,6,20,14); });
+      // Tire treads
+      g.fillStyle(0x1e1e1e);
+      [14,84].forEach(x => { [34,40].forEach(y => [x-6,x-3,x,x+3].forEach(tx => g.fillRect(tx,y-3,2,6))); });
+      [14,84].forEach(x => { [2,8].forEach(y => [x-6,x-3,x,x+3].forEach(tx => g.fillRect(tx,y-3,2,6))); });
+      // Rims
+      g.fillStyle(0x666666); [14,84].forEach(x => { g.fillCircle(x,38,5); g.fillCircle(x,6,5); });
+      g.fillStyle(0xbbbbbb); [14,84].forEach(x => { g.fillCircle(x,38,3); g.fillCircle(x,6,3); });
+      g.fillStyle(0x444444); [14,84].forEach(x => { g.fillCircle(x,38,1); g.fillCircle(x,6,1); });
+      // Undercarriage
+      g.fillStyle(0x2a2a2a); g.fillRect(8,12,84,20);
+      // Body (light gray → tinted by vehicle color)
+      g.fillStyle(0xcccccc); g.fillRect(10,11,80,22);
+      // Hood & trunk shading
+      g.fillStyle(0xbbbbbb); g.fillRect(83,13,14,18); g.fillRect(3,13,9,18);
+      // Roof
+      g.fillStyle(0xdddddd); g.fillRect(26,5,42,8);
+      // Panel seam lines
+      g.fillStyle(0x999999); g.fillRect(10,22,80,2); g.fillRect(40,11,2,22); g.fillRect(62,11,2,22);
+      // Windshield
+      g.fillStyle(0x0d1a22); g.fillRect(27,10,22,15);
+      g.fillStyle(0x2a5570, 0.7); g.fillRect(28,11,10,8); g.fillRect(40,11,6,6);
+      // Headlights
+      g.fillStyle(0xfff8aa); g.fillRect(91,14,8,6); g.fillRect(91,24,8,6);
+      g.fillStyle(0xffffff); g.fillRect(93,15,4,4); g.fillRect(93,25,4,4);
+      // Headlight halo
+      g.fillStyle(0xffffdd,0.4); g.fillRect(95,15,4,2); g.fillRect(95,25,4,2);
+      // Taillights
+      g.fillStyle(0xcc0000); g.fillRect(2,14,8,6); g.fillRect(2,24,8,6);
+      g.fillStyle(0xff3333); g.fillRect(3,15,4,4); g.fillRect(3,25,4,4);
+      // Turret base
+      g.fillStyle(0x555555); g.fillRect(46,3,18,9); g.fillStyle(0x666666); g.fillRect(47,4,16,7);
+      // Gun barrel (3-layer for depth)
+      g.fillStyle(0x333333); g.fillRect(62,5,32,8);
+      g.fillStyle(0x555555); g.fillRect(62,6,32,6);
+      g.fillStyle(0x777777); g.fillRect(62,7,30,4);
+      // Muzzle brake
+      g.fillStyle(0x222222); g.fillRect(90,4,10,9);
+      g.fillStyle(0x000000); g.fillRect(91,5,8,2); g.fillRect(91,10,8,2);
+      // Body top sheen
+      g.fillStyle(0xffffff,0.1); g.fillRect(10,11,80,5);
+      // Exhaust
+      g.fillStyle(0x333333); g.fillRect(0,17,9,4); g.fillRect(0,23,9,4);
+      g.fillStyle(0x111111); g.fillRect(0,18,6,2); g.fillRect(0,24,6,2);
+      // Front bumper
+      g.fillStyle(0x666666); g.fillRect(91,15,8,14); g.fillStyle(0x888888); g.fillRect(92,16,6,2);
+      g.generateTexture('vehicle', 100, 44);
+      g.destroy();
     }
 
-    // Giant zombie
-    const gg = this.make.graphics({ add: false } as any);
-    gg.fillStyle(0x664433);
-    gg.fillCircle(22,10,10); gg.fillRect(8,18,28,24);
-    gg.fillRect(6,42,10,18); gg.fillRect(22,42,10,18);
-    gg.fillRect(0,18,8,18);  gg.fillRect(36,18,8,18);
-    gg.fillStyle(0xff2200); gg.fillRect(14,6,6,5); gg.fillRect(24,6,5,5);
-    gg.generateTexture('zombie_giant', 44, 60);
-    gg.destroy();
+    // ── ZOMBIE COMMON (30×44) ─────────────────────────────────────────────────
+    {
+      const g = G(30,44);
+      // Shadow
+      g.fillStyle(0x000000,0.25); g.fillEllipse(15,43,20,5);
+      // Boots
+      g.fillStyle(0x1a0f00); g.fillRect(5,38,8,5); g.fillRect(17,38,8,5);
+      // Legs
+      g.fillStyle(0x2a4a2a); g.fillRect(6,26,7,14); g.fillRect(17,26,7,14);
+      g.fillStyle(0x3a6a3a); g.fillRect(7,29,4,5); g.fillRect(18,29,4,5);
+      // Torso (torn shirt)
+      g.fillStyle(0x142814); g.fillRect(8,14,14,14);
+      g.fillStyle(0x2a4a2a); g.fillRect(9,15,4,4); g.fillRect(18,17,3,5);
+      // Blood on torso
+      g.fillStyle(0x880000); g.fillRect(10,18,4,4); g.fillRect(17,22,3,4);
+      // Arms outstretched (zombie pose)
+      g.fillStyle(0x2a7a2a);
+      g.fillRect(-5,16,13,5); g.fillRect(22,16,13,5);
+      g.fillStyle(0x3a9a3a); g.fillRect(-7,17,5,3); g.fillRect(32,17,5,3);
+      // Hands
+      g.fillStyle(0x3a9a3a); g.fillCircle(-7,18,4); g.fillCircle(37,18,4);
+      g.fillStyle(0x111111);
+      [-3,0,3].forEach(d => g.fillRect(-12,16+d,5,2));
+      [-3,0,3].forEach(d => g.fillRect(37,16+d,5,2));
+      // Neck
+      g.fillStyle(0x3a9a3a); g.fillRect(12,8,6,7);
+      // Head base
+      g.fillStyle(0x3a9a3a); g.fillRect(7,1,16,14); g.fillCircle(15,3,8);
+      // Hair (dark, matted)
+      g.fillStyle(0x0f0a00); g.fillRect(7,0,16,7); g.fillCircle(15,1,8);
+      g.fillRect(6,1,3,10); g.fillRect(21,1,3,10);
+      // Eye sockets
+      g.fillStyle(0x111111); g.fillRect(8,7,6,5); g.fillRect(16,7,6,5);
+      // Eyes glowing red
+      g.fillStyle(0xff2200); g.fillRect(9,8,4,3); g.fillRect(17,8,4,3);
+      g.fillStyle(0xff8866); g.fillRect(10,8,2,2); g.fillRect(18,8,2,2);
+      // Mouth
+      g.fillStyle(0x440000); g.fillRect(8,13,14,3);
+      g.fillStyle(0x990000); g.fillRect(9,14,12,1);
+      g.fillStyle(0xbbaa88); [9,11,14,16,18].forEach(x => g.fillRect(x,13,2,3));
+      // Head wound
+      g.fillStyle(0x770000); g.fillRect(19,3,3,6); g.fillStyle(0xaa0000); g.fillRect(20,4,2,4);
+      g.generateTexture('zombie_common', 30, 44);
+      g.destroy();
+    }
 
-    const bg = this.make.graphics({ add: false } as any);
-    bg.fillStyle(0xffee00); bg.fillRect(0,0,16,4);
-    bg.fillStyle(0xffaa00); bg.fillRect(12,0,4,4);
-    bg.generateTexture('bullet', 16, 4);
-    bg.destroy();
+    // ── ZOMBIE RUNNER (26×42) ─────────────────────────────────────────────────
+    {
+      const g = G(26,42);
+      g.fillStyle(0x000000,0.2); g.fillEllipse(13,41,18,4);
+      // Feet (forward thrust)
+      g.fillStyle(0x111111); g.fillRect(2,37,8,4); g.fillRect(14,35,8,4);
+      // Lean legs
+      g.fillStyle(0x6a1a1a); g.fillRect(3,24,6,14); g.fillRect(15,22,6,14);
+      g.fillStyle(0x8a3333); g.fillRect(4,27,3,5); g.fillRect(16,25,3,5);
+      // Lean torso (forward hunched)
+      g.fillStyle(0x3a0808); g.fillRect(7,13,12,13);
+      g.fillStyle(0x6a1a1a); g.fillRect(8,14,4,4); g.fillRect(14,16,3,5);
+      // Arms swept back
+      g.fillStyle(0x8a2222);
+      g.fillRect(-4,17,11,4); // right arm back
+      g.fillRect(19,14,10,4); // left arm forward
+      g.fillStyle(0xaa3333); g.fillCircle(-4,19,3); g.fillCircle(29,16,3);
+      g.fillStyle(0x111111);
+      [-2,0,2].forEach(d => g.fillRect(-8,17+d,4,2));
+      [-2,0,2].forEach(d => g.fillRect(29,14+d,4,2));
+      // Neck
+      g.fillStyle(0xaa3333); g.fillRect(10,7,6,7);
+      // Head (angular)
+      g.fillStyle(0xaa3333); g.fillRect(6,1,14,13); g.fillCircle(13,3,7);
+      g.fillStyle(0x110000); g.fillRect(7,0,13,6); g.fillCircle(13,2,7);
+      // Eyes (orange-red, intense)
+      g.fillStyle(0x110000); g.fillRect(7,5,5,5); g.fillRect(14,5,5,5);
+      g.fillStyle(0xff5500); g.fillRect(8,6,3,3); g.fillRect(15,6,3,3);
+      g.fillStyle(0xffaa44); g.fillRect(9,6,1,2); g.fillRect(16,6,1,2);
+      // Snarl
+      g.fillStyle(0x330000); g.fillRect(8,10,10,3);
+      g.fillStyle(0x991111); g.fillRect(9,11,8,1);
+      g.fillStyle(0xbbaa88); [9,11,13,16].forEach(x => g.fillRect(x,10,2,3));
+      g.generateTexture('zombie_runner', 26, 42);
+      g.destroy();
+    }
 
-    const fg = this.make.graphics({ add: false } as any);
-    fg.fillStyle(0xff7700); fg.fillRect(2,5,16,17);
-    fg.fillStyle(0xffaa44); fg.fillRect(7,1,6,6);
-    fg.fillStyle(0xffd090, 0.5); fg.fillRect(5,9,4,10);
-    fg.generateTexture('fuel_can', 20, 22);
-    fg.destroy();
+    // ── ZOMBIE ARMORED (38×48) ─────────────────────────────────────────────────
+    {
+      const g = G(38,48);
+      g.fillStyle(0x000000,0.35); g.fillEllipse(19,47,28,6);
+      // Heavy boots
+      g.fillStyle(0x1a1a1a); g.fillRect(4,41,12,7); g.fillRect(22,41,12,7);
+      g.fillStyle(0x333333); g.fillRect(4,41,12,3); g.fillRect(22,41,12,3);
+      // Armored legs
+      g.fillStyle(0x667788); g.fillRect(5,28,12,15); g.fillRect(21,28,12,15);
+      g.fillStyle(0x778899); g.fillRect(6,29,10,6); g.fillRect(22,29,10,6);
+      g.fillStyle(0x445566); g.fillRect(5,34,12,2); g.fillRect(21,34,12,2);
+      // Chest plate
+      g.fillStyle(0x778899); g.fillRect(4,14,30,16);
+      g.fillStyle(0x8899aa); g.fillRect(5,15,28,13);
+      g.fillStyle(0x667788); g.fillRect(5,20,28,2); g.fillRect(18,14,2,16);
+      // Bolt rivets
+      g.fillStyle(0xaabbcc);
+      [[6,15],[30,15],[6,24],[30,24]].forEach(([x,y]) => g.fillRect(x,y,2,2));
+      // Shoulder pads
+      g.fillStyle(0x8899aa); g.fillRect(-2,13,9,12); g.fillRect(31,13,9,12);
+      g.fillStyle(0x9aabbb); g.fillRect(-1,14,7,9); g.fillRect(32,14,7,9);
+      // Armored arms
+      g.fillStyle(0x667788); g.fillRect(-8,20,10,7); g.fillRect(36,20,10,7);
+      g.fillStyle(0x8899aa); g.fillRect(-9,21,9,5); g.fillRect(37,21,9,5);
+      // Gauntlets
+      g.fillStyle(0x8899aa); g.fillRect(-11,23,8,8); g.fillRect(41,23,8,8);
+      g.fillStyle(0x555555);
+      [-2,0,2].forEach(d => g.fillRect(-14,22+d,4,2));
+      [-2,0,2].forEach(d => g.fillRect(48,22+d,4,2));
+      // Neck guard
+      g.fillStyle(0x667788); g.fillRect(14,8,10,8);
+      // Helmet
+      g.fillStyle(0x556677); g.fillRect(7,0,24,16); g.fillCircle(19,3,12);
+      g.fillStyle(0x667788); g.fillRect(8,1,22,13); g.fillCircle(19,3,11);
+      // Visor (slit)
+      g.fillStyle(0x0a1520); g.fillRect(9,8,20,7);
+      g.fillStyle(0x1a3040,0.8); g.fillRect(10,9,18,5);
+      // Eyes behind visor
+      g.fillStyle(0xffffff); g.fillRect(11,10,5,3); g.fillRect(22,10,5,3);
+      // Mouth grille
+      g.fillStyle(0x445566); g.fillRect(12,14,14,4);
+      [13,16,19,22].forEach(x => g.fillRect(x,14,2,4));
+      g.generateTexture('zombie_armored', 38, 48);
+      g.destroy();
+    }
 
-    const pg = this.make.graphics({ add: false } as any);
-    pg.fillStyle(0xff8800); pg.fillCircle(5,5,5);
-    pg.generateTexture('particle', 10, 10);
-    pg.destroy();
+    // ── ZOMBIE JUMPER (32×46) ─────────────────────────────────────────────────
+    {
+      const g = G(32,46);
+      g.fillStyle(0x000000,0.3); g.fillEllipse(16,45,24,5);
+      // Crouched/bent legs
+      g.fillStyle(0x6a5500);
+      g.fillRect(5,24,8,10);  g.fillRect(19,24,8,10); // thighs
+      g.fillRect(3,32,8,11);  g.fillRect(21,32,8,11); // shins (angled out)
+      // Feet with clawed toes
+      g.fillStyle(0x3a2a00); g.fillRect(0,41,12,4); g.fillRect(20,41,12,4);
+      g.fillStyle(0x111111);
+      [0,3,6].forEach(x => g.fillRect(x,42,2,3));
+      [21,24,27].forEach(x => g.fillRect(x,42,2,3));
+      // Leg muscle highlight
+      g.fillStyle(0x9a8800); g.fillRect(6,25,5,7); g.fillRect(20,25,5,7);
+      // Coiled torso
+      g.fillStyle(0x3a2a00); g.fillRect(9,12,14,14);
+      g.fillStyle(0x6a5500); g.fillRect(10,13,4,5); g.fillRect(18,15,3,5);
+      // Arms raised high (ready to grab)
+      g.fillStyle(0x8a7700);
+      g.fillRect(-6,10,14,5); g.fillRect(24,10,14,5);
+      g.fillRect(-8,6,7,10); g.fillRect(33,6,7,10);
+      // Claws
+      g.fillStyle(0xaaaa00); g.fillCircle(-6,9,4); g.fillCircle(38,9,4);
+      g.fillStyle(0x111111);
+      [-4,-1,2].forEach(d => g.fillRect(-10,7+d,5,2));
+      [-4,-1,2].forEach(d => g.fillRect(37,7+d,5,2));
+      // Neck
+      g.fillStyle(0xaaaa00); g.fillRect(13,6,6,7);
+      // Head
+      g.fillStyle(0xaaaa00); g.fillRect(8,0,16,12); g.fillCircle(16,2,8);
+      g.fillStyle(0x3a2a00); g.fillRect(8,-1,16,6); g.fillCircle(16,0,8);
+      g.fillRect(7,0,3,10); g.fillRect(22,0,3,10);
+      // Eyes (intense yellow)
+      g.fillStyle(0x111100); g.fillRect(9,3,7,5); g.fillRect(16,3,7,5);
+      g.fillStyle(0xffee00); g.fillRect(10,4,5,3); g.fillRect(17,4,5,3);
+      g.fillStyle(0xffffff); g.fillRect(11,4,2,2); g.fillRect(18,4,2,2);
+      // Snarl
+      g.fillStyle(0x221100); g.fillRect(9,9,14,3);
+      g.fillStyle(0xbb8800); g.fillRect(10,10,12,1);
+      g.fillStyle(0xddcc88); [10,12,15,17,19].forEach(x => g.fillRect(x,9,2,3));
+      g.generateTexture('zombie_jumper', 32, 46);
+      g.destroy();
+    }
 
-    const rg = this.make.graphics({ add: false } as any);
-    rg.fillStyle(0xff4400); rg.fillRect(0,2,20,6);
-    rg.fillStyle(0xffaa00); rg.fillRect(16,0,6,10);
-    rg.fillStyle(0xffff00); rg.fillRect(18,3,4,4);
-    rg.fillStyle(0x882200); rg.fillTriangle(0,2,0,8,6,5);
-    rg.generateTexture('rocket', 24, 10);
-    rg.destroy();
+    // ── ZOMBIE TOXIC (30×48) ─────────────────────────────────────────────────
+    {
+      const g = G(30,48);
+      // Toxic pool glow
+      g.fillStyle(0x004400,0.4); g.fillEllipse(15,47,28,7);
+      // Feet (dripping)
+      g.fillStyle(0x002200); g.fillRect(4,43,9,5); g.fillRect(17,43,9,5);
+      g.fillStyle(0x00aa22,0.6); g.fillRect(5,47,3,2); g.fillRect(20,46,3,3);
+      // Bloated legs
+      g.fillStyle(0x1a5522); g.fillRect(4,30,9,15); g.fillRect(17,30,9,15);
+      // Toxic veins on legs
+      g.fillStyle(0x00ee44); g.fillRect(5,33,2,9); g.fillRect(19,35,2,7);
+      // Swollen torso
+      g.fillStyle(0x0a3311); g.fillEllipse(15,21,26,22);
+      g.fillStyle(0x1a5522); g.fillEllipse(15,21,24,20);
+      // Blisters
+      g.fillStyle(0x00dd33);
+      g.fillCircle(8,18,4); g.fillCircle(21,19,5); g.fillCircle(13,24,3); g.fillCircle(20,25,3);
+      g.fillStyle(0x00ff44,0.5);
+      g.fillCircle(8,18,2); g.fillCircle(21,19,3);
+      // Arms (dripping slime)
+      g.fillStyle(0x1a5522);
+      g.fillRect(-7,17,13,7); g.fillRect(24,17,13,7);
+      g.fillStyle(0x00aa22,0.5); g.fillRect(-7,22,13,3); g.fillRect(24,22,13,3);
+      g.fillStyle(0x2a7733); g.fillCircle(-6,20,4); g.fillCircle(36,20,4);
+      g.fillStyle(0x00ff33);
+      [-3,0,3].forEach(d => g.fillRect(-11,18+d,4,2));
+      [-3,0,3].forEach(d => g.fillRect(37,18+d,4,2));
+      // Slime drips hanging
+      g.fillStyle(0x00cc33,0.7);
+      g.fillRect(-4,26,2,5); g.fillRect(1,28,2,4); g.fillRect(26,25,2,6); g.fillRect(31,27,2,5);
+      // Swollen head
+      g.fillStyle(0x2a7733); g.fillEllipse(15,5,24,16); g.fillStyle(0x1a5522); g.fillEllipse(15,5,22,14);
+      // Cracked skull
+      g.fillStyle(0x0a3311); g.fillRect(11,-1,2,6); g.fillRect(17,0,2,5); g.fillRect(7,2,2,5);
+      // Glowing eyes
+      g.fillStyle(0x002200); g.fillRect(6,1,8,7); g.fillRect(16,1,8,7);
+      g.fillStyle(0x00ff44); g.fillRect(7,2,6,5); g.fillRect(17,2,6,5);
+      g.fillStyle(0x88ffaa); g.fillRect(8,2,3,3); g.fillRect(18,2,3,3);
+      // Leaking mouth
+      g.fillStyle(0x001a00); g.fillRect(8,8,14,4);
+      g.fillStyle(0x00cc22,0.8); g.fillRect(8,8,14,4);
+      g.fillStyle(0x00ff44,0.6); g.fillRect(10,12,3,6); g.fillRect(16,11,3,7);
+      // Aura glow
+      g.fillStyle(0x00ff44,0.1); g.fillCircle(15,20,20);
+      g.generateTexture('zombie_toxic', 30, 48);
+      g.destroy();
+    }
 
-    const tcg = this.make.graphics({ add: false } as any);
-    tcg.fillStyle(0x22ee22, 0.45); tcg.fillCircle(20,20,20);
-    tcg.fillStyle(0x00aa00, 0.3);
-    tcg.fillCircle(14,14,12); tcg.fillCircle(26,26,10);
-    tcg.generateTexture('toxic_cloud', 40, 40);
-    tcg.destroy();
+    // ── ZOMBIE GIANT (48×66) ─────────────────────────────────────────────────
+    {
+      const g = G(48,66);
+      g.fillStyle(0x000000,0.4); g.fillEllipse(24,65,44,8);
+      // Massive boots
+      g.fillStyle(0x100a00); g.fillRect(4,57,16,9); g.fillRect(28,57,16,9);
+      g.fillStyle(0x221500); g.fillRect(4,57,16,4); g.fillRect(28,57,16,4);
+      // Thick legs
+      g.fillStyle(0x4a2811); g.fillRect(5,36,16,23); g.fillRect(27,36,16,23);
+      // Leg muscle highlight
+      g.fillStyle(0x6a4022); g.fillRect(7,38,8,12); g.fillRect(29,38,8,12);
+      // Leg wounds
+      g.fillStyle(0x660000); g.fillRect(6,44,5,8); g.fillRect(35,46,4,6);
+      g.fillStyle(0xaa0000); g.fillRect(7,45,3,6); g.fillRect(36,47,2,5);
+      // Massive torso
+      g.fillStyle(0x3a2011); g.fillRect(3,16,42,22);
+      g.fillStyle(0x4a2811); g.fillRect(4,17,40,20);
+      // Belly bulge
+      g.fillStyle(0x5a3822); g.fillEllipse(24,30,36,18);
+      g.fillStyle(0x4a2811); g.fillEllipse(24,29,32,14);
+      // Rib scarring
+      g.fillStyle(0x3a2011); [18,22,26,30,34].forEach(y => g.fillRect(6,y,14,2));
+      // Huge arms
+      g.fillStyle(0x4a2811); g.fillRect(-12,14,18,12); g.fillRect(42,14,18,12);
+      g.fillStyle(0x6a4022); g.fillRect(-10,15,14,8); g.fillRect(44,15,14,8);
+      // Forearms
+      g.fillStyle(0x5a3020); g.fillRect(-16,19,10,8); g.fillRect(54,19,10,8);
+      // Fists
+      g.fillStyle(0x5a3020); g.fillRect(-20,20,12,10); g.fillRect(56,20,12,10);
+      g.fillStyle(0x3a1a00);
+      g.fillRect(-20,20,12,3); g.fillRect(56,20,12,3);
+      // Knuckles
+      g.fillStyle(0x7a5033);
+      [-18,-14,-10,-6].forEach(x => g.fillRect(x,20,3,4));
+      [57,61,65,69].forEach(x => g.fillRect(x,20,3,4));
+      // Neck (massive)
+      g.fillStyle(0x5a3822); g.fillRect(17,8,14,10);
+      g.fillStyle(0x3a2011); g.fillRect(17,8,3,10); g.fillRect(28,8,3,10);
+      // Head
+      g.fillStyle(0x5a3822); g.fillRect(10,0,28,14); g.fillEllipse(24,3,30,14);
+      g.fillStyle(0x4a2811); g.fillRect(11,1,26,12); g.fillEllipse(24,3,28,12);
+      // Skull ridges
+      g.fillStyle(0x3a1a00); g.fillRect(12,0,24,5); g.fillEllipse(24,1,28,8);
+      [13,17,21,25,29,33].forEach(x => g.fillRect(x,0,3,4));
+      // Deep eye sockets
+      g.fillStyle(0x0a0000); g.fillRect(12,4,10,8); g.fillRect(26,4,10,8);
+      // Glowing red eyes
+      g.fillStyle(0xcc1100); g.fillRect(13,5,8,6); g.fillRect(27,5,8,6);
+      g.fillStyle(0xff4422); g.fillRect(14,6,6,4); g.fillRect(28,6,6,4);
+      g.fillStyle(0xff9977); g.fillRect(15,6,3,3); g.fillRect(29,6,3,3);
+      // Nose (crushed)
+      g.fillStyle(0x3a1a00); g.fillRect(20,9,8,4);
+      g.fillStyle(0x0a0000); g.fillCircle(22,12,2); g.fillCircle(26,12,2);
+      // Massive jaw
+      g.fillStyle(0x1a0000); g.fillRect(13,12,22,6);
+      g.fillStyle(0x550000); g.fillRect(14,13,20,4);
+      // Broken teeth
+      g.fillStyle(0xbbaa88); [14,17,21,24,28,31].forEach(x => g.fillRect(x,12,3,6));
+      g.fillStyle(0x777755); [16,23,30].forEach(x => g.fillRect(x,12,2,4));
+      // Blood drips from mouth
+      g.fillStyle(0x880000);
+      g.fillRect(18,17,3,8); g.fillRect(25,18,2,6); g.fillRect(31,16,3,9);
+      g.fillStyle(0xaa0000); g.fillRect(19,17,1,7); g.fillRect(32,17,1,8);
+      // Face scar
+      g.fillStyle(0x550000); g.fillRect(35,2,3,13); g.fillStyle(0x880000); g.fillRect(36,3,1,11);
+      g.generateTexture('zombie_giant', 48, 66);
+      g.destroy();
+    }
+
+    // ── BULLET (18×5) ─────────────────────────────────────────────────────────
+    {
+      const g = G(18,5);
+      g.fillStyle(0xffdd00,0.3); g.fillRect(0,0,18,5);
+      g.fillStyle(0xaa8800); g.fillRect(0,1,6,3);
+      g.fillStyle(0xffffff); g.fillRect(2,2,10,2);
+      g.fillStyle(0xffee44); g.fillRect(12,0,5,5);
+      g.fillStyle(0xffffff); g.fillRect(14,1,3,3);
+      g.generateTexture('bullet', 18, 5);
+      g.destroy();
+    }
+
+    // ── FUEL CAN (22×26) ──────────────────────────────────────────────────────
+    {
+      const g = G(22,26);
+      g.fillStyle(0xaa2200); g.fillRect(2,6,18,18);
+      g.fillStyle(0xff4422); g.fillRect(2,6,5,18);
+      g.fillStyle(0xcc3300); g.fillRect(7,6,13,18);
+      // Ribs
+      g.fillStyle(0x881a00); g.fillRect(5,7,2,16); g.fillRect(15,7,2,16);
+      // Highlight stripe
+      g.fillStyle(0xff7755,0.5); g.fillRect(3,7,3,16);
+      // Top cap
+      g.fillStyle(0x882200); g.fillRect(3,4,16,4); g.fillStyle(0xaa3300); g.fillRect(4,5,14,2);
+      // Spout
+      g.fillStyle(0x888888); g.fillRect(13,1,7,4); g.fillStyle(0xbbbbbb); g.fillRect(14,0,5,2);
+      // Handle
+      g.fillStyle(0x777777); g.fillRect(3,4,8,3); g.fillStyle(0x999999); g.fillRect(4,5,6,1);
+      // Warning label
+      g.fillStyle(0xffee00,0.8); g.fillRect(5,11,12,8);
+      g.fillStyle(0xff3300); g.fillRect(10,12,2,6); g.fillRect(7,14,8,2);
+      // Bottom
+      g.fillStyle(0x661100); g.fillRect(3,22,16,4);
+      g.generateTexture('fuel_can', 22, 26);
+      g.destroy();
+    }
+
+    // ── PARTICLE (12×12) ──────────────────────────────────────────────────────
+    {
+      const g = G(12,12);
+      g.fillStyle(0xff6600,0.5); g.fillCircle(6,6,6);
+      g.fillStyle(0xffaa00); g.fillCircle(6,6,4);
+      g.fillStyle(0xffee44); g.fillCircle(6,6,2);
+      g.fillStyle(0xffffff); g.fillCircle(6,6,1);
+      g.generateTexture('particle', 12, 12);
+      g.destroy();
+    }
+
+    // ── ROCKET (28×12) ────────────────────────────────────────────────────────
+    {
+      const g = G(28,12);
+      // Body
+      g.fillStyle(0xcccccc); g.fillRect(4,2,18,8);
+      g.fillStyle(0xeeeeee); g.fillRect(4,3,18,3);
+      // Warhead
+      g.fillStyle(0xcc2200); g.fillRect(20,1,6,10);
+      g.fillStyle(0xff4422); g.fillRect(21,2,4,8);
+      g.fillStyle(0xff6644); g.fillRect(22,3,2,6);
+      // Nose cone
+      g.fillStyle(0xbb1100); g.fillTriangle(26,0,26,12,28,6);
+      // Band/stripe
+      g.fillStyle(0x888888); g.fillRect(10,2,3,8); g.fillRect(16,2,2,8);
+      // Nozzle
+      g.fillStyle(0x444444); g.fillRect(0,3,6,6);
+      g.fillStyle(0x222222); g.fillRect(0,4,4,4);
+      // Fins
+      g.fillStyle(0x888888);
+      g.fillTriangle(0,0,0,4,5,2); g.fillTriangle(0,8,0,12,5,10);
+      // Exhaust flame
+      g.fillStyle(0xff5500,0.9); g.fillTriangle(-10,4,-10,8,1,6);
+      g.fillStyle(0xffaa00,0.7); g.fillTriangle(-6,5,-6,7,0,6);
+      g.fillStyle(0xffffff,0.5); g.fillTriangle(-3,5,-3,7,0,6);
+      g.generateTexture('rocket', 28, 12);
+      g.destroy();
+    }
+
+    // ── TOXIC CLOUD (50×50) ───────────────────────────────────────────────────
+    {
+      const g = G(50,50);
+      g.fillStyle(0x003300,0.15); g.fillCircle(25,25,25);
+      g.fillStyle(0x006600,0.2);  g.fillCircle(25,25,21);
+      g.fillStyle(0x00aa33,0.3);  g.fillCircle(25,25,17);
+      g.fillStyle(0x00cc44,0.3);
+      g.fillCircle(19,19,12); g.fillCircle(31,21,11); g.fillCircle(22,29,11);
+      g.fillStyle(0x00ff55,0.2);  g.fillCircle(25,25,9);
+      g.fillStyle(0x44ff88,0.12); g.fillCircle(25,25,5);
+      g.generateTexture('toxic_cloud', 50, 50);
+      g.destroy();
+    }
   }
 
   // ─── World & entities ────────────────────────────────────────────────────────
