@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { VEHICLES, VEHICLE_KEYS, SURVIVORS, SurvivorData, Upgrades } from '../GameData';
+import { VEHICLES, VEHICLE_KEYS, SURVIVORS, SurvivorData, Upgrades, WEAPONS, WEAPON_KEYS, WeaponType } from '../GameData';
 
 const W = 800, H = 600;
 
@@ -18,6 +18,8 @@ const SHOP_ITEMS: ShopItem[] = [
 export default class ShopScene extends Phaser.Scene {
   private money = 0;
   private upgrades: Upgrades = {};
+  private currentWeapon: WeaponType = 'mg';
+  private ownedWeapons: WeaponType[] = ['mg'];
   private currentVehicle = 'civilian_car';
   private ownedVehicles: string[] = ['civilian_car'];
   private survivors: string[] = [];
@@ -32,9 +34,11 @@ export default class ShopScene extends Phaser.Scene {
     this.money          = this.registry.get('money')         ?? 0;
     this.upgrades       = { ...(this.registry.get('upgrades') ?? {}) };
     this.currentVehicle = this.registry.get('vehicle')       ?? 'civilian_car';
-    this.ownedVehicles  = this.registry.get('ownedVehicles') ?? ['civilian_car'];
-    this.survivors      = this.registry.get('survivors')     ?? [];
-    this.missionNum     = this.registry.get('missionNumber') ?? 2;
+    this.ownedVehicles  = this.registry.get('ownedVehicles')  ?? ['civilian_car'];
+    this.survivors      = this.registry.get('survivors')      ?? [];
+    this.missionNum     = this.registry.get('missionNumber')  ?? 2;
+    this.currentWeapon  = this.registry.get('currentWeapon')  ?? 'mg';
+    this.ownedWeapons   = this.registry.get('ownedWeapons')   ?? ['mg'];
 
     const available = SURVIVORS.filter(s => !this.survivors.includes(s.key));
     this.offeredSurvivors = Phaser.Utils.Array.Shuffle([...available]).slice(0, 3) as SurvivorData[];
@@ -61,8 +65,9 @@ export default class ShopScene extends Phaser.Scene {
 
     this.drawDivider(66);
     this.drawUpgradesPanel();
+    this.drawWeaponsPanel();
     this.drawSurvivorsPanel();
-    this.drawDivider(420);
+    this.drawDivider(418);
     this.drawVehiclesPanel();
     this.drawContinueButton();
   }
@@ -78,13 +83,12 @@ export default class ShopScene extends Phaser.Scene {
     this.add.text(px, py, 'POTENZIAMENTI', { fontSize: '13px', color: '#aaaaff', fontStyle: 'bold' });
 
     SHOP_ITEMS.forEach((item, i) => {
-      const iy = py + 24 + i * 62;
-      const bought  = item.oneTime && !!(this.upgrades as Record<string,boolean>)[item.key];
+      const iy = py + 22 + i * 48;
+      const bought    = item.oneTime && !!(this.upgrades as Record<string,boolean>)[item.key];
       const canAfford = !bought && this.money >= item.cost;
+      const bgColor   = bought ? 0x0e1e0e : 0x0e0e1a;
 
-      const bgColor = bought ? 0x0e1e0e : 0x0e0e1a;
-      const bg = this.add.rectangle(px + 220, iy + 24, 440, 54, bgColor).setOrigin(0.5);
-
+      const bg = this.add.rectangle(px + 220, iy + 18, 440, 42, bgColor).setOrigin(0.5);
       if (!bought) {
         bg.setInteractive({ useHandCursor: canAfford });
         bg.on('pointerover', () => { if (canAfford) bg.setFillStyle(0x181830); });
@@ -92,17 +96,59 @@ export default class ShopScene extends Phaser.Scene {
         bg.on('pointerdown', () => { if (canAfford) this.buyItem(item); });
       }
 
-      const labelColor = bought ? '#446644' : canAfford ? '#dddddd' : '#554444';
-      this.add.text(px + 6, iy + 8,  item.label, { fontSize: '14px', color: labelColor, fontStyle: 'bold' });
-      this.add.text(px + 6, iy + 28, item.desc,  { fontSize: '11px', color: '#666666' });
-
+      const lc = bought ? '#446644' : canAfford ? '#dddddd' : '#554444';
+      this.add.text(px + 6, iy + 6,  item.label, { fontSize: '13px', color: lc, fontStyle: 'bold' });
+      this.add.text(px + 6, iy + 24, item.desc,  { fontSize: '10px', color: '#555566' });
       if (bought) {
-        this.add.text(px + 430, iy + 18, '✓ ACQUISTATO', { fontSize: '11px', color: '#446644' }).setOrigin(1, 0.5);
+        this.add.text(px + 432, iy + 15, '✓', { fontSize: '13px', color: '#446644' }).setOrigin(1, 0.5);
       } else {
-        const costColor = canAfford ? '#ffee44' : '#663333';
-        this.add.text(px + 430, iy + 18, `★ ${item.cost}`, { fontSize: '14px', color: costColor }).setOrigin(1, 0.5);
+        this.add.text(px + 432, iy + 15, `★ ${item.cost}`, { fontSize: '13px', color: canAfford ? '#ffee44' : '#663333' }).setOrigin(1, 0.5);
       }
     });
+  }
+
+  private drawWeaponsPanel() {
+    const px = 14, py = 322;
+    this.drawDivider(py - 4);
+    this.add.text(px, py, 'ARMI', { fontSize: '13px', color: '#ff9944', fontStyle: 'bold' });
+
+    WEAPON_KEYS.forEach((key, i) => {
+      const w        = WEAPONS[key];
+      const wx       = px + i * 88;
+      const owned    = this.ownedWeapons.includes(key);
+      const selected = this.currentWeapon === key;
+      const canBuy   = !owned && this.money >= w.price;
+      const bgColor  = selected ? 0x1a1200 : owned ? 0x0e0e0e : 0x080808;
+
+      const bg = this.add.rectangle(wx + 40, py + 46, 82, 72, bgColor).setOrigin(0.5)
+        .setInteractive({ useHandCursor: owned || canBuy });
+
+      // Icona colore arma
+      this.add.rectangle(wx + 40, py + 22, 50, 8, w.color).setOrigin(0.5);
+      this.add.text(wx + 40, py + 32, w.name, { fontSize: '8px', color: owned ? '#cccccc' : '#444444', wordWrap: { width: 78 }, align: 'center' }).setOrigin(0.5, 0);
+
+      if (owned) {
+        this.add.text(wx + 40, py + 68, selected ? '● ATTIVA' : 'Usa',
+          { fontSize: '9px', color: selected ? '#ffcc44' : '#4488ff' }).setOrigin(0.5);
+        if (!selected) {
+          bg.on('pointerover',  () => bg.setFillStyle(0x1a1400));
+          bg.on('pointerout',   () => bg.setFillStyle(bgColor));
+          bg.on('pointerdown',  () => this.selectWeapon(key));
+        }
+      } else {
+        this.add.text(wx + 40, py + 56, `★${w.price}`, { fontSize: '10px', color: canBuy ? '#ffee44' : '#443333' }).setOrigin(0.5);
+        this.add.text(wx + 40, py + 70, canBuy ? 'COMPRA' : '🔒', { fontSize: '9px', color: canBuy ? '#ffaa00' : '#333333' }).setOrigin(0.5);
+        if (canBuy) {
+          bg.on('pointerover',  () => bg.setFillStyle(0x1a1000));
+          bg.on('pointerout',   () => bg.setFillStyle(bgColor));
+          bg.on('pointerdown',  () => this.buyWeapon(key));
+        }
+      }
+    });
+
+    // Descrizione arma attiva
+    this.add.text(px, py + 92, `▸ ${WEAPONS[this.currentWeapon].desc}`,
+      { fontSize: '10px', color: '#888866' });
   }
 
   // ─── Survivors panel (right) ─────────────────────────────────────────────────
@@ -237,6 +283,22 @@ export default class ShopScene extends Phaser.Scene {
     this.registry.set('money', this.money);
     this.registry.set('ownedVehicles', newOwned);
     this.registry.set('vehicle', key);
+    this.scene.restart();
+  }
+
+  private selectWeapon(key: WeaponType) {
+    this.registry.set('currentWeapon', key);
+    this.scene.restart();
+  }
+
+  private buyWeapon(key: WeaponType) {
+    const w = WEAPONS[key];
+    if (this.money < w.price || this.ownedWeapons.includes(key)) return;
+    this.money -= w.price;
+    const newOwned = [...this.ownedWeapons, key];
+    this.registry.set('money', this.money);
+    this.registry.set('ownedWeapons', newOwned);
+    this.registry.set('currentWeapon', key);
     this.scene.restart();
   }
 

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { VEHICLES, Upgrades } from '../GameData';
+import { VEHICLES, Upgrades, WeaponType, WEAPONS } from '../GameData';
 import SoundManager from '../SoundManager';
 
 const W = 800, H = 600;
@@ -8,7 +8,6 @@ const VEHICLE_X = 150;
 const SCROLL_SPEED = 240;
 const BASE_FUEL_DRAIN = 2.2;
 const MAX_FUEL = 100;
-const BASE_FIRE_COOLDOWN = 280;
 const BULLET_SPEED = 680;
 const STRIPE_W = 48, STRIPE_GAP = 82;
 const ATTACH_DAMAGE_INTERVAL = 1600;
@@ -108,6 +107,10 @@ export default class GameScene extends Phaser.Scene {
   private hudFuelNum!: Phaser.GameObjects.Text;
   private hudAttached!: Phaser.GameObjects.Text;
 
+  private currentWeapon: WeaponType = 'mg';
+  private rockets!: Phaser.Physics.Arcade.Group;
+  private hudWeapon!: Phaser.GameObjects.Text;
+
   private sfx: SoundManager | null = null;
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -147,6 +150,7 @@ export default class GameScene extends Phaser.Scene {
     this.soldierTimer = 0;
     this.giantTimer = GIANT_SPAWN_INTERVAL;
     this.envIndex = (missionNum - 1) % ENVIRONMENTS.length;
+    this.currentWeapon = this.registry.get('currentWeapon') ?? 'mg';
 
     const def = { engine: 100, wheels: 100, tank: 100, turret: 100, armor: 100 };
     const c = savedComp ?? def;
@@ -265,6 +269,14 @@ export default class GameScene extends Phaser.Scene {
     pg.fillStyle(0xff8800); pg.fillCircle(5,5,5);
     pg.generateTexture('particle', 10, 10);
     pg.destroy();
+
+    const rg = this.make.graphics({ add: false } as any);
+    rg.fillStyle(0xff4400); rg.fillRect(0,2,20,6);
+    rg.fillStyle(0xffaa00); rg.fillRect(16,0,6,10);
+    rg.fillStyle(0xffff00); rg.fillRect(18,3,4,4);
+    rg.fillStyle(0x882200); rg.fillTriangle(0,2,0,8,6,5);
+    rg.generateTexture('rocket', 24, 10);
+    rg.destroy();
 
     const tcg = this.make.graphics({ add: false } as any);
     tcg.fillStyle(0x22ee22, 0.45); tcg.fillCircle(20,20,20);
@@ -480,6 +492,7 @@ export default class GameScene extends Phaser.Scene {
   private buildGroups() {
     this.zombies     = this.physics.add.group();
     this.bullets     = this.physics.add.group();
+    this.rockets     = this.physics.add.group();
     this.fuelCans    = this.physics.add.group();
     this.toxicClouds = this.physics.add.group();
   }
@@ -493,6 +506,8 @@ export default class GameScene extends Phaser.Scene {
       (_v,f) => this.onCollectFuel(f as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.vehicle, this.toxicClouds,
       (_v,c) => this.onVehicleHitCloud(c as Phaser.Physics.Arcade.Sprite));
+    this.physics.add.overlap(this.rockets, this.zombies,
+      (r,z) => this.onRocketHitZombie(r as Phaser.Physics.Arcade.Sprite, z as Phaser.Physics.Arcade.Sprite));
   }
 
   private buildHUD(missionNum: number) {
@@ -512,7 +527,8 @@ export default class GameScene extends Phaser.Scene {
 
     this.hudScore    = this.add.text(290,6,'PUNTEGGIO: 0',{fontSize:'13px',color:'#ffffff'}).setDepth(D+1);
     this.add.text(620,6,`MISS.${missionNum}`,{fontSize:'12px',color:'#88ff88'}).setDepth(D+1);
-    this.hudAttached = this.add.text(690,6,'',{fontSize:'12px',color:'#ff8800'}).setDepth(D+1);
+    this.hudAttached = this.add.text(700,6,'',{fontSize:'11px',color:'#ff8800'}).setDepth(D+1);
+    this.hudWeapon   = this.add.text(620,22,'',{fontSize:'10px',color:'#ffaa44'}).setDepth(D+1);
 
     // Barra progresso missione
     const DIST_KM = Math.floor(MISSION_DIST / 100);
@@ -569,7 +585,7 @@ export default class GameScene extends Phaser.Scene {
   private updateFiring(time: number) {
     if (this.spaceKey.isDown && time - this.lastFire > this.getEffectiveCooldown()) {
       this.lastFire = time;
-      this.fireBullet(this.vehicle.y - 1, false);
+      this.fireWeapon();
     }
   }
 
@@ -673,7 +689,7 @@ export default class GameScene extends Phaser.Scene {
       if (this.soldierTimer >= 3000) {
         this.soldierTimer = 0;
         const targetY = this.getNearestZombieY();
-        this.fireBullet(targetY, true);
+        this.fireAutoShot(targetY);
       }
     }
   }
@@ -703,6 +719,7 @@ export default class GameScene extends Phaser.Scene {
 
     const n = this.attachedZombies.length;
     this.hudAttached.setText(n > 0 ? `[${n} aggrappati]` : '');
+    this.hudWeapon.setText(WEAPONS[this.currentWeapon].name.toUpperCase());
 
     for (const key of Object.keys(this.components) as ComponentKey[]) {
       const comp = this.components[key];
@@ -715,11 +732,17 @@ export default class GameScene extends Phaser.Scene {
 
   private cleanOffScreen() {
     const clean = (g: Phaser.Physics.Arcade.Group, l: number, r: number) =>
-      (g.getChildren() as Phaser.Physics.Arcade.Sprite[]).forEach(s => { if (s.x<l||s.x>r) s.destroy(); });
+      (g.getChildren() as Phaser.Physics.Arcade.Sprite[]).forEach(s => { if (s.active && (s.x<l||s.x>r)) s.destroy(); });
     clean(this.zombies,    -100, W+100);
-    clean(this.bullets,    -20,  W+40);
     clean(this.fuelCans,   -80,  W+80);
     clean(this.toxicClouds,-80,  W+80);
+    clean(this.rockets,    -20,  W+60);
+    // Bullets respect per-projectile maxX (lanciafiamme ha range breve)
+    (this.bullets.getChildren() as Phaser.Physics.Arcade.Sprite[]).forEach(s => {
+      if (!s.active) return;
+      const maxX = (s.getData('maxX') as number) ?? W + 40;
+      if (s.x < -20 || s.x > maxX) s.destroy();
+    });
   }
 
   // ─── Spawning ────────────────────────────────────────────────────────────────
@@ -766,10 +789,43 @@ export default class GameScene extends Phaser.Scene {
     f.setVelocityX(-SCROLL_SPEED).setDepth(6);
   }
 
-  private fireBullet(y: number, autoShot: boolean) {
-    const b = this.bullets.create(this.vehicle.x + 50, y, 'bullet') as Phaser.Physics.Arcade.Sprite;
-    b.setVelocityX(BULLET_SPEED).setDepth(8);
-    if (autoShot) b.setTint(0x00ffff);
+  private fireWeapon() {
+    const w = WEAPONS[this.currentWeapon];
+    const vx = this.vehicle.x + 50, vy = this.vehicle.y;
+    switch (this.currentWeapon) {
+      case 'mg':
+      case 'rifle':
+        this.spawnBullet(vx, vy, w.damage, w.speed, w.color, W + 40);
+        break;
+      case 'double_mg':
+        this.spawnBullet(vx, vy - 8, w.damage, w.speed, w.color, W + 40);
+        this.spawnBullet(vx, vy + 8, w.damage, w.speed, w.color, W + 40);
+        break;
+      case 'flamethrower':
+        this.spawnBullet(vx, vy + Phaser.Math.Between(-6, 6), 1, w.speed, w.color, vx - 50 + w.range);
+        break;
+      case 'rockets':
+        this.spawnRocket(vx, vy);
+        break;
+    }
+    this.sfx?.playShot();
+  }
+
+  private spawnBullet(x: number, y: number, damage: number, speed: number, color: number, maxX: number) {
+    const b = this.bullets.create(x, y, 'bullet') as Phaser.Physics.Arcade.Sprite;
+    b.setVelocityX(speed).setDepth(8).setTint(color);
+    b.setData('damage', damage);
+    b.setData('maxX', maxX);
+  }
+
+  private spawnRocket(x: number, y: number) {
+    const r = this.rockets.create(x, y, 'rocket') as Phaser.Physics.Arcade.Sprite;
+    r.setVelocityX(WEAPONS.rockets.speed).setDepth(8);
+    (r.body as Phaser.Physics.Arcade.Body).setSize(22, 8);
+  }
+
+  private fireAutoShot(y: number) {
+    this.spawnBullet(this.vehicle.x + 50, y, 1, BULLET_SPEED, 0x00ffff, W + 40);
     this.sfx?.playShot();
   }
 
@@ -787,9 +843,10 @@ export default class GameScene extends Phaser.Scene {
 
   private onBulletHitZombie(bullet: Phaser.Physics.Arcade.Sprite, zombie: Phaser.Physics.Arcade.Sprite) {
     if (!bullet.active || !zombie.active) return;
+    const dmg = (bullet.getData('damage') as number) ?? 1;
     bullet.destroy();
     const type = zombie.getData('type') as ZombieType;
-    const hp   = (zombie.getData('hp') as number) - 1;
+    const hp   = (zombie.getData('hp') as number) - dmg;
     if (hp <= 0) {
       this.score += ZOMBIE_STATS[type].score;
       this.spawnHitParticles(zombie.x, zombie.y);
@@ -872,6 +929,45 @@ export default class GameScene extends Phaser.Scene {
         }
         break;
     }
+  }
+
+  private onRocketHitZombie(rocket: Phaser.Physics.Arcade.Sprite, zombie: Phaser.Physics.Arcade.Sprite) {
+    if (!rocket.active || !zombie.active) return;
+    const rx = rocket.x, ry = rocket.y;
+    rocket.destroy();
+
+    const AOE = 90;
+    const dmg = WEAPONS.rockets.damage;
+    for (const z of this.zombies.getChildren() as Phaser.Physics.Arcade.Sprite[]) {
+      if (!z.active) continue;
+      if (Phaser.Math.Distance.Between(rx, ry, z.x, z.y) > AOE) continue;
+      const hp = (z.getData('hp') as number) - dmg;
+      if (hp <= 0) {
+        this.score += ZOMBIE_STATS[z.getData('type') as ZombieType].score;
+        this.spawnHitParticles(z.x, z.y);
+        if (z.getData('type') === 'toxic') this.spawnToxicCloud(z.x, z.y);
+        z.destroy();
+      } else {
+        z.setData('hp', hp);
+        z.setTint(0xffffff);
+        this.time.delayedCall(80, () => { if (z?.active) z.clearTint(); });
+      }
+    }
+    for (let i = this.attachedZombies.length - 1; i >= 0; i--) {
+      const az = this.attachedZombies[i];
+      if (Phaser.Math.Distance.Between(rx, ry, az.sprite.x, az.sprite.y) <= AOE) {
+        az.hp -= dmg;
+        if (az.hp <= 0) {
+          this.spawnHitParticles(az.sprite.x, az.sprite.y);
+          az.sprite.destroy();
+          this.attachedZombies.splice(i, 1);
+        }
+      }
+    }
+    this.spawnHitParticles(rx, ry);
+    this.spawnHitParticles(rx + 8, ry - 8);
+    this.sfx?.playExplosion();
+    this.cameras.main.shake(130, 0.009);
   }
 
   private onCollectFuel(can: Phaser.Physics.Arcade.Sprite) {
@@ -957,7 +1053,8 @@ export default class GameScene extends Phaser.Scene {
 
   private getEffectiveCooldown(): number {
     if (this.components.turret.health <= 0) return 99999;
-    return (BASE_FIRE_COOLDOWN / this.vehicleFireMult) * (1 + (1 - this.components.turret.health/100) * 1.4);
+    const base = WEAPONS[this.currentWeapon].cooldown;
+    return (base / this.vehicleFireMult) * (1 + (1 - this.components.turret.health/100) * 1.4);
   }
 
   private getEffectiveFuelDrain(): number {
