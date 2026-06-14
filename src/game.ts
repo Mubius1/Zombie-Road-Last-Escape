@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import GameScene from './scenes/GameScene';
 import ShopScene from './scenes/ShopScene';
+import DebugScene from './scenes/DebugScene';
 
 export default class Game {
   private game?: Phaser.Game;
@@ -12,7 +13,7 @@ export default class Game {
       parent: 'game-container',
       width: 800,
       height: 600,
-      scene: [GameScene, ShopScene],
+      scene: [GameScene, ShopScene, DebugScene],
       physics: {
         default: 'arcade',
         arcade: {

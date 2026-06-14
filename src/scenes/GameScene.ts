@@ -16,21 +16,21 @@ const MISSION_DIST = 18000;
 const GIANT_SPAWN_INTERVAL = 22000;
 const BOSS_TRIGGER = 0.82; // % missione a cui appare il boss
 
-type BossType = 'mega_mutant' | 'giant_worm' | 'armored_colossus' | 'radioactive_beast';
+export type BossType = 'mega_mutant' | 'giant_worm' | 'armored_colossus' | 'radioactive_beast';
 
-interface BossConfig {
+export interface BossConfig {
   name: string; hp: number; speed: number; scaleX: number; scaleY: number;
   tint: number; bodyW: number; bodyH: number; reward: number;
 }
 
-const BOSS_CONFIG: Record<BossType, BossConfig> = {
+export const BOSS_CONFIG: Record<BossType, BossConfig> = {
   mega_mutant:       { name: 'Mega Mutante',      hp: 80,  speed: 55, scaleX: 2.8, scaleY: 2.8, tint: 0x22cc22, bodyW: 48, bodyH: 66, reward: 400 },
   giant_worm:        { name: 'Verme Gigante',      hp: 110, speed: 40, scaleX: 3.8, scaleY: 1.8, tint: 0xcc8822, bodyW: 80, bodyH: 38, reward: 500 },
   armored_colossus:  { name: 'Colosso Corazzato',  hp: 150, speed: 28, scaleX: 3.0, scaleY: 3.2, tint: 0x7788aa, bodyW: 52, bodyH: 70, reward: 650 },
   radioactive_beast: { name: 'Bestia Radioattiva', hp: 95,  speed: 50, scaleX: 2.6, scaleY: 2.6, tint: 0x88ff22, bodyW: 50, bodyH: 58, reward: 450 },
 };
 
-const BOSS_ORDER: BossType[] = ['mega_mutant', 'giant_worm', 'armored_colossus', 'radioactive_beast'];
+export const BOSS_ORDER: BossType[] = ['mega_mutant', 'giant_worm', 'armored_colossus', 'radioactive_beast'];
 
 interface EnvConfig {
   name: string;
@@ -140,6 +140,10 @@ export default class GameScene extends Phaser.Scene {
   private bossHudObjects: Phaser.GameObjects.GameObject[] = [];
   private bossHudFill?: Phaser.GameObjects.Rectangle;
 
+  // Debug
+  private debugGod = false;
+  private hudDebug?: Phaser.GameObjects.Text;
+
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private spaceKey!: Phaser.Input.Keyboard.Key;
 
@@ -239,9 +243,13 @@ export default class GameScene extends Phaser.Scene {
   // ─── Textures ────────────────────────────────────────────────────────────────
 
   private buildTextures() {
-    this.buildVehicleTexture();
-    if (this.textures.exists('zombie_common')) return;
-    const G = (_w: number, _h: number) => this.make.graphics({ add: false } as any) as Phaser.GameObjects.Graphics & { generateTexture(k:string,w:number,h:number):void };
+    GameScene.buildVehicleTexture(this, this.vehicleKey);
+    GameScene.buildEntityTextures(this);
+  }
+
+  static buildEntityTextures(scene: Phaser.Scene) {
+    if (scene.textures.exists('zombie_common')) return;
+    const G = (_w: number, _h: number) => scene.make.graphics({ add: false } as any) as Phaser.GameObjects.Graphics & { generateTexture(k:string,w:number,h:number):void };
 
     // ── ZOMBIE COMMON (30×44) ─────────────────────────────────────────────────
     {
@@ -627,7 +635,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // Interpola un colore verso un target (0xffffff per schiarire, 0x000000 per scurire)
-  private mixColor(color: number, target: number, t: number): number {
+  static mixColor(color: number, target: number, t: number): number {
     const r = (color >> 16) & 0xff, g = (color >> 8) & 0xff, b = color & 0xff;
     const tr = (target >> 16) & 0xff, tg = (target >> 8) & 0xff, tb = target & 0xff;
     const nr = Math.round(r + (tr - r) * t);
@@ -637,17 +645,17 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // Veicolo in vista dall'alto (top-down), colore "cotto" nella texture (niente tint)
-  private buildVehicleTexture() {
-    const key = `vehicle_${this.vehicleKey}`;
-    if (this.textures.exists(key)) return;
+  static buildVehicleTexture(scene: Phaser.Scene, vehicleKey: string) {
+    const key = `vehicle_${vehicleKey}`;
+    if (scene.textures.exists(key)) return;
 
-    const base    = VEHICLES[this.vehicleKey].color;
-    const light   = this.mixColor(base, 0xffffff, 0.30);
-    const lighter = this.mixColor(base, 0xffffff, 0.52);
-    const dark    = this.mixColor(base, 0x000000, 0.34);
-    const darker  = this.mixColor(base, 0x000000, 0.58);
+    const base    = VEHICLES[vehicleKey].color;
+    const light   = GameScene.mixColor(base, 0xffffff, 0.30);
+    const lighter = GameScene.mixColor(base, 0xffffff, 0.52);
+    const dark    = GameScene.mixColor(base, 0x000000, 0.34);
+    const darker  = GameScene.mixColor(base, 0x000000, 0.58);
 
-    const g = this.make.graphics({ add: false } as any) as Phaser.GameObjects.Graphics & { generateTexture(k:string,w:number,h:number):void };
+    const g = scene.make.graphics({ add: false } as any) as Phaser.GameObjects.Graphics & { generateTexture(k:string,w:number,h:number):void };
 
     // Ombra a terra
     g.fillStyle(0x000000, 0.22); g.fillEllipse(50, 25, 96, 40);
@@ -1006,11 +1014,22 @@ export default class GameScene extends Phaser.Scene {
     });
 
     this.add.text(W/2,H-6,'↑↓ Muovi   SPAZIO Spara',{fontSize:'11px',color:'#333333'}).setOrigin(0.5,1).setDepth(D);
+    this.add.text(4,H-6,'0=Debug',{fontSize:'9px',color:'#2a3a2a'}).setOrigin(0,1).setDepth(D);
+    this.hudDebug = this.add.text(W-6,H-6,'',{fontSize:'10px',color:'#00ff88',fontStyle:'bold'}).setOrigin(1,1).setDepth(D+5);
   }
 
   private buildInput() {
     this.cursors  = this.input.keyboard!.createCursorKeys();
     this.spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+    // Tasti debug
+    const kb = this.input.keyboard!;
+    kb.on('keydown-ZERO', () => this.scene.start('DebugScene'));
+    kb.on('keydown-G', () => { this.debugGod = !this.debugGod; if (this.debugGod) this.fuel = this.maxFuel; });
+    kb.on('keydown-B', () => { if (this.alive && !this.bossSpawned) this.spawnBoss(); });
+    kb.on('keydown-N', () => { if (this.alive && !this.missionDone) this.triggerMissionComplete(); });
+    kb.on('keydown-H', () => { this.health = this.maxHealth; this.fuel = this.maxFuel;
+      (Object.keys(this.components) as ComponentKey[]).forEach(k => this.components[k].health = 100); });
   }
 
   // ─── Update ──────────────────────────────────────────────────────────────────
@@ -1038,6 +1057,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private updateFuel(dt: number) {
+    if (this.debugGod) { this.fuel = this.maxFuel; return; }
     this.fuel -= this.getEffectiveFuelDrain() * dt;
     if (this.fuel <= 0) { this.fuel = 0; this.endGame('Carburante esaurito!'); }
   }
@@ -1170,6 +1190,8 @@ export default class GameScene extends Phaser.Scene {
     this.hudDistFill.displayWidth = Math.max(1, distPct * 110);
     const barColor = distPct > 0.8 ? 0x88ff44 : distPct > 0.5 ? 0x44aaff : 0x4466cc;
     this.hudDistFill.setFillStyle(barColor);
+
+    this.hudDebug?.setText(this.debugGod ? '◆ GOD MODE  (G off · B boss · N fine · H ripara)' : '');
 
     const n = this.attachedZombies.length;
     this.hudAttached.setText(n > 0 ? `[${n} aggrappati]` : '');
@@ -1486,12 +1508,14 @@ export default class GameScene extends Phaser.Scene {
   // ─── Component damage system ─────────────────────────────────────────────────
 
   private damageComponent(key: ComponentKey, amount: number) {
+    if (this.debugGod) return;
     const comp = this.components[key];
     comp.health = Math.max(0, comp.health - amount);
     if (key === 'engine' && comp.health <= 0) this.endGame('Motore distrutto!');
   }
 
   private dealDamage(amount: number) {
+    if (this.debugGod) return;
     const armorPct = this.components.armor.health / 100;
     const bonus = this.vehicleArmorBonus / 100;
     const base  = armorPct<=0 ? 2.5 : armorPct<0.3 ? 1.8 : armorPct<0.6 ? 1.3 : 1.0;
