@@ -239,63 +239,9 @@ export default class GameScene extends Phaser.Scene {
   // ─── Textures ────────────────────────────────────────────────────────────────
 
   private buildTextures() {
-    if (this.textures.exists('vehicle')) return;
+    this.buildVehicleTexture();
+    if (this.textures.exists('zombie_common')) return;
     const G = (_w: number, _h: number) => this.make.graphics({ add: false } as any) as Phaser.GameObjects.Graphics & { generateTexture(k:string,w:number,h:number):void };
-
-    // ── VEHICLE (100×44) ─────────────────────────────────────────────────────
-    {
-      const g = G(100,44);
-      // Tires
-      g.fillStyle(0x111111);
-      [14,84].forEach(x => { g.fillEllipse(x,38,20,14); g.fillEllipse(x,6,20,14); });
-      // Tire treads
-      g.fillStyle(0x1e1e1e);
-      [14,84].forEach(x => { [34,40].forEach(y => [x-6,x-3,x,x+3].forEach(tx => g.fillRect(tx,y-3,2,6))); });
-      [14,84].forEach(x => { [2,8].forEach(y => [x-6,x-3,x,x+3].forEach(tx => g.fillRect(tx,y-3,2,6))); });
-      // Rims
-      g.fillStyle(0x666666); [14,84].forEach(x => { g.fillCircle(x,38,5); g.fillCircle(x,6,5); });
-      g.fillStyle(0xbbbbbb); [14,84].forEach(x => { g.fillCircle(x,38,3); g.fillCircle(x,6,3); });
-      g.fillStyle(0x444444); [14,84].forEach(x => { g.fillCircle(x,38,1); g.fillCircle(x,6,1); });
-      // Undercarriage
-      g.fillStyle(0x2a2a2a); g.fillRect(8,12,84,20);
-      // Body (light gray → tinted by vehicle color)
-      g.fillStyle(0xcccccc); g.fillRect(10,11,80,22);
-      // Hood & trunk shading
-      g.fillStyle(0xbbbbbb); g.fillRect(83,13,14,18); g.fillRect(3,13,9,18);
-      // Roof
-      g.fillStyle(0xdddddd); g.fillRect(26,5,42,8);
-      // Panel seam lines
-      g.fillStyle(0x999999); g.fillRect(10,22,80,2); g.fillRect(40,11,2,22); g.fillRect(62,11,2,22);
-      // Windshield
-      g.fillStyle(0x0d1a22); g.fillRect(27,10,22,15);
-      g.fillStyle(0x2a5570, 0.7); g.fillRect(28,11,10,8); g.fillRect(40,11,6,6);
-      // Headlights
-      g.fillStyle(0xfff8aa); g.fillRect(91,14,8,6); g.fillRect(91,24,8,6);
-      g.fillStyle(0xffffff); g.fillRect(93,15,4,4); g.fillRect(93,25,4,4);
-      // Headlight halo
-      g.fillStyle(0xffffdd,0.4); g.fillRect(95,15,4,2); g.fillRect(95,25,4,2);
-      // Taillights
-      g.fillStyle(0xcc0000); g.fillRect(2,14,8,6); g.fillRect(2,24,8,6);
-      g.fillStyle(0xff3333); g.fillRect(3,15,4,4); g.fillRect(3,25,4,4);
-      // Turret base
-      g.fillStyle(0x555555); g.fillRect(46,3,18,9); g.fillStyle(0x666666); g.fillRect(47,4,16,7);
-      // Gun barrel (3-layer for depth)
-      g.fillStyle(0x333333); g.fillRect(62,5,32,8);
-      g.fillStyle(0x555555); g.fillRect(62,6,32,6);
-      g.fillStyle(0x777777); g.fillRect(62,7,30,4);
-      // Muzzle brake
-      g.fillStyle(0x222222); g.fillRect(90,4,10,9);
-      g.fillStyle(0x000000); g.fillRect(91,5,8,2); g.fillRect(91,10,8,2);
-      // Body top sheen
-      g.fillStyle(0xffffff,0.1); g.fillRect(10,11,80,5);
-      // Exhaust
-      g.fillStyle(0x333333); g.fillRect(0,17,9,4); g.fillRect(0,23,9,4);
-      g.fillStyle(0x111111); g.fillRect(0,18,6,2); g.fillRect(0,24,6,2);
-      // Front bumper
-      g.fillStyle(0x666666); g.fillRect(91,15,8,14); g.fillStyle(0x888888); g.fillRect(92,16,6,2);
-      g.generateTexture('vehicle', 100, 44);
-      g.destroy();
-    }
 
     // ── ZOMBIE COMMON (30×44) ─────────────────────────────────────────────────
     {
@@ -680,6 +626,104 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  // Interpola un colore verso un target (0xffffff per schiarire, 0x000000 per scurire)
+  private mixColor(color: number, target: number, t: number): number {
+    const r = (color >> 16) & 0xff, g = (color >> 8) & 0xff, b = color & 0xff;
+    const tr = (target >> 16) & 0xff, tg = (target >> 8) & 0xff, tb = target & 0xff;
+    const nr = Math.round(r + (tr - r) * t);
+    const ng = Math.round(g + (tg - g) * t);
+    const nb = Math.round(b + (tb - b) * t);
+    return (nr << 16) | (ng << 8) | nb;
+  }
+
+  // Veicolo in vista dall'alto (top-down), colore "cotto" nella texture (niente tint)
+  private buildVehicleTexture() {
+    const key = `vehicle_${this.vehicleKey}`;
+    if (this.textures.exists(key)) return;
+
+    const base    = VEHICLES[this.vehicleKey].color;
+    const light   = this.mixColor(base, 0xffffff, 0.30);
+    const lighter = this.mixColor(base, 0xffffff, 0.52);
+    const dark    = this.mixColor(base, 0x000000, 0.34);
+    const darker  = this.mixColor(base, 0x000000, 0.58);
+
+    const g = this.make.graphics({ add: false } as any) as Phaser.GameObjects.Graphics & { generateTexture(k:string,w:number,h:number):void };
+
+    // Ombra a terra
+    g.fillStyle(0x000000, 0.22); g.fillEllipse(50, 25, 96, 40);
+
+    // Pneumatici (arrotondati, sporgono sopra/sotto la carrozzeria)
+    const wheels: Array<[number, number]> = [[16, 2], [62, 2], [16, 31], [62, 31]];
+    g.fillStyle(0x141414); wheels.forEach(([x, y]) => g.fillRoundedRect(x, y, 22, 11, 4));
+    g.fillStyle(0x2c2c2c); wheels.forEach(([x, y]) => [5, 10, 15].forEach(o => g.fillRect(x + o, y + 2, 2, 7)));
+
+    // Carrozzeria — bordo scuro + corpo, angoli anteriori (dx) più arrotondati
+    g.fillStyle(darker); g.fillRoundedRect(7, 6, 86, 32, { tl: 8, bl: 8, tr: 16, br: 16 });
+    g.fillStyle(base);   g.fillRoundedRect(8, 7, 84, 30, { tl: 7, bl: 7, tr: 15, br: 15 });
+    // Ombra fianco inferiore + luce fianco superiore (luce dall'alto)
+    g.fillStyle(dark);   g.fillRoundedRect(10, 29, 80, 7, { tl: 4, bl: 4, tr: 8, br: 8 });
+    g.fillStyle(light);  g.fillRoundedRect(12, 8, 74, 9, { tl: 5, bl: 2, tr: 9, br: 2 });
+
+    // Cofano (parte anteriore): pieghe lamiera
+    g.fillStyle(dark);  g.fillRect(64, 15, 22, 1); g.fillRect(64, 28, 22, 1);
+    g.fillStyle(light); g.fillRect(66, 21, 18, 2);
+
+    // Parabrezza (trapezio, vetro scuro con riflesso)
+    g.fillStyle(0x0e1d29);
+    g.fillPoints([{ x: 52, y: 10 }, { x: 64, y: 14 }, { x: 64, y: 30 }, { x: 52, y: 34 }], true);
+    g.fillStyle(0x2c5470, 0.5);
+    g.fillPoints([{ x: 53, y: 12 }, { x: 60, y: 14 }, { x: 58, y: 19 }, { x: 53, y: 17 }], true);
+
+    // Tettuccio cabina (punto più alto → più chiaro)
+    g.fillStyle(light);   g.fillRoundedRect(33, 11, 20, 22, 6);
+    g.fillStyle(lighter); g.fillRoundedRect(35, 13, 16, 8, 4);
+    g.fillStyle(dark);    g.fillRect(33, 21, 20, 1);
+
+    // Lunotto posteriore
+    g.fillStyle(0x0e1d29);
+    g.fillPoints([{ x: 24, y: 12 }, { x: 33, y: 11 }, { x: 33, y: 33 }, { x: 24, y: 32 }], true);
+    g.fillStyle(0x2c5470, 0.4);
+    g.fillPoints([{ x: 25, y: 13 }, { x: 31, y: 13 }, { x: 30, y: 18 }, { x: 25, y: 17 }], true);
+
+    // Cofano post. / giunzioni
+    g.fillStyle(dark); g.fillRect(20, 9, 1, 26); g.fillRect(11, 12, 8, 1); g.fillRect(11, 31, 8, 1);
+
+    // Specchietti
+    g.fillStyle(base);     g.fillRoundedRect(49, 3, 7, 4, 2); g.fillRoundedRect(49, 37, 7, 4, 2);
+    g.fillStyle(0x0e1d29); g.fillRect(50, 4, 4, 2); g.fillRect(50, 38, 4, 2);
+
+    // Fari anteriori
+    g.fillStyle(0xfff4bc); g.fillRoundedRect(85, 9, 6, 5, 2); g.fillRoundedRect(85, 30, 6, 5, 2);
+    g.fillStyle(0xffffff); g.fillRect(86, 10, 3, 3); g.fillRect(86, 31, 3, 3);
+    g.fillStyle(0xfff4bc, 0.3); g.fillRect(90, 10, 4, 3); g.fillRect(90, 31, 4, 3);
+
+    // Fari posteriori
+    g.fillStyle(0xcc1111); g.fillRoundedRect(8, 10, 4, 5, 1); g.fillRoundedRect(8, 29, 4, 5, 1);
+    g.fillStyle(0xff4444); g.fillRect(9, 11, 2, 3); g.fillRect(9, 30, 2, 3);
+
+    // Paraurti anteriore
+    g.fillStyle(lighter); g.fillRoundedRect(89, 16, 4, 12, 2);
+
+    // Torretta + cannone (al centro, punta a destra)
+    const metal = 0x4a4a52, metalL = 0x70707a, metalD = 0x26262c;
+    g.fillStyle(metalD); g.fillCircle(58, 22, 9);
+    g.fillStyle(metal);  g.fillCircle(58, 22, 7);
+    g.fillStyle(metalL); g.fillCircle(56, 20, 2.5);
+    g.fillStyle(metalD); g.fillCircle(58, 22, 2);
+    // Canna (arriva al bordo anteriore x=100)
+    g.fillStyle(metalD); g.fillRect(58, 18, 42, 8);
+    g.fillStyle(metal);  g.fillRect(58, 19, 42, 6);
+    g.fillStyle(metalL); g.fillRect(58, 20, 38, 2);
+    g.fillStyle(metalD); g.fillRect(90, 17, 10, 10);
+    g.fillStyle(0x000000); g.fillRect(91, 19, 8, 2); g.fillRect(91, 23, 8, 2);
+
+    // Riflesso superiore
+    g.fillStyle(0xffffff, 0.10); g.fillRoundedRect(16, 7, 58, 3, 2);
+
+    g.generateTexture(key, 100, 44);
+    g.destroy();
+  }
+
   // ─── World & entities ────────────────────────────────────────────────────────
 
   private buildWorld() {
@@ -877,10 +921,10 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private buildVehicle() {
-    this.vehicle = this.physics.add.sprite(VEHICLE_X, ROAD_CENTER, 'vehicle');
+    this.vehicle = this.physics.add.sprite(VEHICLE_X, ROAD_CENTER, `vehicle_${this.vehicleKey}`);
     (this.vehicle.body as Phaser.Physics.Arcade.Body).setCollideWorldBounds(false);
     (this.vehicle.body as Phaser.Physics.Arcade.Body).setSize(72, 22);
-    this.vehicle.setDepth(10).setTint(VEHICLES[this.vehicleKey].color);
+    this.vehicle.setDepth(10);
   }
 
   private buildGroups() {
