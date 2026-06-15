@@ -67,6 +67,24 @@ const ZOMBIE_STATS: Record<ZombieType, ZombieStats> = {
   toxic:   { speed: 55,  hp: 2,  scale: 1.1,  damage: 10, score: 25 },
 };
 
+// Personalità di movimento per tipo.
+//  amp/spd/lean = rollio · pow = forma d'onda (>1 pesante che indugia, <1 agile che frusta)
+//  stomp = tonfo verticale · wob = respiro (squash) · home/turn = inseguimento e virata
+//  fx/fxEvery = emissione VFX procedurali
+interface ZombieMotion {
+  amp: number; spd: number; lean: number; pow: number;
+  stomp: number; wob: number; home: number; turn: number;
+  fx: boolean; fxEvery: number;
+}
+const ZOMBIE_MOTION: Record<ZombieType, ZombieMotion> = {
+  common:  { amp: 0.09, spd: 4.0,  lean:  0.00, pow: 1.0,  stomp: 0,   wob: 0,    home: 14, turn: 0.05, fx: false, fxEvery: 0   },
+  runner:  { amp: 0.13, spd: 11.0, lean: -0.22, pow: 0.55, stomp: 0,   wob: 0,    home: 60, turn: 0.18, fx: true,  fxEvery: 100 },
+  armored: { amp: 0.05, spd: 2.6,  lean:  0.00, pow: 1.6,  stomp: 1.2, wob: 0,    home: 0,  turn: 0,    fx: false, fxEvery: 0   },
+  jumper:  { amp: 0.10, spd: 9.0,  lean:  0.00, pow: 0.5,  stomp: 0,   wob: 0,    home: 0,  turn: 0,    fx: false, fxEvery: 0   },
+  giant:   { amp: 0.04, spd: 2.0,  lean:  0.00, pow: 1.6,  stomp: 1.8, wob: 0.03, home: 0,  turn: 0,    fx: true,  fxEvery: 360 },
+  toxic:   { amp: 0.13, spd: 2.2,  lean:  0.00, pow: 1.0,  stomp: 0,   wob: 0.05, home: 16, turn: 0.05, fx: true,  fxEvery: 220 },
+};
+
 const SPAWN_POOL: ZombieType[] = [
   'common', 'common', 'common', 'common',
   'runner', 'runner',
@@ -231,6 +249,7 @@ export default class GameScene extends Phaser.Scene {
     this.updateZombieSpawning(delta);
     this.updateGiantSpawning(delta);
     this.updateBoss(delta);
+    this.updateZombieMotion(time, delta);
     this.updateAttachedZombies(delta);
     this.checkBulletsVsAttached();
     this.updateToxicClouds(delta);
@@ -250,324 +269,364 @@ export default class GameScene extends Phaser.Scene {
   static buildEntityTextures(scene: Phaser.Scene) {
     if (scene.textures.exists('zombie_common')) return;
     const G = (_w: number, _h: number) => scene.make.graphics({ add: false } as any) as Phaser.GameObjects.Graphics & { generateTexture(k:string,w:number,h:number):void };
+    // Aggiunge N frame numerati (0..n-1) a una texture spritesheet generata
+    const AF = (key: string, fw: number, fh: number, n: number) => {
+      const t = scene.textures.get(key);
+      for (let i = 0; i < n; i++) t.add(i, 0, i * fw, 0, fw, fh);
+    };
 
-    // ── ZOMBIE COMMON (30×44) — cadavere ambulante ───────────────────────────
+    // ── ZOMBIE COMMON · "Il Collo Rotto" (30×44 × 3) ───────────────────────────
     {
-      const g = G(30,44);
-      const skin=0x6f8a5f, skinL=0x8aa676, skinD=0x4d6440, skinDD=0x33442c;
-      const shirt=0x3b4156, shirtL=0x4d5570, shirtD=0x282c3c;
-      const pants=0x34322b, blood=0x8a1212, bloodB=0xc21d1d, bone=0xd9cba6;
-      g.fillStyle(0x000000,0.28); g.fillEllipse(15,42,22,6);
-      // Scarpe
-      g.fillStyle(0x191510); g.fillEllipse(10,40,9,5); g.fillEllipse(20,39,9,5);
-      // Gambe
-      g.fillStyle(pants); g.fillRoundedRect(8,27,6,13,3); g.fillRoundedRect(16,26,6,14,3);
-      g.fillStyle(0x201e18); g.fillRect(8,33,6,1); g.fillRect(16,33,6,1);
-      // Braccia protese ai lati
-      g.fillStyle(skinD); g.fillRoundedRect(-3,16,9,5,2); g.fillRoundedRect(24,16,9,5,2);
-      g.fillStyle(skin);  g.fillRoundedRect(-3,16,8,4,2); g.fillRoundedRect(25,16,8,4,2);
-      g.fillStyle(skinL); g.fillRect(-2,16,6,1); g.fillRect(26,16,6,1);
-      g.fillStyle(skin);  g.fillCircle(-2,18,3); g.fillCircle(28,18,3);
-      g.fillStyle(0x9aae86);
-      g.fillTriangle(-4,15,-7,16,-4,18); g.fillTriangle(28,15,31,16,28,18);
-      // Torso (maglietta strappata)
-      g.fillStyle(shirtD); g.fillRoundedRect(6,14,18,15,6);
-      g.fillStyle(shirt);  g.fillRoundedRect(7,15,16,13,5);
-      g.fillStyle(shirtL); g.fillRoundedRect(8,16,6,8,3);
-      // Pancia esposta
-      g.fillStyle(skin);  g.fillEllipse(15,27,10,7);
-      g.fillStyle(skinD); g.fillRect(11,26,8,1); g.fillRect(12,28,6,1);
-      // Sangue
-      g.fillStyle(blood);  g.fillEllipse(12,20,6,5); g.fillEllipse(18,23,3,3);
-      g.fillStyle(bloodB); g.fillEllipse(12,19,3,2);
-      // Collo
-      g.fillStyle(skinD); g.fillRoundedRect(12,10,6,6,2);
-      // Testa
-      g.fillStyle(skin);  g.fillCircle(15,7,7); g.fillEllipse(15,10,12,9);
-      g.fillStyle(skinL); g.fillEllipse(12,5,7,6);
-      g.fillStyle(skinD); g.fillEllipse(19,10,6,7);
-      // Capelli radi
-      g.fillStyle(0x241c12); g.fillEllipse(15,3,13,6);
-      g.fillTriangle(8,3,10,11,11,3); g.fillTriangle(22,3,20,10,19,3);
-      // Occhiaie + occhi
-      g.fillStyle(skinDD); g.fillEllipse(11,7,5,4); g.fillEllipse(19,7,5,4);
-      g.fillStyle(0xff2a10); g.fillEllipse(11,7,3,2.4); g.fillEllipse(19,7,3,2.4);
-      g.fillStyle(0xffc7a0); g.fillCircle(10,6,1); g.fillCircle(18,6,1);
-      // Naso
-      g.fillStyle(skinDD); g.fillTriangle(15,8,13,11,17,11);
-      // Bocca + denti
-      g.fillStyle(0x2a0a0a); g.fillEllipse(15,13,9,4);
-      g.fillStyle(bone); g.fillTriangle(11,11,13,11,12,14); g.fillTriangle(14,11,16,11,15,14); g.fillTriangle(17,11,19,11,18,14);
-      g.fillRect(12,14,7,1);
-      g.fillStyle(0x88aa66,0.6); g.fillRect(15,14,1,5);
-      // Ferita tempia
-      g.fillStyle(blood); g.fillEllipse(20,4,4,3); g.fillStyle(bloodB); g.fillEllipse(20,4,2,1.5);
-      g.generateTexture('zombie_common', 30, 44);
-      g.destroy();
+      const g = G(90,44);
+      const flA=0x6f7d54, flHi=0x8a9668, flSh=0x444c33, livid=0x5a4e63;
+      const musc=0x6e2a26, muscHi=0x9a3a2e, bone=0xd9cba6;
+      const shA=0x3b4156, shHi=0x4d5570, shSh=0x282c3c, pants=0x34322b, eye=0xff2a10;
+      for (let f = 0; f < 3; f++) {
+        const ox = f * 30, ph = f - 1; const X = (x: number) => ox + x;
+        // ombra + scarpe + gambe (passo alternato)
+        g.fillStyle(0x000000,0.28); g.fillEllipse(X(15),42,22,6);
+        g.fillStyle(0x191510); g.fillEllipse(X(10-ph),40+ph,9,5); g.fillEllipse(X(20+ph),39-ph,9,5);
+        g.fillStyle(pants);
+        g.fillRoundedRect(X(8-ph),27+ph*2,6,13-ph,3);
+        g.fillRoundedRect(X(16+ph),26-ph*2,6,14+ph,3);
+        // chiazze di livor mortis sulle gambe
+        g.fillStyle(livid,0.7); g.fillEllipse(X(11-ph),34,4,6); g.fillEllipse(X(19+ph),33,4,5);
+        // braccio DESTRO penzolante (lussato, lungo il fianco)
+        g.fillStyle(flSh); g.fillRoundedRect(X(22),16,5,16,2);
+        g.fillStyle(flA);  g.fillRoundedRect(X(22),16,4,15,2);
+        g.fillStyle(flA);  g.fillCircle(X(24),33,3);
+        g.fillStyle(flHi); g.fillTriangle(X(22),35,X(24),38,X(26),35);
+        // braccio SINISTRO proteso (controfase col passo)
+        const laY=16+ph*2;
+        g.fillStyle(flSh); g.fillRoundedRect(X(1),laY,8,5,2);
+        g.fillStyle(flA);  g.fillRoundedRect(X(1),laY,7,4,2);
+        g.fillStyle(flHi); g.fillRect(X(2),laY,5,1);
+        g.fillStyle(flA);  g.fillCircle(X(1),laY+2,3);
+        g.fillStyle(0x9aae86); g.fillTriangle(X(-1),laY-1,X(-3),laY,X(-1),laY+2);
+        // torso: brandelli di maglietta (bordo strappato a triangoli)
+        g.fillStyle(shSh); g.fillRoundedRect(X(7),14,16,15,5);
+        g.fillStyle(shA);  g.fillRoundedRect(X(8),15,14,12,4);
+        g.fillStyle(shSh); [9,12,15,18].forEach(x=>g.fillTriangle(X(x),26,X(x+3),26,X(x+1.5),30));
+        g.fillStyle(shHi); g.fillRoundedRect(X(9),16,5,6,2);
+        // squarcio: muscolo vivo + costola d'osso
+        g.fillStyle(musc);   g.fillEllipse(X(15),25,9,6);
+        g.fillStyle(muscHi); g.fillEllipse(X(14),24,4,2);
+        g.fillStyle(bone);   [12,15,18].forEach(x=>g.fillRect(X(x),22,1,6));
+        g.fillStyle(0x4a0e0e); g.fillEllipse(X(17),26,3,3);
+        // collo slanciato → testa che PENDE a destra (collo rotto)
+        g.fillStyle(flSh); g.fillRoundedRect(X(14),9,8,7,3);
+        g.fillStyle(flA);  g.fillCircle(X(19),8,7); g.fillEllipse(X(20),11,11,8);
+        g.fillStyle(flHi); g.fillEllipse(X(16),5,6,5);
+        g.fillStyle(flSh); g.fillEllipse(X(23),11,5,6);
+        g.fillStyle(livid,0.6); g.fillEllipse(X(22),9,4,5);
+        g.fillStyle(0x241c12); g.fillEllipse(X(18),3,12,6); g.fillTriangle(X(12),4,X(14),10,X(15),4);
+        // occhiaie + occhi rossi + bocca storta + denti + bava
+        g.fillStyle(0x2a2418); g.fillEllipse(X(16),8,5,4); g.fillEllipse(X(23),8,4,4);
+        g.fillStyle(eye); g.fillEllipse(X(16),8,2.6,2.2); g.fillEllipse(X(23),8,2.4,2);
+        g.fillStyle(0xffc7a0); g.fillCircle(X(15),7,1); g.fillCircle(X(22),7,1);
+        g.fillStyle(0x2a0a0a); g.fillEllipse(X(20),13,7,3);
+        g.fillStyle(bone); [17,20,23].forEach(x=>g.fillTriangle(X(x),12,X(x+2),12,X(x+1),14));
+        g.fillStyle(0x88aa66,0.6); g.fillRect(X(20),14,1,6);
+      }
+      g.generateTexture('zombie_common',90,44); AF('zombie_common',30,44,3); g.destroy();
     }
 
-    // ── ZOMBIE RUNNER (26×42) — corridore emaciato ──────────────────────────
+    // ── ZOMBIE RUNNER · "Lo Scorticato" (26×42 × 3) ────────────────────────────
     {
-      const g = G(26,42);
-      const skin=0x9c8c7b, skinL=0xb6a695, skinD=0x6f6253, skinDD=0x4a4136;
-      const rag=0x55303a, blood=0x7a1414, eye=0xff6410, bone=0xd9cba6;
-      g.fillStyle(0x000000,0.22); g.fillEllipse(13,40,18,5);
-      // Gamba posteriore (spinta indietro)
-      g.fillStyle(skinD); g.fillRoundedRect(3,24,5,14,2);
-      g.fillStyle(skin);  g.fillRoundedRect(3,24,4,12,2);
-      g.fillStyle(0x191510); g.fillEllipse(4,38,7,4);
-      // Gamba anteriore (slanciata avanti)
-      g.fillStyle(skinD); g.fillRoundedRect(14,22,5,15,2);
-      g.fillStyle(skin);  g.fillRoundedRect(14,22,4,13,2);
-      g.fillStyle(skinL); g.fillRect(15,24,2,7);
-      g.fillStyle(0x191510); g.fillEllipse(17,37,8,4);
-      // Braccio posteriore
-      g.fillStyle(skinD); g.fillRoundedRect(-4,18,11,4,2);
-      g.fillStyle(skin);  g.fillCircle(-3,20,3);
-      // Torso magro, proteso
-      g.fillStyle(rag);   g.fillRoundedRect(7,12,12,14,4);
-      g.fillStyle(0x44262e); g.fillRoundedRect(8,13,5,8,2);
-      // Costole sporgenti
-      g.fillStyle(skin);  g.fillEllipse(13,22,9,6);
-      g.fillStyle(skinD); g.fillRect(9,20,8,1); g.fillRect(9,22,8,1); g.fillRect(10,24,6,1);
-      g.fillStyle(blood); g.fillEllipse(11,16,4,3);
-      // Braccio anteriore ad artiglio
-      g.fillStyle(skinD); g.fillRoundedRect(18,13,11,4,2);
-      g.fillStyle(skin);  g.fillRoundedRect(18,13,10,3,2);
-      g.fillStyle(skinL); g.fillRect(19,13,7,1);
-      g.fillStyle(skin);  g.fillCircle(29,15,3);
-      g.fillStyle(0xb6a695);
-      g.fillTriangle(30,12,33,12,30,15); g.fillTriangle(30,15,33,16,30,18);
-      // Collo teso
-      g.fillStyle(skinD); g.fillRoundedRect(11,7,7,6,2);
-      // Testa angolosa, protesa
-      g.fillStyle(skin);  g.fillEllipse(13,6,13,11);
-      g.fillStyle(skinL); g.fillEllipse(11,4,7,6);
-      g.fillStyle(skinD); g.fillEllipse(17,8,6,7);
-      g.fillStyle(0x2a221a); g.fillEllipse(12,2,10,4);
-      // Occhi folli
-      g.fillStyle(skinDD); g.fillEllipse(9,6,5,4); g.fillEllipse(17,6,5,4);
-      g.fillStyle(eye);    g.fillEllipse(9,6,3,2.4); g.fillEllipse(17,6,3,2.4);
-      g.fillStyle(0xffd28a); g.fillCircle(8,5,1); g.fillCircle(16,5,1);
-      // Bocca spalancata che ringhia
-      g.fillStyle(0x1a0000); g.fillEllipse(13,11,8,5);
-      g.fillStyle(bone);
-      [8,11,14,17].forEach(x => g.fillTriangle(x,9,x+2,9,x+1,12));
-      [9,12,15].forEach(x => g.fillTriangle(x,14,x+2,14,x+1,11));
-      g.fillStyle(blood); g.fillRect(13,13,2,4);
-      g.generateTexture('zombie_runner', 26, 42);
-      g.destroy();
+      const g = G(78,42);
+      const sk=0xb3a48f, skHi=0xcabba6, skSh=0x7d705e;
+      const abr=0x7a2e22, abrHi=0xa8412e, rag=0x55303a, bone=0xd9cba6, eye=0xff6410;
+      for (let f = 0; f < 3; f++) {
+        const ox = f * 26, ph = f - 1; const X = (x: number) => ox + x;
+        g.fillStyle(0x000000,0.22); g.fillEllipse(X(13),40,18,5);
+        // gamba posteriore (spinta indietro)
+        g.fillStyle(skSh); g.fillRoundedRect(X(2+ph*3),24+ph*3,5,14-ph,2);
+        g.fillStyle(sk);   g.fillRoundedRect(X(2+ph*3),24+ph*3,4,12-ph,2);
+        g.fillStyle(0x191510); g.fillEllipse(X(3+ph*3),38+ph,7,4);
+        // gamba anteriore (slancio avanti)
+        g.fillStyle(skSh); g.fillRoundedRect(X(15-ph*3),22-ph*3,5,15+ph,2);
+        g.fillStyle(sk);   g.fillRoundedRect(X(15-ph*3),22-ph*3,4,13+ph,2);
+        g.fillStyle(skHi); g.fillRect(X(16-ph*3),24-ph*3,2,7);
+        g.fillStyle(0x191510); g.fillEllipse(X(18-ph*3),37-ph,8,4);
+        // abrasione sulla coscia (raschiatura da asfalto)
+        g.fillStyle(abr); g.fillEllipse(X(16-ph*2),27,3,5);
+        g.fillStyle(abrHi); g.fillEllipse(X(16-ph*2),26,1.5,2);
+        // braccio posteriore
+        const baY = 18+ph*3;
+        g.fillStyle(skSh); g.fillRoundedRect(X(-3),baY,11,4,2);
+        g.fillStyle(sk);   g.fillCircle(X(-2),baY+2,3);
+        // torso magro + costole + abrasione spalla
+        g.fillStyle(rag);   g.fillRoundedRect(X(7),12,12,14,4);
+        g.fillStyle(0x44262e); g.fillRoundedRect(X(8),13,5,8,2);
+        g.fillStyle(sk);   g.fillEllipse(X(13),22,9,6);
+        g.fillStyle(skSh); g.fillRect(X(9),20,8,1); g.fillRect(X(9),22,8,1); g.fillRect(X(10),24,6,1);
+        g.fillStyle(abr);  g.fillEllipse(X(11),15,4,3); g.fillStyle(abrHi); g.fillEllipse(X(11),14,2,1.4);
+        // braccio anteriore proteso ad artiglio
+        const aaY = 13-ph*3;
+        g.fillStyle(skSh); g.fillRoundedRect(X(18),aaY,9,4,2);
+        g.fillStyle(sk);   g.fillRoundedRect(X(18),aaY,8,3,2);
+        g.fillStyle(skHi); g.fillRect(X(19),aaY,6,1);
+        g.fillStyle(sk);   g.fillCircle(X(26),aaY+2,3);
+        g.fillStyle(0xcabba6);
+        g.fillTriangle(X(27),aaY-1,X(29),aaY-1,X(27),aaY+2);
+        g.fillTriangle(X(27),aaY+2,X(29),aaY+3,X(27),aaY+5);
+        // collo teso + testa protesa, angolosa
+        g.fillStyle(skSh); g.fillRoundedRect(X(11),7,7,6,2);
+        g.fillStyle(sk);   g.fillEllipse(X(14),6,13,10);
+        g.fillStyle(skHi); g.fillEllipse(X(12),4,6,5);
+        g.fillStyle(skSh); g.fillEllipse(X(18),8,5,6);
+        g.fillStyle(0x2a221a); g.fillEllipse(X(13),2,10,4);
+        // occhi arancio brucianti (faro) + bocca spalancata che ringhia
+        g.fillStyle(0x1a0e00); g.fillEllipse(X(10),6,5,4); g.fillEllipse(X(18),6,5,4);
+        g.fillStyle(eye); g.fillEllipse(X(10),6,3,2.4); g.fillEllipse(X(18),6,3,2.4);
+        g.fillStyle(0xffd28a); g.fillCircle(X(9),5,1.1); g.fillCircle(X(17),5,1.1);
+        g.fillStyle(0x1a0000); g.fillEllipse(X(14),11,8,5);
+        g.fillStyle(bone);
+        [9,12,15,18].forEach(x => g.fillTriangle(X(x),9,X(x+2),9,X(x+1),12));
+        [10,13,16].forEach(x => g.fillTriangle(X(x),14,X(x+2),14,X(x+1),11));
+        g.fillStyle(abr); g.fillRect(X(14),13,2,4);
+      }
+      g.generateTexture('zombie_runner',78,42); AF('zombie_runner',26,42,3); g.destroy();
     }
 
-    // ── ZOMBIE ARMORED (38×48) — corazzato da sommossa ──────────────────────
+    // ── ZOMBIE ARMORED · "Il Tutore" (38×48 × 3) ───────────────────────────────
     {
-      const g = G(38,48);
-      const steel=0x6c7a8a, steelL=0x9aa8b8, steelD=0x49545f, steelDD=0x2f363e;
-      const eye=0xffcc22, rust=0x7a4a2a;
-      g.fillStyle(0x000000,0.35); g.fillEllipse(19,46,30,6);
-      // Stivali corazzati
-      g.fillStyle(0x16181c); g.fillEllipse(11,43,12,7); g.fillEllipse(27,43,12,7);
-      g.fillStyle(steelD);   g.fillRoundedRect(6,40,10,4,2); g.fillRoundedRect(22,40,10,4,2);
-      // Gambe a piastre
-      g.fillStyle(steelD); g.fillRoundedRect(6,28,11,14,3); g.fillRoundedRect(21,28,11,14,3);
-      g.fillStyle(steel);  g.fillRoundedRect(7,29,9,11,3); g.fillRoundedRect(22,29,9,11,3);
-      g.fillStyle(steelL); g.fillRect(8,30,3,7); g.fillRect(23,30,3,7);
-      // Spallacci
-      g.fillStyle(steelD); g.fillEllipse(4,17,12,11); g.fillEllipse(34,17,12,11);
-      g.fillStyle(steel);  g.fillEllipse(4,16,9,8);  g.fillEllipse(34,16,9,8);
-      g.fillStyle(steelL); g.fillEllipse(2,14,4,4);  g.fillEllipse(32,14,4,4);
-      // Braccia + guanti
-      g.fillStyle(steelD); g.fillRoundedRect(-7,20,11,7,3); g.fillRoundedRect(34,20,11,7,3);
-      g.fillStyle(steel);  g.fillRoundedRect(-7,20,10,5,2); g.fillRoundedRect(35,20,10,5,2);
-      g.fillStyle(steelDD); g.fillCircle(-7,24,4); g.fillCircle(45,24,4);
-      // Corazza pettorale
-      g.fillStyle(steelDD); g.fillRoundedRect(6,13,26,18,6);
-      g.fillStyle(steel);   g.fillRoundedRect(7,14,24,16,5);
-      g.fillStyle(steelL);  g.fillRoundedRect(9,15,9,6,3);
-      g.fillStyle(steelDD); g.fillRect(8,22,22,1); g.fillRect(19,14,1,16);
-      // Rivetti
-      g.fillStyle(0xb8c6d4);
-      [[9,16],[29,16],[9,28],[29,28]].forEach(([x,y]) => g.fillCircle(x,y,1.3));
-      // Ruggine / sangue secco
-      g.fillStyle(rust,0.7); g.fillEllipse(24,24,6,4);
-      g.fillStyle(0x6a1414,0.6); g.fillEllipse(13,27,5,3);
-      // Collo + casco
-      g.fillStyle(steelD); g.fillRoundedRect(13,7,12,8,3);
-      g.fillStyle(steelDD); g.fillEllipse(19,7,26,15);
-      g.fillStyle(steel);   g.fillEllipse(19,6,23,13);
-      g.fillStyle(steelL);  g.fillEllipse(13,2,9,5);
-      // Visiera
-      g.fillStyle(0x0a1118); g.fillRoundedRect(8,7,22,7,3);
-      g.fillStyle(0x1c3550,0.7); g.fillRoundedRect(9,8,20,3,2);
-      // Occhi dietro la visiera
-      g.fillStyle(eye); g.fillEllipse(13,10,4,2.4); g.fillEllipse(25,10,4,2.4);
-      g.fillStyle(0xffffcc); g.fillCircle(12,10,1); g.fillCircle(24,10,1);
-      // Grata bocca
-      g.fillStyle(steelDD); g.fillRoundedRect(12,14,14,5,2);
-      g.fillStyle(0x14181e); [13,16,19,22].forEach(x => g.fillRect(x,15,2,4));
-      g.generateTexture('zombie_armored', 38, 48);
-      g.destroy();
+      const g = G(114,48);
+      const st=0x5f6b78, stHi=0x8a97a5, stSh=0x39424c, stDD=0x20262c;
+      const rustT=0x8a4a26, rustB=0x3a1d0e, verd=0x3f6b54, bloodOx=0x2a1410;
+      const flesh=0x5a4e63, eye=0xffcc22;
+      for (let f = 0; f < 3; f++) {
+        const ox = f * 38, ph = f - 1; const X = (x: number) => ox + x;
+        g.fillStyle(0x000000,0.35); g.fillEllipse(X(19),46,30,6);
+        // stivali + gambe (marcia minima, pesante)
+        g.fillStyle(0x16181c); g.fillEllipse(X(12-ph),43,12,7); g.fillEllipse(X(26+ph),43,12,7);
+        g.fillStyle(stSh); g.fillRoundedRect(X(8-ph),28+ph,11,15,3); g.fillRoundedRect(X(20+ph),28-ph,11,15,3);
+        g.fillStyle(st);   g.fillRoundedRect(X(9-ph),29+ph,9,12,3); g.fillRoundedRect(X(21+ph),29-ph,9,12,3);
+        g.fillStyle(verd,0.6); g.fillRect(X(9-ph),38,9,2); g.fillRect(X(21+ph),38,9,2);
+        // braccio destro + guanto
+        g.fillStyle(stSh); g.fillRoundedRect(X(30),20-ph,9,7,3);
+        g.fillStyle(st);   g.fillRoundedRect(X(31),20-ph,8,5,2);
+        g.fillStyle(stDD); g.fillCircle(X(39),24-ph,4);
+        // corazza pettorale + sangue ossidato
+        g.fillStyle(stDD); g.fillRoundedRect(X(9),13,22,18,6);
+        g.fillStyle(st);   g.fillRoundedRect(X(10),14,20,16,5);
+        g.fillStyle(stHi); g.fillRoundedRect(X(12),15,8,6,3);
+        g.fillStyle(stSh); g.fillRect(X(11),22,18,1); g.fillRect(X(20),14,1,16);
+        g.fillStyle(bloodOx,0.8); g.fillEllipse(X(23),25,6,4);
+        // rivetti con colature di RUGGINE che scendono
+        const rivets: [number, number][] = [[12,16],[28,16],[12,28],[28,28]];
+        rivets.forEach(([x,y]) => { g.fillStyle(rustT,0.7); g.fillRect(X(x),y,2,8); g.fillStyle(rustB,0.7); g.fillRect(X(x),y+5,2,4); });
+        g.fillStyle(0xb8c6d4); rivets.forEach(([x,y]) => g.fillCircle(X(x+1),y,1.3));
+        // spallaccio destro (cupola)
+        g.fillStyle(stSh); g.fillEllipse(X(32),16,11,10);
+        g.fillStyle(st);   g.fillEllipse(X(32),15,8,7);
+        g.fillStyle(stHi); g.fillEllipse(X(30),13,4,3);
+        // collo (carne marcia) + casco (verderame sui bordi)
+        g.fillStyle(flesh); g.fillRoundedRect(X(15),9,10,6,2);
+        g.fillStyle(stDD); g.fillEllipse(X(20),7,24,15);
+        g.fillStyle(st);   g.fillEllipse(X(20),6,21,13);
+        g.fillStyle(stHi); g.fillEllipse(X(15),2,8,5);
+        g.fillStyle(verd,0.5); g.fillEllipse(X(28),9,5,6);
+        // visiera scura + occhi gialli dietro
+        g.fillStyle(0x0a1118); g.fillRoundedRect(X(10),7,21,7,3);
+        g.fillStyle(0x1c3550,0.7); g.fillRoundedRect(X(11),8,19,3,2);
+        g.fillStyle(eye); g.fillEllipse(X(15),10,4,2.4); g.fillEllipse(X(26),10,4,2.4);
+        g.fillStyle(0xffffcc); g.fillCircle(X(14),10,1); g.fillCircle(X(25),10,1);
+        // griglia bocca
+        g.fillStyle(stDD); g.fillRoundedRect(X(14),14,13,5,2);
+        g.fillStyle(0x14181e); [15,18,21,24].forEach(x => g.fillRect(X(x),15,2,4));
+        // SCUDO antisommossa sul braccio sinistro (gancio silhouette)
+        g.fillStyle(stDD); g.fillRoundedRect(X(-2),12,9,28,4);
+        g.fillStyle(stSh); g.fillRoundedRect(X(-1),13,7,26,4);
+        g.fillStyle(st);   g.fillRoundedRect(X(0),15,4,22,3);
+        g.fillStyle(stHi); g.fillRect(X(1),17,2,10);
+        g.fillStyle(bloodOx,0.7); g.fillEllipse(X(3),24,3,5);
+        g.fillStyle(verd,0.5); g.fillRect(X(0),36,5,2);
+      }
+      g.generateTexture('zombie_armored',114,48); AF('zombie_armored',38,48,3); g.destroy();
     }
 
-    // ── ZOMBIE JUMPER (32×46) — saltatore agile ─────────────────────────────
+    // ── ZOMBIE JUMPER · "Il Ragno" (32×46 × 3) ─────────────────────────────────
     {
-      const g = G(32,46);
-      const skin=0xa89436, skinL=0xc8b24e, skinD=0x77692a, skinDD=0x4f461d;
-      const eye=0xfff000, claw=0xe8e0c0, blood=0x7a1414;
-      g.fillStyle(0x000000,0.3); g.fillEllipse(16,44,22,5);
-      // Cosce a molla
-      g.fillStyle(skinD); g.fillRoundedRect(5,23,8,9,4); g.fillRoundedRect(19,23,8,9,4);
-      g.fillStyle(skin);  g.fillEllipse(8,26,6,7); g.fillEllipse(24,26,6,7);
-      // Stinchi
-      g.fillStyle(skinD); g.fillRoundedRect(3,30,7,11,3); g.fillRoundedRect(22,30,7,11,3);
-      g.fillStyle(skin);  g.fillRoundedRect(3,30,5,9,3); g.fillRoundedRect(22,30,5,9,3);
-      g.fillStyle(skinL); g.fillRect(4,31,2,6); g.fillRect(23,31,2,6);
-      // Piedi artigliati
-      g.fillStyle(skinDD); g.fillEllipse(5,41,9,4); g.fillEllipse(27,41,9,4);
-      g.fillStyle(claw);
-      [1,4,7].forEach(x => g.fillTriangle(x,42,x+2,42,x+1,45));
-      [23,26,29].forEach(x => g.fillTriangle(x,42,x+2,42,x+1,45));
-      // Torso teso
-      g.fillStyle(skinD); g.fillEllipse(16,17,15,15);
-      g.fillStyle(skin);  g.fillEllipse(16,17,13,13);
-      g.fillStyle(skinL); g.fillEllipse(12,13,6,6);
-      g.fillStyle(skinDD); g.fillRect(11,18,10,1); g.fillRect(12,21,8,1);
-      g.fillStyle(blood); g.fillEllipse(19,20,4,3);
-      // Braccia alzate
-      g.fillStyle(skinD); g.fillRoundedRect(-5,9,13,5,2); g.fillRoundedRect(24,9,13,5,2);
-      g.fillStyle(skin);  g.fillRoundedRect(-6,5,6,8,3); g.fillRoundedRect(32,5,6,8,3);
-      g.fillStyle(skinL); g.fillRect(-5,6,2,5); g.fillRect(33,6,2,5);
-      // Artigli
-      g.fillStyle(claw);
-      [-7,-4,-1].forEach(x => g.fillTriangle(x,3,x+2,3,x+1,0));
-      [33,36,39].forEach(x => g.fillTriangle(x,3,x+2,3,x+1,0));
-      // Collo
-      g.fillStyle(skinD); g.fillRoundedRect(13,5,6,6,2);
-      // Testa
-      g.fillStyle(skin);  g.fillEllipse(16,5,14,11);
-      g.fillStyle(skinL); g.fillEllipse(13,3,7,6);
-      g.fillStyle(skinD); g.fillEllipse(20,7,6,6);
-      // Occhi gialli
-      g.fillStyle(skinDD); g.fillEllipse(11,5,5,4); g.fillEllipse(20,5,5,4);
-      g.fillStyle(eye);    g.fillEllipse(11,5,3,2.6); g.fillEllipse(20,5,3,2.6);
-      g.fillStyle(0xffffff); g.fillCircle(10,4,1); g.fillCircle(19,4,1);
-      // Ghigno con zanne
-      g.fillStyle(0x1a1400); g.fillEllipse(16,10,9,4);
-      g.fillStyle(claw);
-      [12,15,18].forEach(x => g.fillTriangle(x,8,x+2,8,x+1,11));
-      [13,16].forEach(x => g.fillTriangle(x,13,x+2,13,x+1,10));
-      g.generateTexture('zombie_jumper', 32, 46);
-      g.destroy();
+      const g = G(96,46);
+      const sk=0x9aa83e, skHi=0xc2d05a, skSh=0x5f6a22, joint=0x20240e;
+      const tend=0xd8e08a, eye=0xfff000, claw=0xe8e0c0, blood=0x7a2e22;
+      for (let f = 0; f < 3; f++) {
+        const ox = f * 32, ph = f - 1; const X = (x: number) => ox + x;
+        const bY = ph * 2;
+        g.fillStyle(0x000000,0.3); g.fillEllipse(X(16),44,22,5);
+        // cosce (compressione a molla nel frame centrale)
+        const thH = 9 - Math.abs(ph)*2;
+        g.fillStyle(skSh); g.fillRoundedRect(X(5),23+bY,8,thH,4); g.fillRoundedRect(X(19),23+bY,8,thH,4);
+        g.fillStyle(sk);   g.fillEllipse(X(8),26+bY,6,thH-2); g.fillEllipse(X(24),26+bY,6,thH-2);
+        // ginocchia annerite (lettura "insetto")
+        g.fillStyle(joint); g.fillCircle(X(7),30+bY,2.4); g.fillCircle(X(25),30+bY,2.4);
+        // stinchi + tendini esposti
+        g.fillStyle(skSh); g.fillRoundedRect(X(3),30+bY,7,11,3); g.fillRoundedRect(X(22),30+bY,7,11,3);
+        g.fillStyle(sk);   g.fillRoundedRect(X(3),30+bY,5,9,3); g.fillRoundedRect(X(22),30+bY,5,9,3);
+        g.fillStyle(tend); g.fillRect(X(4),31+bY,1,7); g.fillRect(X(26),31+bY,1,7);
+        // piedi artigliati
+        g.fillStyle(skSh); g.fillEllipse(X(5),41,9,4); g.fillEllipse(X(27),41,9,4);
+        g.fillStyle(claw);
+        [1,4,7].forEach(x => g.fillTriangle(X(x),42,X(x+2),42,X(x+1),45));
+        [23,26,29].forEach(x => g.fillTriangle(X(x),42,X(x+2),42,X(x+1),45));
+        // torso teso (addominali a tendine)
+        g.fillStyle(skSh); g.fillEllipse(X(16),17+bY,15,15);
+        g.fillStyle(sk);   g.fillEllipse(X(16),17+bY,13,13);
+        g.fillStyle(skHi); g.fillEllipse(X(12),13+bY,6,6);
+        g.fillStyle(tend); g.fillRect(X(11),18+bY,10,1); g.fillRect(X(12),21+bY,8,1);
+        g.fillStyle(blood); g.fillEllipse(X(19),20+bY,4,3);
+        // braccia alzate (gomiti scuri) + artigli
+        const aY = 9+bY+ph*2;
+        g.fillStyle(skSh); g.fillRoundedRect(X(-4),aY,12,5,2); g.fillRoundedRect(X(24),aY,12,5,2);
+        g.fillStyle(joint); g.fillCircle(X(2),aY+2,2.2); g.fillCircle(X(30),aY+2,2.2);
+        g.fillStyle(sk);   g.fillRoundedRect(X(-5),aY-4,6,8,3); g.fillRoundedRect(X(31),aY-4,6,8,3);
+        g.fillStyle(skHi); g.fillRect(X(-4),aY-3,2,5); g.fillRect(X(32),aY-3,2,5);
+        g.fillStyle(claw);
+        [-6,-3,0].forEach(x => g.fillTriangle(X(x),aY-6,X(x+2),aY-6,X(x+1),aY-10));
+        [32,35,38].forEach(x => g.fillTriangle(X(x),aY-6,X(x+2),aY-6,X(x+1),aY-10));
+        // collo + testa
+        g.fillStyle(skSh); g.fillRoundedRect(X(13),5+bY,6,6,2);
+        g.fillStyle(sk);   g.fillEllipse(X(16),5+bY,14,11);
+        g.fillStyle(skHi); g.fillEllipse(X(13),3+bY,7,6);
+        g.fillStyle(skSh); g.fillEllipse(X(20),7+bY,6,6);
+        // occhi giallo elettrico + ghigno con zanne
+        g.fillStyle(0x222a00); g.fillEllipse(X(11),5+bY,5,4); g.fillEllipse(X(20),5+bY,5,4);
+        g.fillStyle(eye); g.fillEllipse(X(11),5+bY,3,2.6); g.fillEllipse(X(20),5+bY,3,2.6);
+        g.fillStyle(0xffffd0); g.fillCircle(X(10),4+bY,1); g.fillCircle(X(19),4+bY,1);
+        g.fillStyle(0x1a1400); g.fillEllipse(X(16),10+bY,9,4);
+        g.fillStyle(claw);
+        [12,15,18].forEach(x => g.fillTriangle(X(x),8+bY,X(x+2),8+bY,X(x+1),11+bY));
+        [13,16].forEach(x => g.fillTriangle(X(x),13+bY,X(x+2),13+bY,X(x+1),10+bY));
+      }
+      g.generateTexture('zombie_jumper',96,46); AF('zombie_jumper',32,46,3); g.destroy();
     }
 
-    // ── ZOMBIE TOXIC (30×48) — mutante tossico ──────────────────────────────
+    // ── ZOMBIE TOXIC · "Il Gonfio" (30×48 × 3) ─────────────────────────────────
     {
-      const g = G(30,48);
-      const skin=0x3f7a33, skinL=0x5fa84a, skinD=0x265020, skinDD=0x16320f;
-      const ooze=0x6cff3a, oozeD=0x2cbb2a, eye=0x9dff5a;
-      // Alone tossico
-      g.fillStyle(0x33ff33,0.08); g.fillCircle(15,24,21);
-      g.fillStyle(0x004400,0.4);  g.fillEllipse(15,46,26,7);
-      // Piedi
-      g.fillStyle(skinDD); g.fillEllipse(8,44,9,5); g.fillEllipse(22,44,9,5);
-      // Gambe gonfie
-      g.fillStyle(skinD); g.fillEllipse(9,36,9,16); g.fillEllipse(21,36,9,16);
-      g.fillStyle(skin);  g.fillEllipse(9,35,7,13); g.fillEllipse(21,35,7,13);
-      g.fillStyle(oozeD); g.fillEllipse(8,33,2,8); g.fillEllipse(22,36,2,6);
-      // Torso enorme e gonfio
-      g.fillStyle(skinD); g.fillEllipse(15,22,27,24);
-      g.fillStyle(skin);  g.fillEllipse(15,22,24,21);
-      g.fillStyle(skinL); g.fillEllipse(10,15,9,8);
-      // Pustole
-      g.fillStyle(oozeD);
-      g.fillCircle(8,20,4); g.fillCircle(22,18,5); g.fillCircle(13,27,4); g.fillCircle(21,28,3);
-      g.fillStyle(ooze);
-      g.fillCircle(8,20,2.2); g.fillCircle(22,18,3); g.fillCircle(13,27,2);
-      g.fillStyle(0xcaffb0); g.fillCircle(7,19,1); g.fillCircle(21,17,1.2);
-      // Braccia colanti
-      g.fillStyle(skinD); g.fillEllipse(-2,22,12,7); g.fillEllipse(32,22,12,7);
-      g.fillStyle(skin);  g.fillEllipse(-1,21,9,5);  g.fillEllipse(31,21,9,5);
-      g.fillStyle(skinDD); g.fillCircle(-4,24,4); g.fillCircle(34,24,4);
-      // Gocce di melma
-      g.fillStyle(ooze,0.8);
-      g.fillEllipse(-4,29,3,4); g.fillEllipse(34,30,3,4); g.fillEllipse(15,40,3,5);
-      g.fillStyle(oozeD,0.6); g.fillEllipse(6,42,2,3); g.fillEllipse(24,41,2,3);
-      // Testa gonfia
-      g.fillStyle(skinD); g.fillEllipse(15,7,22,16);
-      g.fillStyle(skin);  g.fillEllipse(15,7,19,13);
-      g.fillStyle(skinL); g.fillEllipse(10,3,7,6);
-      // Cranio crepato
-      g.fillStyle(skinDD); g.fillRect(14,0,2,5); g.fillTriangle(9,1,11,6,12,1);
-      // Occhi luminosi
-      g.fillStyle(0x062006); g.fillEllipse(10,7,6,5); g.fillEllipse(20,7,6,5);
-      g.fillStyle(eye);      g.fillEllipse(10,7,3.5,3); g.fillEllipse(20,7,3.5,3);
-      g.fillStyle(0xeaffd6); g.fillCircle(9,6,1.2); g.fillCircle(19,6,1.2);
-      // Bocca che cola
-      g.fillStyle(0x051a05); g.fillEllipse(15,13,11,5);
-      g.fillStyle(ooze,0.85); g.fillEllipse(15,13,9,3);
-      g.fillStyle(ooze,0.7); g.fillEllipse(13,17,2,4); g.fillEllipse(17,16,2,4);
-      g.generateTexture('zombie_toxic', 30, 48);
-      g.destroy();
+      const g = G(90,48);
+      const sk=0x3f7a33, skHi=0x5fa84a, skSh=0x265020, vein=0x7dff4a;
+      const ooze=0x6cff3a, oozeD=0x2cbb2a, sac=0x8fd86a, eye=0x9dff5a;
+      for (let f = 0; f < 3; f++) {
+        const ox = f * 30, ph = f - 1; const X = (x: number) => ox + x; const sw = ph;
+        g.fillStyle(0x33ff33,0.08); g.fillCircle(X(15)+sw,24,21);
+        g.fillStyle(0x004400,0.4);  g.fillEllipse(X(15)+sw,46,26,7);
+        // piedi + gambe gonfie con vene
+        g.fillStyle(skSh); g.fillEllipse(X(8-ph),44,9,5); g.fillEllipse(X(22+ph),44,9,5);
+        g.fillStyle(skSh); g.fillEllipse(X(9-ph),36+ph,9,16); g.fillEllipse(X(21+ph),36-ph,9,16);
+        g.fillStyle(sk);   g.fillEllipse(X(9-ph),35+ph,7,13); g.fillEllipse(X(21+ph),35-ph,7,13);
+        g.fillStyle(vein,0.8); g.fillRect(X(8-ph),30,1,12); g.fillRect(X(22+ph),32,1,9);
+        // torso gonfio
+        g.fillStyle(skSh); g.fillEllipse(X(15)+sw,22,27,24);
+        g.fillStyle(sk);   g.fillEllipse(X(15)+sw,22,24,21);
+        g.fillStyle(skHi); g.fillEllipse(X(10)+sw,15,9,8);
+        // vene emissive sul torso
+        g.fillStyle(vein,0.7);
+        g.fillRect(X(13)+sw,14,1,16); g.fillRect(X(13)+sw,22,8,1); g.fillRect(X(9)+sw,26,8,1);
+        // pustole con nucleo luminoso
+        const pus: [number, number, number][] = [[8,20,4],[21,28,3],[13,30,3]];
+        pus.forEach(([x,y,r]) => {
+          g.fillStyle(oozeD); g.fillCircle(X(x)+sw,y,r);
+          g.fillStyle(ooze);  g.fillCircle(X(x)+sw,y,r*0.5);
+          g.fillStyle(0xeaffd6); g.fillCircle(X(x-1)+sw,y-1,1);
+        });
+        // braccia colanti (oscillano inversamente)
+        const laY=22+ph, raY=22-ph;
+        g.fillStyle(skSh); g.fillEllipse(X(-2),laY,12,7); g.fillEllipse(X(32),raY,12,7);
+        g.fillStyle(sk);   g.fillEllipse(X(-1),laY-1,9,5); g.fillEllipse(X(31),raY-1,9,5);
+        g.fillStyle(skSh); g.fillCircle(X(-3),laY+2,4); g.fillCircle(X(33),raY+2,4);
+        // SACCA tossica enorme sulla spalla destra (gancio silhouette)
+        g.fillStyle(skSh); g.fillEllipse(X(24)+sw,11,16,15);
+        g.fillStyle(sac);  g.fillEllipse(X(24)+sw,11,13,12);
+        g.fillStyle(ooze,0.5); g.fillEllipse(X(24)+sw,12,8,7);
+        g.fillStyle(0xeaffd6); g.fillEllipse(X(21)+sw,8,3,3);
+        g.fillStyle(vein,0.7); g.fillRect(X(20)+sw,8,8,1); g.fillRect(X(24)+sw,5,1,12);
+        // testa gonfia (inclinata verso la sacca)
+        g.fillStyle(skSh); g.fillEllipse(X(13)+sw,7,20,15);
+        g.fillStyle(sk);   g.fillEllipse(X(13)+sw,7,17,12);
+        g.fillStyle(skHi); g.fillEllipse(X(9)+sw,3,7,6);
+        g.fillStyle(skSh); g.fillRect(X(12)+sw,0,2,5);
+        // occhi luminosi + bocca che cola
+        g.fillStyle(0x062006); g.fillEllipse(X(9)+sw,7,6,5); g.fillEllipse(X(18)+sw,7,5,4);
+        g.fillStyle(eye);   g.fillEllipse(X(9)+sw,7,3.5,3); g.fillEllipse(X(18)+sw,7,3,2.6);
+        g.fillStyle(0xeaffd6); g.fillCircle(X(8)+sw,6,1.2); g.fillCircle(X(17)+sw,6,1);
+        g.fillStyle(0x051a05); g.fillEllipse(X(13)+sw,13,10,5);
+        g.fillStyle(ooze,0.85); g.fillEllipse(X(13)+sw,13,8,3);
+        g.fillStyle(ooze,0.7); g.fillEllipse(X(11)+sw,17,2,4); g.fillEllipse(X(15)+sw,16,2,4);
+      }
+      g.generateTexture('zombie_toxic',90,48); AF('zombie_toxic',30,48,3); g.destroy();
     }
 
-    // ── ZOMBIE GIANT (48×66) — colosso bruto ────────────────────────────────
+    // ── ZOMBIE GIANT · "L'Innesto" (48×66 × 3) — riusato dai boss ──────────────
     {
-      const g = G(48,66);
-      const skin=0x6a4326, skinL=0x8a5e38, skinD=0x472c18, skinDD=0x2e1c10;
-      const blood=0x7a1010, bloodB=0xb01818, bone=0xd9c8a0, eye=0xff2a10;
-      g.fillStyle(0x000000,0.4); g.fillEllipse(24,64,44,8);
-      // Piedi
-      g.fillStyle(0x120c06); g.fillEllipse(13,60,16,8); g.fillEllipse(35,60,16,8);
-      // Gambe massicce
-      g.fillStyle(skinD); g.fillRoundedRect(6,38,16,22,7); g.fillRoundedRect(26,38,16,22,7);
-      g.fillStyle(skin);  g.fillRoundedRect(7,38,13,20,6); g.fillRoundedRect(28,38,13,20,6);
-      g.fillStyle(skinL); g.fillEllipse(12,44,5,11); g.fillEllipse(33,44,5,11);
-      g.fillStyle(blood); g.fillEllipse(9,50,5,7); g.fillStyle(bloodB); g.fillEllipse(9,50,2,4);
-      // Braccia enormi
-      g.fillStyle(skinD); g.fillEllipse(4,22,18,14); g.fillEllipse(44,22,18,14);
-      g.fillStyle(skin);  g.fillEllipse(5,21,14,11); g.fillEllipse(43,21,14,11);
-      g.fillStyle(skinL); g.fillEllipse(3,18,6,5); g.fillEllipse(45,18,6,5);
-      // Avambracci + pugni
-      g.fillStyle(skinD); g.fillEllipse(3,30,13,12); g.fillEllipse(45,30,13,12);
-      g.fillStyle(skin);  g.fillEllipse(4,30,10,10); g.fillEllipse(44,30,10,10);
-      g.fillStyle(skinDD);
-      [1,4,7].forEach(x => g.fillCircle(x,27,1.6));
-      [41,44,47].forEach(x => g.fillCircle(x,27,1.6));
-      // Torso colossale
-      g.fillStyle(skinD); g.fillRoundedRect(3,15,42,26,10);
-      g.fillStyle(skin);  g.fillRoundedRect(5,16,38,23,9);
-      g.fillStyle(skinL); g.fillEllipse(15,21,12,8); g.fillEllipse(33,21,12,8);
-      g.fillStyle(skinD); g.fillRect(24,18,1,20);
-      // Pancia squarciata (costole + sangue)
-      g.fillStyle(skinDD); g.fillEllipse(24,33,18,9);
-      g.fillStyle(bone); [16,20,24,28,32].forEach(x => g.fillRect(x,29,2,8));
-      g.fillStyle(blood); g.fillEllipse(24,35,12,4);
-      // Collo taurino
-      g.fillStyle(skinD); g.fillRoundedRect(16,8,16,11,4);
-      g.fillStyle(skin);  g.fillRoundedRect(17,8,14,9,3);
-      // Testa
-      g.fillStyle(skinD); g.fillEllipse(24,5,28,15);
-      g.fillStyle(skin);  g.fillEllipse(24,5,24,12);
-      g.fillStyle(skinL); g.fillEllipse(18,1,9,6);
-      // Cresta ossea
-      g.fillStyle(skinDD); g.fillEllipse(24,0,22,6);
-      [14,19,24,29,34].forEach(x => g.fillTriangle(x,0,x+3,0,x+1.5,3));
-      // Occhi rossi infossati
-      g.fillStyle(0x100000); g.fillEllipse(17,5,8,6); g.fillEllipse(31,5,8,6);
-      g.fillStyle(eye);      g.fillEllipse(17,5,4.5,3.5); g.fillEllipse(31,5,4.5,3.5);
-      g.fillStyle(0xff9977); g.fillCircle(16,4,1.4); g.fillCircle(30,4,1.4);
-      // Mascella + zanne
-      g.fillStyle(0x180000); g.fillEllipse(24,11,20,6);
-      g.fillStyle(bone);
-      [15,19,24,29,33].forEach(x => g.fillTriangle(x,8,x+3,8,x+1.5,13));
-      [17,22,27,31].forEach(x => g.fillTriangle(x,15,x+3,15,x+1.5,10));
-      // Sangue dalla bocca
-      g.fillStyle(blood); g.fillRect(20,13,3,7); g.fillRect(28,13,2,6);
-      g.fillStyle(bloodB); g.fillRect(21,13,1,5);
-      // Cicatrice
-      g.fillStyle(skinDD); g.fillRect(33,0,1,11);
-      g.generateTexture('zombie_giant', 48, 66);
-      g.destroy();
+      const g = G(144,66);
+      const sk=0x5a3a2e, skHi=0x7d5240, skSh=0x38241c, livid=0x4a3a52;
+      const graft=0x5a5a3a, graftHi=0x7d7d50, graftSh=0x2a2a18;
+      const sut=0x1e140e, stitch=0x8a7a60, bone=0xd9c8a0, blood=0x6e2a26, eye=0xff2a10;
+      for (let f = 0; f < 3; f++) {
+        const ox = f * 48, ph = f - 1; const X = (x: number) => ox + x;
+        g.fillStyle(0x000000,0.4); g.fillEllipse(X(24),64,44,8);
+        // piedi + gambe massicce (passo pesante)
+        g.fillStyle(0x120c06); g.fillEllipse(X(13-ph*2),60,16,8); g.fillEllipse(X(35+ph*2),60,16,8);
+        g.fillStyle(skSh); g.fillRoundedRect(X(6-ph*2),38+ph*2,16,22,7); g.fillRoundedRect(X(26+ph*2),38-ph*2,16,22,7);
+        g.fillStyle(sk);   g.fillRoundedRect(X(7-ph*2),38+ph*2,13,20,6); g.fillRoundedRect(X(28+ph*2),38-ph*2,13,20,6);
+        g.fillStyle(skHi); g.fillEllipse(X(12-ph*2),44+ph,5,11); g.fillEllipse(X(33+ph*2),44-ph,5,11);
+        g.fillStyle(livid,0.6); g.fillEllipse(X(10),52,5,8);
+        g.fillStyle(blood); g.fillEllipse(X(35),50,5,7);
+        // braccio SINISTRO (carne normale)
+        const laY=22+ph*2;
+        g.fillStyle(skSh); g.fillEllipse(X(5),laY,18,14);
+        g.fillStyle(sk);   g.fillEllipse(X(5),laY-1,14,11);
+        g.fillStyle(skHi); g.fillEllipse(X(3),laY-4,6,5);
+        g.fillStyle(skSh); g.fillEllipse(X(4),laY+8,13,12);
+        g.fillStyle(sk);   g.fillEllipse(X(4),laY+8,10,10);
+        // braccio DESTRO INNESTATO (più grosso, colore diverso, suture alla spalla)
+        const raY=22-ph*2;
+        g.fillStyle(graftSh); g.fillEllipse(X(43),raY,21,16);
+        g.fillStyle(graft);   g.fillEllipse(X(43),raY-1,17,13);
+        g.fillStyle(graftHi); g.fillEllipse(X(44),raY-4,7,5);
+        g.fillStyle(graftSh); g.fillEllipse(X(44),raY+9,15,14);
+        g.fillStyle(graft);   g.fillEllipse(X(44),raY+9,12,11);
+        g.fillStyle(sut); g.fillRect(X(35),raY-6,1,15);
+        g.fillStyle(stitch); [raY-5,raY-1,raY+3,raY+7].forEach(y => g.fillRect(X(33),y,5,1));
+        // nocche
+        g.fillStyle(skSh);   [1,4,7].forEach(x => g.fillCircle(X(x),laY+18,1.6));
+        g.fillStyle(graftSh); [41,44,47].forEach(x => g.fillCircle(X(x),raY+18,1.6));
+        // torso colossale + GOBBA (spalla destra rialzata)
+        g.fillStyle(skSh); g.fillRoundedRect(X(3),15,42,26,10);
+        g.fillStyle(sk);   g.fillRoundedRect(X(5),16,38,23,9);
+        g.fillStyle(skSh); g.fillEllipse(X(38),13,16,12);
+        g.fillStyle(sk);   g.fillEllipse(X(38),13,12,9);
+        g.fillStyle(skHi); g.fillEllipse(X(15),21,12,8); g.fillEllipse(X(33),20,10,7);
+        g.fillStyle(skSh); g.fillRect(X(24),18,1,20);
+        // chiazze livide + suture sul torso
+        g.fillStyle(livid,0.55); g.fillEllipse(X(13),30,8,6); g.fillEllipse(X(34),31,7,5);
+        g.fillStyle(sut); g.fillRect(X(18),18,1,18);
+        g.fillStyle(stitch); [20,24,28,32].forEach(y => g.fillRect(X(16),y,5,1));
+        // pancia squarciata (costole + sangue)
+        g.fillStyle(0x2e1a14); g.fillEllipse(X(24),33,18,9);
+        g.fillStyle(bone); [16,20,24,28,32].forEach(x => g.fillRect(X(x),29,2,8));
+        g.fillStyle(blood); g.fillEllipse(X(24),35,12,4);
+        // collo + testa piccola e infossata
+        g.fillStyle(skSh); g.fillRoundedRect(X(16),9,16,10,4);
+        g.fillStyle(skSh); g.fillEllipse(X(23),6,26,14);
+        g.fillStyle(sk);   g.fillEllipse(X(23),6,22,11);
+        g.fillStyle(skHi); g.fillEllipse(X(17),2,9,6);
+        // cresta ossea
+        g.fillStyle(skSh); g.fillEllipse(X(23),1,20,6);
+        [14,18,22,26,30].forEach(x => g.fillTriangle(X(x),1,X(x+3),1,X(x+1.5),4));
+        // occhi rossi infossati
+        g.fillStyle(0x100000); g.fillEllipse(X(16),6,8,6); g.fillEllipse(X(30),6,8,6);
+        g.fillStyle(eye); g.fillEllipse(X(16),6,4.5,3.5); g.fillEllipse(X(30),6,4.5,3.5);
+        g.fillStyle(0xff9977); g.fillCircle(X(15),5,1.4); g.fillCircle(X(29),5,1.4);
+        // mascella + zanne + sangue
+        g.fillStyle(0x180000); g.fillEllipse(X(23),12,20,6);
+        g.fillStyle(bone);
+        [14,18,23,28,32].forEach(x => g.fillTriangle(X(x),9,X(x+3),9,X(x+1.5),14));
+        [16,21,26,30].forEach(x => g.fillTriangle(X(x),16,X(x+3),16,X(x+1.5),11));
+        g.fillStyle(blood); g.fillRect(X(19),14,3,7); g.fillRect(X(27),14,2,6);
+      }
+      g.generateTexture('zombie_giant',144,66); AF('zombie_giant',48,66,3); g.destroy();
     }
 
     // ── BULLET (18×5) ─────────────────────────────────────────────────────────
@@ -659,6 +718,28 @@ export default class GameScene extends Phaser.Scene {
       g.generateTexture('toxic_cloud', 50, 50);
       g.destroy();
     }
+
+    // ── Animazioni di camminata (ciclo 0=passo sx · 1=neutro · 2=passo dx) ──────
+    const walk = (type: string, rate: number) => {
+      const key = `walk_${type}`;
+      if (scene.anims.exists(key)) return;
+      scene.anims.create({
+        key,
+        frames: [
+          { key: `zombie_${type}`, frame: 0 },
+          { key: `zombie_${type}`, frame: 1 },
+          { key: `zombie_${type}`, frame: 2 },
+          { key: `zombie_${type}`, frame: 1 },
+        ],
+        frameRate: rate, repeat: -1,
+      });
+    };
+    walk('common', 5);
+    walk('runner', 12);
+    walk('armored', 4);
+    walk('jumper', 9);
+    walk('toxic', 4);
+    walk('giant', 3.5);
   }
 
   // Interpola un colore verso un target (0xffffff per schiarire, 0x000000 per scurire)
@@ -1495,6 +1576,82 @@ export default class GameScene extends Phaser.Scene {
 
   // ─── Spawning ────────────────────────────────────────────────────────────────
 
+  // Personalità di movimento: rollio con forma d'onda, tonfo, respiro, virata + VFX
+  private updateZombieMotion(time: number, delta: number) {
+    const t = time / 1000;
+    for (const z of this.zombies.getChildren() as Phaser.Physics.Arcade.Sprite[]) {
+      if (!z.active) continue;
+      const type = (z.getData('type') as ZombieType) ?? 'common';
+      const m = ZOMBIE_MOTION[type] ?? ZOMBIE_MOTION.common;
+      const ph = (z.getData('rockPhase') as number) ?? 0;
+
+      // Rollio con forma d'onda (pesante indugia agli estremi · agile frusta per il centro)
+      const s = Math.sin(t * m.spd + ph);
+      z.rotation = m.lean + Math.sign(s) * Math.pow(Math.abs(s), m.pow) * m.amp;
+
+      // Tonfo verticale del passo pesante (offset reversibile, niente accumulo)
+      if (m.stomp > 0) {
+        const prev = (z.getData('bob') as number) ?? 0;
+        const bob = -Math.abs(Math.cos(t * m.spd + ph)) * m.stomp;
+        z.y += bob - prev;
+        z.setData('bob', bob);
+      }
+
+      // Respiro / gonfiore (squash-stretch del volume)
+      if (m.wob > 0) {
+        const base = ZOMBIE_STATS[type].scale;
+        const w = Math.sin(t * m.spd * 0.7 + ph) * m.wob;
+        z.setScale(base * (1 + w), base * (1 - w));
+      }
+
+      // Inseguimento verticale con virata graduale (agile scatta · lento deriva)
+      if (m.home > 0 && !z.getData('entering')) {
+        const body = z.body as Phaser.Physics.Arcade.Body;
+        const targetVy = Phaser.Math.Clamp(this.vehicle.y - z.y, -1, 1) * m.home;
+        body.setVelocityY(Phaser.Math.Linear(body.velocity.y, targetVy, m.turn));
+        z.y = Phaser.Math.Clamp(z.y, ROAD_TOP + 12, ROAD_BOTTOM - 12);
+      }
+
+      // VFX procedurali "fire-and-forget", emissione throttellata
+      if (m.fx) {
+        let fxT = ((z.getData('fxT') as number) ?? Math.random() * m.fxEvery) - delta;
+        if (fxT <= 0) { this.emitZombieFx(z, type); fxT = m.fxEvery; }
+        z.setData('fxT', fxT);
+      }
+    }
+  }
+
+  // Emette particelle che si auto-distruggono in base al tipo (vapore, melma, scia, polvere)
+  private emitZombieFx(z: Phaser.Physics.Arcade.Sprite, type: ZombieType) {
+    if (type === 'toxic') {
+      const p = this.add.image(z.x + Phaser.Math.Between(-6, 6), z.y - 6, 'particle')
+        .setTint(0x4cff3a).setAlpha(0.5).setScale(0.7).setDepth(8);
+      this.tweens.add({ targets: p, y: p.y - 22, scale: 1.6, alpha: 0, duration: 900, onComplete: () => p.destroy() });
+      if (Math.random() < 0.4) {
+        const d = this.add.image(z.x + Phaser.Math.Between(-8, 8), z.y + 10, 'particle')
+          .setTint(0x2cbb2a).setScale(0.5).setDepth(8);
+        this.tweens.add({ targets: d, y: d.y + 16, scaleX: 0.3, scaleY: 1.2, alpha: 0, duration: 500, onComplete: () => d.destroy() });
+      }
+    } else if (type === 'runner') {
+      const ghost = this.add.image(z.x, z.y, 'zombie_runner')
+        .setScale(z.scaleX, z.scaleY).setRotation(z.rotation).setAlpha(0.26).setTint(0xff7744).setDepth(8);
+      this.tweens.add({ targets: ghost, alpha: 0, duration: 220, onComplete: () => ghost.destroy() });
+    } else if (type === 'giant') {
+      const d = this.add.image(z.x + Phaser.Math.Between(-14, 14), z.y + 28, 'particle')
+        .setTint(0x6a5a44).setAlpha(0.5).setScale(1).setDepth(8);
+      this.tweens.add({ targets: d, y: d.y - 4, scale: 2, alpha: 0, duration: 600, onComplete: () => d.destroy() });
+    }
+  }
+
+  // Scintille metalliche (proiettile che rimbalza sulla corazza)
+  private emitSparks(x: number, y: number) {
+    for (let i = 0; i < 4; i++) {
+      const a = Math.random() * Math.PI * 2, sp = Phaser.Math.Between(20, 60);
+      const p = this.add.image(x, y, 'particle').setTint(0xfff2a0).setScale(0.35).setDepth(14);
+      this.tweens.add({ targets: p, x: x + Math.cos(a) * sp, y: y + Math.sin(a) * sp, alpha: 0, scale: 0.05, duration: 220, onComplete: () => p.destroy() });
+    }
+  }
+
   private spawnZombie() {
     const type = SPAWN_POOL[Math.floor(Math.random() * SPAWN_POOL.length)];
     const stats = ZOMBIE_STATS[type];
@@ -1505,8 +1662,11 @@ export default class GameScene extends Phaser.Scene {
       const targetY = Phaser.Math.Between(ROAD_TOP + 22, ROAD_BOTTOM - 22);
       const z = this.zombies.create(W + 30, startY, 'zombie_jumper') as Phaser.Physics.Arcade.Sprite;
       z.setScale(stats.scale).setData('hp', stats.hp).setData('type', 'jumper');
+      z.setData('rockPhase', Math.random() * 6.28).setData('entering', true);
       z.setVelocityX(-(stats.speed + SCROLL_SPEED)).setDepth(9).setBodySize(20,28);
-      this.tweens.add({ targets: z, y: targetY, duration: 500, ease: 'Sine.easeOut' });
+      z.play('walk_jumper'); z.anims.setProgress(Math.random());
+      this.tweens.add({ targets: z, y: targetY, duration: 500, ease: 'Sine.easeOut',
+        onComplete: () => { if (z.active) z.setData('entering', false); } });
       return;
     }
 
@@ -1516,14 +1676,18 @@ export default class GameScene extends Phaser.Scene {
       const y = Phaser.Math.Clamp(baseY + i*28*(Math.random()>0.5?1:-1), ROAD_TOP+22, ROAD_BOTTOM-22);
       const z = this.zombies.create(W+30+i*20, y, `zombie_${type}`) as Phaser.Physics.Arcade.Sprite;
       z.setScale(stats.scale).setData('hp', stats.hp).setData('type', type);
+      z.setData('rockPhase', Math.random() * 6.28);
       z.setVelocityX(-(stats.speed + SCROLL_SPEED)).setDepth(9).setBodySize(20,28);
+      z.play(`walk_${type}`); z.anims.setProgress(Math.random());
     }
   }
 
   private spawnGiant() {
     const z = this.zombies.create(W + 60, ROAD_CENTER, 'zombie_giant') as Phaser.Physics.Arcade.Sprite;
     z.setScale(ZOMBIE_STATS.giant.scale).setData('hp', ZOMBIE_STATS.giant.hp).setData('type', 'giant');
+    z.setData('rockPhase', Math.random() * 6.28);
     z.setVelocityX(-(ZOMBIE_STATS.giant.speed + SCROLL_SPEED)).setDepth(9).setBodySize(38,50);
+    z.play('walk_giant'); z.anims.setProgress(Math.random());
     const warn = this.add.text(W - 60, H/2, '⚠ GIGANTE!', {
       fontSize: '22px', color: '#ff4400', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 4,
@@ -1594,6 +1758,7 @@ export default class GameScene extends Phaser.Scene {
     const dmg = (bullet.getData('damage') as number) ?? 1;
     bullet.destroy();
     const type = zombie.getData('type') as ZombieType;
+    if (type === 'armored') this.emitSparks(zombie.x, zombie.y);
     const hp   = (zombie.getData('hp') as number) - dmg;
     if (hp <= 0) {
       this.score += ZOMBIE_STATS[type].score;
@@ -1760,6 +1925,7 @@ export default class GameScene extends Phaser.Scene {
 
     const sprite = this.add.sprite(this.vehicle.x+slot.dx, this.vehicle.y+slot.dy, `zombie_${type}`);
     sprite.setScale(0.68).setDepth(11).setTint(type==='jumper' ? 0xffcc00 : 0xff8800);
+    sprite.play(`walk_${type}`); sprite.anims.setProgress(Math.random());
     this.tweens.add({ targets: sprite, scaleX: 0.84, scaleY: 0.84, yoyo: true, duration: 110, repeat: 1 });
     this.attachedZombies.push({ sprite, slotIndex, comp: slot.comp, hp, timer: ATTACH_DAMAGE_INTERVAL });
     this.cameras.main.shake(70, 0.005);
@@ -1918,6 +2084,7 @@ export default class GameScene extends Phaser.Scene {
     // Sprite boss (riusa zombie_giant scalato e tintato)
     const boss = this.bossGroup.create(W + 90, ROAD_CENTER, 'zombie_giant') as Phaser.Physics.Arcade.Sprite;
     boss.setScale(cfg.scaleX, cfg.scaleY).setTint(cfg.tint).setDepth(12);
+    boss.play('walk_giant');
     boss.setData('bossType', bossType);
     boss.setData('hp', cfg.hp);
     const t1init = bossType === 'armored_colossus' ? 3000
@@ -2008,8 +2175,10 @@ export default class GameScene extends Phaser.Scene {
       x, Phaser.Math.Clamp(y, ROAD_TOP + 22, ROAD_BOTTOM - 22), `zombie_${type}`
     ) as Phaser.Physics.Arcade.Sprite;
     z.setScale(stats.scale).setData('hp', stats.hp).setData('type', type);
+    z.setData('rockPhase', Math.random() * 6.28);
     z.setVelocityX(-(stats.speed + SCROLL_SPEED)).setDepth(9);
     (z.body as Phaser.Physics.Arcade.Body).setSize(20, 28);
+    z.play(`walk_${type}`); z.anims.setProgress(Math.random());
   }
 
   private fireBossProjectile(x: number, fromY: number) {

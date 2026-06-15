@@ -1,0 +1,353 @@
+# 🧟 Art Bible — Comparto Zombi
+### Zombie Road: Last Escape · Direzione Artistica (qualità AAA)
+
+> **Stato:** v1.0 · vivo (living document)
+> **Ambito:** estetica, leggibilità e personalità di movimento di tutti i nemici "zombi".
+> **Riferimento di stile:** survival-horror top-down ad alta densità (es. *Dead Nation*) — orrore **leggibile**, mai confusionario.
+> **Vincolo fondante:** grafica **100% procedurale** (Phaser 3 Graphics API → `generateTexture`). **Nessun PNG.**
+
+Questo documento è la **fonte di verità** per chiunque (umano o AI) tocchi i nemici. Se modifichi un nemico, aggiorna anche la sua scheda qui.
+
+---
+
+## 0. Mappa del codice (dove vive tutto)
+
+| Cosa | Dove |
+|---|---|
+| Disegno texture + spritesheet a 3 frame | `src/scenes/GameScene.ts` → `static buildEntityTextures()` |
+| Creazione animazioni di camminata | stesso metodo, helper `walk(type, rate)` |
+| Statistiche di gioco (velocità, hp, scala, danno, punti) | `ZOMBIE_STATS` |
+| Personalità di movimento (rollio, tonfo, virata, VFX) | `ZOMBIE_MOTION` + `updateZombieMotion()` |
+| Emettitori VFX | `emitZombieFx()`, `emitSparks()` |
+| Helper frame spritesheet | `AF(key, fw, fh, n)` |
+| Helper colore (schiarisci/scurisci) | `static mixColor(color, target, t)` |
+| Galleria di test | `src/scenes/DebugScene.ts` |
+
+**Chiavi texture:** `zombie_common`, `zombie_runner`, `zombie_armored`, `zombie_jumper`, `zombie_toxic`, `zombie_giant`.
+**Animazioni:** `walk_<tipo>` (loop, sequenza fotogrammi `[0,1,2,1]`).
+
+---
+
+## 1. I tre pilastri
+
+A risoluzione di gioco un nemico è alto **25–50 px**: il dettaglio interno quasi sparisce. L'orrore e la riconoscibilità vivono in quest'ordine:
+
+1. **SILHOUETTE** — la sagoma deve dire *cosa* è in 1 frame. Asimmetria obbligatoria: un corpo storto racconta già una morte.
+2. **MOVIMENTO** — il *come* si muove comunica peso/agilità prima ancora della texture.
+3. **TEXTURE** — chiazze, bagliori e gore aggiungono *storia*, ma sono l'ultimo 20%.
+
+> **Regola d'oro:** *Sagoma asimmetrica + 1 gancio visivo unico + 1 colore emissivo che cattura l'occhio + 1 personalità di movimento tattile.*
+
+**Mai** zombi in piedi, simmetrici e statici. Mai.
+
+---
+
+## 2. Vincoli tecnici (non negoziabili)
+
+- **Solo primitive:** `fillRect`, `fillRoundedRect`, `fillEllipse`, `fillCircle`, `fillTriangle`, `lineBetween`. Le forme arrotondate fanno anti-aliasing → niente "scaletta" anni '80.
+- **Spritesheet orizzontale a 3 frame** per ciclo di camminata. Posa parametrica su `ph = f - 1 ∈ {-1, 0, +1}` (passo sx · neutro · passo dx).
+- **Contenere il disegno nel frame** (`X(x) = ox + x`, con `x ∈ ~[0, fw]`): sforare bleeda nel frame adiacente dello stesso foglio. Limiti tollerati: ≤ ~4 px sugli arti estremi.
+- **Hitbox fisse** (`setBodySize`), indipendenti da rotazione, scala-respiro e animazione. Il movimento "vivo" è **solo visivo**: non tocca il bilanciamento.
+- **VFX = fire-and-forget:** immagini/particelle che si auto-distruggono via tween. **Mai** un emitter persistente per ogni zombi; emissione *throttellata* dal pool condiviso.
+- **Performance budget:** decine di nemici a schermo a 60 fps. Niente effetti per-pixel, niente shader, niente blur.
+
+---
+
+## 3. Linguaggio visivo condiviso
+
+### 3.1 Palette del decadimento
+Mai un colore-pelle uniforme. Ogni corpo ha **almeno 3 zone materiche**:
+- `carne necrotica` (base desaturata, tono malato)
+- `livor mortis` (chiazza grigio-viola — **sempre nella metà bassa**, dove il sangue si deposita)
+- `tessuto strappato` (rosso-bruno scuro con **bordo d'osso frastagliato a triangoli**)
+
+### 3.2 Luce e stacco
+- Luce convenzionale da **alto-sinistra** (coerente col veicolo): lato superiore schiarito.
+- **Bordo d'ombra scurissimo** sul lato basso/destro: è ciò che stacca lo zombi dal fondo scuro della strada a 30 px.
+
+### 3.3 Colore emissivo
+Gli **occhi** (o il bagliore biologico) sono il **punto più luminoso e saturo** della creatura: è lì che va l'occhio del giocatore. Un solo accento emissivo per tipo.
+
+---
+
+## 4. Toolkit VFX procedurale
+
+Costruzioni riutilizzabili (solo primitive). Il *sottile* va **cotto nei 3 frame**; il *dinamico* emesso a runtime e throttellato.
+
+| Effetto | Costruzione | Animazione |
+|---|---|---|
+| Goccia / colatura | `fillCircle` + `fillTriangle` (punta su) = lacrima | cade con gravità → si allunga → splat (ellisse piatta) |
+| Schizzo / spruzzo | 3–5 micro-ellissi in arco | dissolvenza + scala → 0 |
+| Vapore / fumo | 3 cerchi impilati, raggio↑ / alpha↓ | salgono + crescono + svaniscono |
+| Bava / filo | `lineBetween` o rounded-rect sottile | si allunga, poi "snap" e ricade |
+| Scossa / arco | polilinea 5–6 punti con jitter, bianco-ciano + scintille a triangolo | accendi/spegni ogni 60–90 ms |
+| Bagliore | grande `fillCircle` a bassa alpha dietro al corpo | pulsa con `sin` su scala/alpha |
+| Scintille metallo | particelle che schizzano radialmente | tween posizione + alpha → 0 |
+
+**Implementazioni attuali** (`emitZombieFx` / `emitSparks`):
+- Tossico → vapore verde `#4cff3a` che sale + goccia melma `#2cbb2a`.
+- Corridore → afterimage tint `#ff7744`, alpha 0.26.
+- Gigante → polvere ai piedi `#6a5a44`.
+- Corazzato → scintille `#fff2a0` ad ogni colpo incassato.
+
+---
+
+## 5. Sistema di Motion Personality
+
+`rotation = lean + sign(sin(t·spd + fase)) · |sin(...)|^pow · amp`
+
+- **`pow > 1`** → onda che **indugia agli estremi** = peso, massa, lentezza tattile.
+- **`pow < 1`** → onda che **frusta per il centro** = scatto, nervosismo, agilità.
+- **`stomp`** → tonfo verticale del passo (offset reversibile, niente accumulo).
+- **`wob`** → respiro/gonfiore (squash-stretch del volume).
+- **`home` + `turn`** → inseguimento verticale del veicolo con **virata graduale** (`turn` alto = scatta su di te; basso = deriva).
+- **`fx` / `fxEvery`** → emissione VFX throttellata (ms).
+
+### Tabella parametri canonica (`ZOMBIE_MOTION`)
+
+| Tipo | amp | spd | lean | pow | stomp | wob | home | turn | fx | ogni |
+|---|---|---|---|---|---|---|---|---|---|---|
+| common | 0.09 | 4.0 | 0.00 | 1.0 | 0 | 0 | 14 | 0.05 | — | — |
+| runner | 0.13 | 11.0 | **-0.22** | **0.55** | 0 | 0 | 60 | **0.18** | scia | 100 |
+| armored | 0.05 | 2.6 | 0.00 | **1.6** | **1.2** | 0 | 0 | 0 | — | — |
+| jumper | 0.10 | 9.0 | 0.00 | **0.5** | 0 | 0 | 0 | 0 | — | — |
+| giant | 0.04 | 2.0 | 0.00 | **1.6** | **1.8** | 0.03 | 0 | 0 | polvere | 360 |
+| toxic | 0.13 | 2.2 | 0.00 | 1.0 | 0 | **0.05** | 16 | 0.05 | vapore | 220 |
+
+---
+
+## 6. Schede dei nemici
+
+> Ogni scheda: **Concept** (storytelling) · **Materia/Palette** (hex reali) · **Silhouette** (il gancio) · **VFX** · **Motion**.
+> Dimensioni = frame singolo. Lo spritesheet è `fw × 3`.
+
+---
+
+### 6.1 COMUNE — *"Il Collo Rotto"* · 30×44 · `scale 1.0`
+**Concept:** è morto cadendo. La testa pende lateralmente, un braccio è lussato e penzola più in basso dell'altro.
+
+**Palette:**
+`carne #6f7d54` · luce `#8a9668` · ombra `#444c33` · **livor mortis #5a4e63** · muscolo `#6e2a26` / `#9a3a2e` · osso `#d9cba6` · maglietta `#3b4156`/`#4d5570`/`#282c3c` · pantaloni `#34322b` · occhi `#ff2a10`.
+
+**Silhouette:** testa **inclinata** a destra + **braccio destro penzolante** lungo il fianco, sinistro proteso. Asimmetria immediata.
+
+**VFX (cotti):** brandelli di maglietta con **bordo strappato a triangoli**, squarcio con **muscolo + costole d'osso**, chiazze livide su gambe e viso, bava dalla bocca.
+
+**Motion:** strascico lento, rollio ±5°, deriva verticale debole verso il giocatore.
+
+---
+
+### 6.2 CORRIDORE — *"Lo Scorticato"* · 26×42 · `scale 0.82`
+**Concept:** corre così forte che la pelle si lacera sull'asfalto. Pura urgenza.
+
+**Palette:**
+`pelle sbiancata #b3a48f` · luce `#cabba6` · ombra `#7d705e` · **abrasione #7a2e22 / #a8412e** · stracci `#55303a` · osso `#d9cba6` · **occhi arancio #ff6410** (faro).
+
+**Silhouette:** **orizzontale, bassa, a freccia** (lean -0.22 + posa di slancio). Gamba anteriore protesa, braccio anteriore ad artiglio, testa oltre i piedi.
+
+**VFX:** **scia/afterimage** arancione; abrasioni rosse su spalla e coscia; micro-spruzzi.
+
+**Motion:** scatto frenetico (`pow 0.55`, `spd 11`), **virata netta** (`turn 0.18`): ti individua e corregge la rotta di colpo. Il più "terrificante" nell'inseguire.
+
+---
+
+### 6.3 CORAZZATO — *"Il Tutore"* · 38×48 · `scale 1.25`
+**Concept:** agente antisommossa rianimato, fuso dentro la sua armatura ossidata.
+
+**Palette:**
+`acciaio #5f6b78` · luce `#8a97a5` · ombra `#39424c` · cavità `#20262c` · **ruggine #8a4a26 → #3a1d0e** (colature verticali) · **verderame #3f6b54** · **sangue ossidato #2a1410** · carne marcia nelle giunture `#5a4e63` · occhi `#ffcc22`.
+
+**Silhouette:** **blocco largo e top-heavy** + gancio unico: **scudo antisommossa** (trapezio alto) sul braccio sinistro. Spallaccio a cupola.
+
+**VFX (cotti):** colature di ruggine sotto i rivetti, verderame sui bordi, sangue ossidato sulla corazza. **(dinamico)** scintille quando colpito.
+
+**Motion:** massa pura. `pow 1.6`, **tonfo verticale** ad ogni passo, gambe quasi immobili. Nessun inseguimento: avanza implacabile e dritto, non barcolla se colpito.
+
+---
+
+### 6.4 SALTATORE — *"Il Ragno"* · 32×46 · `scale 0.9`
+**Concept:** tendini e articolazioni cedute al contrario; si muove a scatti come un insetto.
+
+**Palette:**
+`pelle giallo-verde #9aa83e` · luce `#c2d05a` · ombra `#5f6a22` · **articolazioni nere #20240e** (lettura insetto) · **tendini #d8e08a** · **occhi giallo elettrico #fff000** · artigli `#e8e0c0`.
+
+**Silhouette:** **compatto e spinoso** — palla accovacciata con **artigli che spuntano oltre la testa**. Arti ad angolo acuto.
+
+**VFX (cotti):** ginocchia/gomiti scuri, tendini chiari tesi sugli arti, zanne.
+
+**Motion:** estremamente agile a scatti (`pow 0.5`), **rimbalzo** (`bY` nei frame). Ingresso con **balzo** (tween sulla Y dall'alto/basso, non avanza dritto).
+
+---
+
+### 6.5 TOSSICO — *"Il Gonfio"* · 30×48 · `scale 1.1`
+**Concept:** sacca di gas e marciume sotto pressione, sul punto di scoppiare.
+
+**Palette:**
+`pelle verde malata #3f7a33` · luce `#5fa84a` · ombra `#265020` · **vene emissive #7dff4a** · melma `#6cff3a` / `#2cbb2a` · **sacca traslucida #8fd86a** · occhi `#9dff5a`.
+
+**Silhouette:** **asimmetrico e bulboso** — gancio unico: **enorme sacca tossica su una spalla** che sbilancia tutta la sagoma. Testa inclinata verso la sacca.
+
+**VFX:** il più ricco — **vene emissive**, **pustole con nucleo luminoso**, alone verde. **(dinamico)** vapore che sale + gocce di melma. Alla morte lascia nube tossica.
+
+**Motion:** molle e instabile — dondolio ampio + **respiro** (`wob 0.05`, squash che lo fa sembrare pieno di liquido). Deriva lenta verso il giocatore.
+
+---
+
+### 6.6 GIGANTE — *"L'Innesto"* · 48×66 · `scale 2.2` · **base dei boss**
+**Concept:** non è uno zombi, sono **più cadaveri cuciti insieme** — un esperimento.
+
+**Palette:**
+`carne bruno-violacea #5a3a2e` · luce `#7d5240` · ombra `#38241c` · **chiazze livide #4a3a52** · **braccio innestato #5a5a3a / #7d7d50 / #2a2a18** (colore diverso) · **suture #1e140e + punti #8a7a60** · osso `#d9c8a0` · sangue `#6e2a26` · occhi `#ff2a10`.
+
+**Silhouette:** **torreggiante, top-heavy** — **gobba** (spalla destra rialzata sopra la testa piccola) + **braccio destro innestato sovradimensionato** di colore diverso. Triangolo largo-in-alto = bruto istantaneo.
+
+**VFX (cotti):** suture/punti sul torso e alla spalla innestata, pancia squarciata con gabbia toracica, chiazze livide. **(dinamico)** polvere ai piedi.
+
+**Motion:** peso massimo (`pow 1.6`, `spd 2`), **tonfo marcato** + **respiro** (`wob 0.03`). Va dritto, inarrestabile.
+
+**Riuso boss:** stessa texture con **tinta + scala** (`BOSS_CONFIG`): Mega Mutante (verde) · Verme Gigante (arancio-bruno) · Colosso Corazzato (grigio-blu) · Bestia Radioattiva (verde acceso). I boss riproducono `walk_giant`.
+
+---
+
+## 7. Pipeline: aggiungere un nuovo nemico
+
+1. **Concept prima della pixel:** una frase di storytelling + il *gancio di silhouette*.
+2. Definisci la **palette a 3 zone** (necrosi / livido / strappo) + 1 colore emissivo.
+3. Disegna i **3 frame** parametrici su `ph` dentro `buildEntityTextures`, restando nei limiti del frame.
+4. `generateTexture(key, fw*3, fh)` + `AF(key, fw, fh, 3)`.
+5. Registra l'animazione: `walk(type, rate)`.
+6. Aggiungi la riga in `ZOMBIE_STATS` (bilanciamento) e in `ZOMBIE_MOTION` (personalità).
+7. Se serve un VFX, estendi `emitZombieFx` (fire-and-forget, throttellato).
+8. Verifica nella **DebugScene** (galleria animata) a scala reale **e** ingrandita.
+9. Aggiorna **questa scheda**.
+
+---
+
+## 8. Checklist di qualità (definition of done)
+
+- [ ] Riconoscibile dalla **sola sagoma** a 30 px.
+- [ ] Asimmetria presente (posa o anatomia).
+- [ ] Palette a **≥3 zone** + 1 accento emissivo.
+- [ ] Almeno **1 elemento di storytelling** (ferita, innesto, ruggine, abrasione...).
+- [ ] **Movimento** distintivo (peso *oppure* agilità leggibile).
+- [ ] Nessun **bleed** evidente tra i frame.
+- [ ] Hitbox invariata / bilanciamento non alterato dagli effetti visivi.
+- [ ] 60 fps con molti nemici a schermo.
+
+---
+
+## 9. Antipattern da evitare
+
+- ❌ Zombi simmetrici, in piedi, statici.
+- ❌ Colore-pelle uniforme senza chiazze.
+- ❌ Dettaglio interno fitto invisibile a 30 px (spreco) al posto di una silhouette forte.
+- ❌ Movimento uguale per tutti (stessa sinusoide) → sembrano tutti "molli".
+- ❌ VFX persistenti per-zombi → cali di frame.
+- ❌ Sforare i bordi del frame nello spritesheet → artefatti in animazione.
+
+---
+
+## 10. Scheda-template (nuovi nemici · boss · eventi)
+
+Copia il blocco qui sotto per ogni nuovo nemico. I commenti spiegano **cosa fa ogni campo in fase di compilazione**: vanno letti, poi sostituiti con i valori reali (non lasciarli nel documento finale della scheda).
+
+### 10.1 — Scheda Markdown (da incollare in §6)
+
+```markdown
+### 6.N NOME_IT — *"Soprannome"* · FWxFH · `scale S`
+<!-- 6.N      → numero progressivo di sezione (es. 6.7) -->
+<!-- NOME_IT  → nome leggibile in MAIUSCOLO; serve anche al validatore per ritrovare la scheda
+                (aggiungilo alla mappa IT2KEY nello script di validazione). -->
+<!-- Soprannome → il "nome da incubo" che porta lo storytelling (es. "Il Collo Rotto"). -->
+<!-- FWxFH    → dimensioni del SINGOLO frame in px (lo spritesheet sarà FW*3 × FH).
+                Deve coincidere ESATTAMENTE con AF('zombie_<chiave>', FW, FH, 3) nel codice. -->
+<!-- scale S  → fattore di scala a schermo = ZOMBIE_STATS[<chiave>].scale. -->
+
+**Concept:** ...
+<!-- Una sola frase di storytelling ambientale: COME è morto / cosa lo rende inquietante.
+     È il seme di tutto il resto (palette, ferite, posa). -->
+
+**Palette:**
+<!-- Elenca gli hex REALI usati nel codice, raggruppati per zona:
+     carne necrotica (base/luce/ombra) · livor mortis · tessuto strappato/osso ·
+     materiali (vestiti/metallo) · 1 colore EMISSIVO (occhi/bagliore = punto più luminoso). -->
+
+**Silhouette:**
+<!-- Il GANCIO unico: cosa rende la sagoma riconoscibile a 30 px (asimmetria, protesi,
+     gobba, scudo, sacca...). Una frase. -->
+
+**VFX:**
+<!-- Cosa è COTTO nei frame (chiazze, vene, suture, ruggine) e cosa è DINAMICO
+     (vapore/gocce/scintille/scia) emesso da emitZombieFx. -->
+
+**Motion:**
+<!-- La personalità tattile in parole: pesante o agile? tonfo? respiro? insegue?
+     Deve riflettere i numeri di ZOMBIE_MOTION qui sotto. -->
+```
+
+### 10.2 — Costante di gioco (`ZOMBIE_STATS`)
+
+```ts
+// chiave: usata OVUNQUE → texture 'zombie_<chiave>', animazione 'walk_<chiave>'
+<chiave>: {
+  speed:  0,    // px/s orizzontali AGGIUNTIVI allo scroll della strada (più alto = più aggressivo)
+  hp:     0,    // colpi base per ucciderlo (il danno proiettile varia per arma)
+  scale:  1.0,  // scala a schermo della texture · DEVE coincidere con "scale S" nella scheda §6
+  damage: 0,    // danno al veicolo all'impatto
+  score:  0,    // punti dati alla morte
+},
+```
+
+### 10.3 — Costante di movimento (`ZOMBIE_MOTION`)
+
+```ts
+// Ogni campo qui DEVE coincidere con la riga corrispondente nella tabella §5 della Art Bible.
+<chiave>: {
+  amp:     0.00,  // ampiezza del rollio in radianti (~0.09 = 5°). 0 = rigido.
+  spd:     0.0,   // velocità dell'oscillazione (rad/s). Alto = passi/scatti rapidi.
+  lean:    0.00,  // inclinazione COSTANTE in radianti. Negativo = piegato in avanti (corsa).
+  pow:     1.0,   // forma d'onda: >1 = pesante (indugia agli estremi) · <1 = agile (frusta al centro).
+  stomp:   0,     // ampiezza del tonfo verticale del passo (px). >0 solo per i pesanti.
+  wob:     0,     // respiro/gonfiore: squash-stretch del volume (0..~0.06). >0 = "vivo/molle".
+  home:    0,     // inseguimento verticale: velocità (px/s) con cui punta la Y del veicolo. 0 = va dritto.
+  turn:    0,     // virata: 0..1 lerp per frame verso la rotta. Alto = scatta su di te · basso = deriva.
+  fx:      false, // se true emette VFX procedurali (gestiti in emitZombieFx).
+  fxEvery: 0,     // intervallo emissione VFX in ms · DEVE coincidere con la colonna "ogni" in §5.
+                  //   (se fx:false → fxEvery:0 e "ogni" = "—" nella tabella)
+},
+```
+
+### 10.4 — Riga tabella §5 (parametri di movimento)
+
+```
+| <chiave> | amp | spd | lean | pow | stomp | wob | home | turn | <fx-desc o —> | <fxEvery o —> |
+```
+<!-- I numeri devono essere IDENTICI a ZOMBIE_MOTION. Lo script di validazione confronta
+     proprio questa riga col codice. "fx-desc" è descrittivo (es. "vapore"); il validatore
+     controlla solo "ogni" (= fxEvery). -->
+
+### 10.5 — Dopo aver compilato il template
+
+1. Disegna i 3 frame in `buildEntityTextures` + `generateTexture` + `AF(...)`.
+2. Registra l'animazione con `walk('<chiave>', frameRate)`.
+3. Inserisci le righe in `ZOMBIE_STATS` e `ZOMBIE_MOTION`.
+4. Per un VFX nuovo, estendi `emitZombieFx`.
+5. Se la chiave è un nome italiano nuovo, aggiungi la coppia in `IT2KEY` dentro `scripts/validate-art-bible.mjs`.
+6. **Esegui `npm run validate:art`** → deve passare senza disallineamenti.
+7. Verifica visivamente nella `DebugScene`.
+
+---
+
+## 11. Anti-deriva (validazione automatica)
+
+I numeri di questo documento **non devono mai divergere** dal codice. Uno script li confronta:
+
+```bash
+npm run validate:art
+```
+
+Controlla, per ogni nemico, che **dimensioni frame**, **scala** e **tutti i parametri di `ZOMBIE_MOTION`** scritti qui coincidano con `src/scenes/GameScene.ts`. È agganciato anche a `npm run build`: **se i valori divergono, la build fallisce.** Quando cambi un parametro, aggiorna *entrambi* (codice + scheda) e rilancia la validazione.
+
+---
+
+*Fine documento. Mantienilo allineato al codice: se cambi un hex, una posa o un parametro di movimento, aggiorna la scheda corrispondente — e fai girare `npm run validate:art`.*

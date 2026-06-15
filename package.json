@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "validate:art": "node scripts/validate-art-bible.mjs",
+    "build": "npm run validate:art && tsc && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

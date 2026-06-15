@@ -85,7 +85,8 @@ export default class DebugScene extends Phaser.Scene {
     ZOMBIE_INFO.forEach((z, i) => {
       const cx = 66 + i * 122;
       this.cell(cx, top + 30, 116, 60);
-      this.add.image(cx, top + 30, z.key).setOrigin(0.5);
+      const type = z.key.replace('zombie_', '');
+      this.add.sprite(cx, top + 30, z.key).setOrigin(0.5).play(`walk_${type}`);
       this.add.text(cx, top + 56, z.label, { fontSize: '10px', color: '#aaddaa' }).setOrigin(0.5, 0);
     });
   }
@@ -99,8 +100,9 @@ export default class DebugScene extends Phaser.Scene {
       this.cell(cx, top + 30, 150, 64);
       // Scala ridotta per stare nella cella, ma mantiene proporzioni reali
       const shrink = 0.7;
-      this.add.image(cx, top + 30, 'zombie_giant')
-        .setOrigin(0.5).setScale(cfg.scaleX * shrink, cfg.scaleY * shrink).setTint(cfg.tint);
+      this.add.sprite(cx, top + 30, 'zombie_giant')
+        .setOrigin(0.5).setScale(cfg.scaleX * shrink, cfg.scaleY * shrink).setTint(cfg.tint)
+        .play('walk_giant');
       this.add.text(cx, top + 50, cfg.name, { fontSize: '9px', color: '#ffaaaa', fontStyle: 'bold' }).setOrigin(0.5, 0);
       this.add.text(cx, top + 62, `HP ${cfg.hp} · ★${cfg.reward}`, { fontSize: '8px', color: '#886666' }).setOrigin(0.5, 0);
     });
