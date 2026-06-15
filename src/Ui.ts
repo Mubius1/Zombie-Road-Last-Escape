@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import Juice from './Juice';
 import Settings from './Settings';
+import { OVERSAMPLE } from './Config';
 
 /**
  * Chrome condiviso dell'interfaccia — fonte di verità unica per font, palette
@@ -183,7 +184,9 @@ export default class Ui {
     scene: Phaser.Scene, x: number, y: number,
     content: string | string[], style: TextStyle = {},
   ): Phaser.GameObjects.Text {
-    return scene.add.text(x, y, content, { fontFamily: FONT, ...style });
+    // setResolution(OVERSAMPLE): il testo è renderato a DPI maggiore così resta nitido
+    // quando la camera lo ingrandisce per riempire la risoluzione nativa.
+    return scene.add.text(x, y, content, { fontFamily: FONT, ...style }).setResolution(OVERSAMPLE);
   }
 
   /** Rettangolo arrotondato generico (card del negozio, box di esito, ecc.). */

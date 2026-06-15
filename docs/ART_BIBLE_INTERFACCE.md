@@ -8,6 +8,8 @@
 
 Questo documento è la **fonte di verità** per chiunque (umano o AI) tocchi un'interfaccia. Se modifichi un colore, una taglia di testo o un pannello, aggiorna anche la sua scheda qui.
 
+> **📐 Risoluzione & scaling (giugno 2026):** le coordinate/taglie qui sono la **baseline di design 800×600**. La camera di ogni scena va in **zoom** per riempire la risoluzione nativa scelta dal giocatore — nuovo **menu Risoluzione** (cycler ◂ ▸) + toggle **Schermo intero** in `SettingsScene`, preset 4:3 e 16:9 in [`Config.RESOLUTIONS`](../src/Config.ts). Centri e ancoraggi a destra usano `designW` (più ampia in 16:9), **non** la costante 800. Il testo resta nitido grazie a `Ui.text` → `setResolution(OVERSAMPLE)`. Dettagli: sezione *Risoluzione & scaling* in [`CLAUDE.md`](../CLAUDE.md).
+
 > **Documenti gemelli:**
 > - [`ART_BIBLE_ZOMBIES.md`](./ART_BIBLE_ZOMBIES.md) — i nemici. Contiene la sezione **⭐ Standard di Produzione AAA**, che vale per **tutto il titolo**: è la **stella polare** condivisa. Qui **non la riscrivo** — la **applico alle interfacce**.
 > - [`ART_BIBLE_AMBIENTE.md`](./ART_BIBLE_AMBIENTE.md) — la strada e lo sfondo.

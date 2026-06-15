@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import Juice from './Juice';
 import Settings from './Settings';
+import { OVERSAMPLE } from './Config';
 /**
  * Chrome condiviso dell'interfaccia — fonte di verità unica per font, palette
  * funzionale e helper UI. Chiude i 3 gap di rifinitura dell'Art Bible Interfacce:
@@ -140,7 +141,9 @@ export class RoundRect {
 export default class Ui {
     /** Testo con la voce tipografica condivisa già applicata (chiude il gap font). */
     static text(scene, x, y, content, style = {}) {
-        return scene.add.text(x, y, content, { fontFamily: FONT, ...style });
+        // setResolution(OVERSAMPLE): il testo è renderato a DPI maggiore così resta nitido
+        // quando la camera lo ingrandisce per riempire la risoluzione nativa.
+        return scene.add.text(x, y, content, { fontFamily: FONT, ...style }).setResolution(OVERSAMPLE);
     }
     /** Rettangolo arrotondato generico (card del negozio, box di esito, ecc.). */
     static box(scene, x, y, w, h, opts = {}) {

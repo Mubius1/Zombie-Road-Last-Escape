@@ -8,6 +8,8 @@
 
 Questo documento è la **fonte di verità** per chiunque (umano o AI) tocchi la strada o l'ambiente. Se modifichi una palette, una banda o un parametro di scorrimento, aggiorna anche la scheda qui.
 
+> **📐 Risoluzione & scaling (giugno 2026):** i numeri di geometria qui (`W=800`, `H=600`, `ROAD_TOP=155`, `ROAD_CENTER=300`, `ROAD_BOTTOM=445`) sono la **baseline di design**. Il gioco gira alla risoluzione scelta dal giocatore: la camera va in **zoom** per riempire lo schermo mantenendo questo spazio. In **16:9** la larghezza di design (`designW`) è maggiore → **si vede più strada** a destra (veicolo ancorato a sinistra, spawn dal bordo destro). Strada e parallasse restano generate a risoluzione design. Dettagli: sezione *Risoluzione & scaling* in [`CLAUDE.md`](../CLAUDE.md) e [`src/Config.ts`](../src/Config.ts).
+
 > **Documento gemello:** [`ART_BIBLE_ZOMBIES.md`](./ART_BIBLE_ZOMBIES.md) copre i nemici. La sezione **⭐ Standard di Produzione AAA** di quel file vale per **tutto il titolo**: è la **stella polare** condivisa. Qui non la riscrivo — la **applico alla strada**.
 
 ---

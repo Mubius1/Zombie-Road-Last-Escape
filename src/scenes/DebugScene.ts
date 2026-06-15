@@ -3,8 +3,9 @@ import GameScene, { BOSS_CONFIG, BOSS_ORDER } from './GameScene';
 import { VEHICLES, VEHICLE_KEYS, WEAPONS, WEAPON_KEYS, WeaponType, SURVIVORS } from '../GameData';
 import Juice from '../Juice';
 import Ui, { UI } from '../Ui';
+import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 
-const W = 800, H = 600;
+const H = 600;
 
 interface ZombieInfo { key: string; label: string; }
 
@@ -26,18 +27,23 @@ const OBJECT_INFO: Array<{ key: string; label: string; scale: number }> = [
 ];
 
 export default class DebugScene extends Phaser.Scene {
+  /** Larghezza di design (le gallerie restano ancorate a sinistra: è uno strumento di debug). */
+  private designW = DESIGN_W;
+
   constructor() { super({ key: 'DebugScene' }); }
 
   create() {
+    this.designW = setupCamera(this).designW;
+
     // Genera TUTTE le texture (tutti i veicoli + entità)
     GameScene.buildEntityTextures(this);
     VEHICLE_KEYS.forEach(k => GameScene.buildVehicleTexture(this, k));
 
-    this.add.rectangle(W / 2, H / 2, W, H, UI.bgDeep);
-    Ui.text(this, W / 2, 6, 'MODALITÀ DEBUG — Galleria Modelli & Test', {
+    this.add.rectangle(this.designW / 2, H / 2, this.designW, H, UI.bgDeep);
+    Ui.text(this, this.designW / 2, 6, 'MODALITÀ DEBUG — Galleria Modelli & Test', {
       fontSize: '16px', color: UI.cyanDebug, fontStyle: 'bold',
     }).setOrigin(0.5, 0);
-    Ui.text(this, W / 2, 26, 'Clicca un veicolo o un\'arma per provarlo · pulsanti in basso per i test', {
+    Ui.text(this, this.designW / 2, 26, 'Clicca un veicolo o un\'arma per provarlo · pulsanti in basso per i test', {
       fontSize: '10px', color: UI.faint,
     }).setOrigin(0.5, 0);
 
@@ -75,7 +81,7 @@ export default class DebugScene extends Phaser.Scene {
       const cx = 60 + i * 103;
       const cell = this.cell(cx, top + 22, 98, 48, true);
       cell.on('pointerdown', () => this.testVehicle(key));
-      this.add.image(cx, top + 22, `vehicle_${key}`).setOrigin(0.5);
+      this.add.image(cx, top + 22, `vehicle_${key}`).setOrigin(0.5).setScale(1 / OVERSAMPLE);
       Ui.text(this, cx, top + 48, VEHICLES[key].name, {
         fontSize: '8px', color: '#bbbbcc', align: 'center', wordWrap: { width: 100 },
       }).setOrigin(0.5, 0);
@@ -89,7 +95,7 @@ export default class DebugScene extends Phaser.Scene {
       const cx = 66 + i * 122;
       this.cell(cx, top + 30, 116, 60);
       const type = z.key.replace('zombie_', '');
-      this.add.sprite(cx, top + 30, z.key).setOrigin(0.5).play(`walk_${type}`);
+      this.add.sprite(cx, top + 30, z.key).setOrigin(0.5).setScale(1 / OVERSAMPLE).play(`walk_${type}`);
       Ui.text(this, cx, top + 56, z.label, { fontSize: '10px', color: '#aaddaa' }).setOrigin(0.5, 0);
     });
   }
@@ -104,7 +110,7 @@ export default class DebugScene extends Phaser.Scene {
       // Scala ridotta per stare nella cella, ma mantiene proporzioni reali
       const shrink = 0.7;
       this.add.sprite(cx, top + 30, 'zombie_giant')
-        .setOrigin(0.5).setScale(cfg.scaleX * shrink, cfg.scaleY * shrink).setTint(cfg.tint)
+        .setOrigin(0.5).setScale(cfg.scaleX * shrink / OVERSAMPLE, cfg.scaleY * shrink / OVERSAMPLE).setTint(cfg.tint)
         .play('walk_giant');
       Ui.text(this, cx, top + 50, cfg.name, { fontSize: '9px', color: UI.redSoft, fontStyle: 'bold' }).setOrigin(0.5, 0);
       Ui.text(this, cx, top + 62, `HP ${cfg.hp} · ★${cfg.reward}`, { fontSize: '8px', color: '#886666' }).setOrigin(0.5, 0);
@@ -204,7 +210,7 @@ export default class DebugScene extends Phaser.Scene {
 
   private toast(msg: string, apply: () => void) {
     apply();
-    const t = Ui.text(this, W / 2, 560, msg, {
+    const t = Ui.text(this, this.designW / 2, 560, msg, {
       fontSize: '14px', color: UI.greenSoft, fontStyle: 'bold',
       backgroundColor: '#003300', padding: { x: 8, y: 4 },
     }).setOrigin(0.5).setDepth(50);

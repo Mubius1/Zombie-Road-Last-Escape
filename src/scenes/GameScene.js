@@ -5,7 +5,10 @@ import Juice from '../Juice';
 import Environment from '../Environment';
 import Settings from '../Settings';
 import Ui, { UI } from '../Ui';
-const W = 800, H = 600;
+import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
+// Spazio di design: l'altezza è fissa (H), la larghezza varia col formato (designW,
+// più ampia in 16:9). La camera in zoom adatta tutto alla risoluzione nativa — vedi Config.ts.
+const H = 600;
 const ROAD_TOP = 155, ROAD_BOTTOM = 445, ROAD_CENTER = 300;
 const VEHICLE_X = 150;
 const SCROLL_SPEED = 240;
@@ -30,23 +33,6 @@ export const BOSS_CONFIG = {
     radioactive_beast: { name: 'Bestia Radioattiva', hp: 95, speed: 50, scaleX: 2.6, scaleY: 2.6, tint: 0x88ff22, bodyW: 50, bodyH: 58, reward: 450 },
 };
 export const BOSS_ORDER = ['mega_mutant', 'giant_worm', 'armored_colossus', 'radioactive_beast'];
-// ── Tuning del COLOSSO CORAZZATO (slice verticale AAA) ──────────────────────
-// Macchina a stati: idle → telegraph → (charge|volley) → recover → idle. Fase 2 al 50% HP.
-const COLOSSUS_TUNE = {
-    targetX: 540, // posizione di stazionamento
-    approachSpeed: 150, // velocità d'ingresso (entrata in scena), separata dalla cadenza d'attacco
-    bob: 70, // ampiezza oscillazione verticale in idle
-    shieldMult: 0.30, // dmg ricevuto frontale a SCUDO ALZATO (fase 1)
-    shieldMultP2: 0.50, // scudo incrinato in fase 2: meno protezione
-    weakMult: 1.5, // dmg al NUCLEO esposto (durante gli attacchi)
-    recover: 600, // durata recupero dopo un attacco
-    chargeSpeed: 520, chargeMinX: 210, returnSpeed: 230,
-    volleySpreadDeg: 12, // ventaglio fra i proietti
-    // fase 1
-    actionGap: 2400, telCharge: 750, telVolley: 650, volleyShots: 3,
-    // fase 2 (enrage)
-    p2: { actionGap: 1400, telCharge: 480, telVolley: 430, volleyShots: 5 },
-};
 const ENVIRONMENTS = [
     { name: 'Città Distrutta', bgColor: 0x12121e, skyColor: 0x16161e, groundColor: 0x1a1610, roadColor: 0x2a2a2a, lineColor: 0xddcc00, shoulderColor: 0x1e1e22, grade: 0x8fa6c8, gradeAlpha: 0.42, emissive: 0xffcc33, hazeColor: 0x2a2a3a },
     { name: 'Autostrada Abbandonata', bgColor: 0x14120e, skyColor: 0x1c180e, groundColor: 0x141208, roadColor: 0x323028, lineColor: 0xaaaa44, shoulderColor: 0x201e16, grade: 0xc8bc86, gradeAlpha: 0.40, emissive: 0xccbb55, hazeColor: 0x33301f },
@@ -123,15 +109,6 @@ export default class GameScene extends Phaser.Scene {
         this.bossSprite = null;
         this.bossMaxHp = 0;
         this.bossHudObjects = [];
-        // Boss "AAA": macchina a stati + fasi (usata dal Colosso; gli altri restano legacy)
-        this.bossPhase = 1;
-        this.bossState = 'idle';
-        this.bossStateTimer = 0;
-        this.bossActionTimer = 0;
-        this.bossAttack = '';
-        this.bossVulnerable = false;
-        this.bossChargeY = ROAD_CENTER;
-        this.bossCore = null;
         // Debug
         this.debugGod = false;
         this.numberKeys = [];
@@ -142,8 +119,12 @@ export default class GameScene extends Phaser.Scene {
         this.lastFire = 0;
         this.spawnTimer = 0;
         this.spawnInterval = 2100;
+        /** Larghezza dello spazio di design (800 in 4:3, maggiore in 16:9 → più strada). */
+        this.designW = DESIGN_W;
     }
     create() {
+        // Camera in zoom: lo spazio di design riempie la risoluzione nativa scelta.
+        this.designW = setupCamera(this).designW;
         this.vehicleKey = this.registry.get('vehicle') ?? 'civilian_car';
         this.activeSurvivors = this.registry.get('survivors') ?? [];
         this.upgrades = this.registry.get('upgrades') ?? {};
@@ -182,11 +163,6 @@ export default class GameScene extends Phaser.Scene {
         this.bossSprite = null;
         this.bossHudObjects = [];
         this.bossHudFill = undefined;
-        this.bossWeakText = undefined;
-        this.bossCore = null;
-        this.bossVulnerable = false;
-        this.bossPhase = 1;
-        this.bossState = 'idle';
         const def = { engine: 100, wheels: 100, tank: 100, turret: 100, armor: 100 };
         const c = savedComp ?? def;
         this.components = {
@@ -255,24 +231,36 @@ export default class GameScene extends Phaser.Scene {
     }
     // ─── Textures ────────────────────────────────────────────────────────────────
     buildTextures() {
-        Juice.buildTextures(this); // garantisce fx_light (glow) anche con screenFx off
         GameScene.buildVehicleTexture(this, this.vehicleKey);
         GameScene.buildEntityTextures(this);
-        GameScene.buildBossTextures(this);
     }
     static buildEntityTextures(scene) {
         if (scene.textures.exists('zombie_common'))
             return;
         const G = (_w, _h) => scene.make.graphics({ add: false });
-        // Aggiunge N frame numerati (0..n-1) a una texture spritesheet generata
+        // Variante SOVRACAMPIONATA per gli sprite che il giocatore osserva da vicino (zombie):
+        // scala il Graphics di OVERSAMPLE e genera la texture a OVERSAMPLE× (resta nitida sotto lo
+        // zoom della camera). Le dimensioni passate restano quelle di DESIGN — l'override le
+        // moltiplica internamente, così le chiamate (e il validatore) non cambiano.
+        const OS_G = (_w, _h) => {
+            const g = scene.make.graphics({ add: false });
+            g.setScale(OVERSAMPLE);
+            const orig = g.generateTexture.bind(g);
+            g.generateTexture = (k, w, h) => orig(k, w * OVERSAMPLE, h * OVERSAMPLE);
+            return g;
+        };
+        // Aggiunge N frame numerati (0..n-1) a una texture spritesheet generata.
+        // Le texture zombie sono sovracampionate (OS_G) → i frame vanno a coordinate OVERSAMPLE×;
+        // i numeri passati restano di design (lo sprite torna a scala design via osSprite).
         const AF = (key, fw, fh, n) => {
             const t = scene.textures.get(key);
+            const s = OVERSAMPLE;
             for (let i = 0; i < n; i++)
-                t.add(i, 0, i * fw, 0, fw, fh);
+                t.add(i, 0, i * fw * s, 0, fw * s, fh * s);
         };
         // ── ZOMBIE COMMON · "Il Collo Rotto" (30×44 × 3) ───────────────────────────
         {
-            const g = G(90, 44);
+            const g = OS_G(90, 44);
             const flA = 0x6f7d54, flHi = 0x8a9668, flSh = 0x444c33, livid = 0x5a4e63;
             const musc = 0x6e2a26, muscHi = 0x9a3a2e, bone = 0xd9cba6;
             const shA = 0x3b4156, shHi = 0x4d5570, shSh = 0x282c3c, pants = 0x34322b, eye = 0xff2a10;
@@ -369,7 +357,7 @@ export default class GameScene extends Phaser.Scene {
         }
         // ── ZOMBIE RUNNER · "Lo Scorticato" (26×42 × 3) ────────────────────────────
         {
-            const g = G(78, 42);
+            const g = OS_G(78, 42);
             const sk = 0xb3a48f, skHi = 0xcabba6, skSh = 0x7d705e;
             const abr = 0x7a2e22, abrHi = 0xa8412e, rag = 0x55303a, bone = 0xd9cba6, eye = 0xff6410;
             for (let f = 0; f < 3; f++) {
@@ -467,7 +455,7 @@ export default class GameScene extends Phaser.Scene {
         }
         // ── ZOMBIE ARMORED · "Il Tutore" (38×48 × 3) ───────────────────────────────
         {
-            const g = G(114, 48);
+            const g = OS_G(114, 48);
             const st = 0x5f6b78, stHi = 0x8a97a5, stSh = 0x39424c, stDD = 0x20262c;
             const rustT = 0x8a4a26, rustB = 0x3a1d0e, verd = 0x3f6b54, bloodOx = 0x2a1410;
             const flesh = 0x5a4e63, eye = 0xffcc22;
@@ -567,7 +555,7 @@ export default class GameScene extends Phaser.Scene {
         }
         // ── ZOMBIE JUMPER · "Il Ragno" (32×46 × 3) ─────────────────────────────────
         {
-            const g = G(96, 46);
+            const g = OS_G(96, 46);
             const sk = 0x9aa83e, skHi = 0xc2d05a, skSh = 0x5f6a22, joint = 0x20240e;
             const tend = 0xd8e08a, eye = 0xfff000, claw = 0xe8e0c0, blood = 0x7a2e22;
             for (let f = 0; f < 3; f++) {
@@ -665,7 +653,7 @@ export default class GameScene extends Phaser.Scene {
         }
         // ── ZOMBIE TOXIC · "Il Gonfio" (30×48 × 3) ─────────────────────────────────
         {
-            const g = G(90, 48);
+            const g = OS_G(90, 48);
             const sk = 0x3f7a33, skHi = 0x5fa84a, skSh = 0x265020, vein = 0x7dff4a;
             const ooze = 0x6cff3a, oozeD = 0x2cbb2a, sac = 0x8fd86a, eye = 0x9dff5a;
             for (let f = 0; f < 3; f++) {
@@ -767,7 +755,7 @@ export default class GameScene extends Phaser.Scene {
         }
         // ── ZOMBIE GIANT · "L'Innesto" (48×66 × 3) — riusato dai boss ──────────────
         {
-            const g = G(144, 66);
+            const g = OS_G(144, 66);
             const sk = 0x5a3a2e, skHi = 0x7d5240, skSh = 0x38241c, livid = 0x4a3a52;
             const graft = 0x5a5a3a, graftHi = 0x7d7d50, graftSh = 0x2a2a18;
             const sut = 0x1e140e, stitch = 0x8a7a60, bone = 0xd9c8a0, blood = 0x6e2a26, eye = 0xff2a10;
@@ -1070,6 +1058,14 @@ export default class GameScene extends Phaser.Scene {
         const darker = GameScene.mixColor(base, 0x000000, 0.58);
         const metal = 0x4a4a52, metalL = 0x70707a, metalD = 0x26262c;
         const g = scene.make.graphics({ add: false });
+        // Sovracampionamento: il veicolo è l'elemento più osservato → texture a OVERSAMPLE× (nitida
+        // sotto lo zoom della camera). Il disegno resta in coordinate design; lo sprite torna a scala
+        // design con setScale(1/OVERSAMPLE) in buildVehicle.
+        g.setScale(OVERSAMPLE);
+        {
+            const orig = g.generateTexture.bind(g);
+            g.generateTexture = (k, w, h) => orig(k, w * OVERSAMPLE, h * OVERSAMPLE);
+        }
         g.fillStyle(0x000000, 0.22);
         g.fillEllipse(50, 25, 96, 40);
         if (vehicleKey === 'civilian_car') {
@@ -1696,155 +1692,24 @@ export default class GameScene extends Phaser.Scene {
         g.generateTexture(key, 100, 44);
         g.destroy();
     }
-    // Texture procedurali dei boss "AAA" (silhouette propria, non il gigante ritintato).
-    // Slice verticale: per ora il COLOSSO CORAZZATO; gli altri restano su zombie_giant.
-    static buildBossTextures(scene) {
-        const mk = () => scene.make.graphics({ add: false });
-        // ── COLOSSO CORAZZATO — "Il Bastione" · 128×104 · fronte (scudo) a SINISTRA ──
-        if (!scene.textures.exists('boss_colossus')) {
-            const g = mk();
-            const steel = 0x5f6b78, steelL = 0x8a97a5, steelD = 0x39424c, cav = 0x20262c;
-            const rust = 0x8a4a26, rustD = 0x3a1d0e, verde = 0x3f6b54, flesh = 0x5a4e63;
-            const sutur = 0x1e140e, stitch = 0x8a7a60, amber = 0xffb24a;
-            g.fillStyle(0x000000, 0.28);
-            g.fillEllipse(66, 96, 120, 28); // ombra a terra
-            // gambe tozze + piastre piede
-            g.fillStyle(steelD);
-            g.fillRoundedRect(52, 76, 20, 26, 4);
-            g.fillRoundedRect(78, 76, 20, 26, 4);
-            g.fillStyle(steel);
-            g.fillRoundedRect(53, 77, 18, 20, 4);
-            g.fillRoundedRect(79, 77, 18, 20, 4);
-            g.fillStyle(0x141414);
-            g.fillRect(50, 96, 24, 6);
-            g.fillRect(76, 96, 24, 6);
-            // torso corazzato top-heavy (luce alto-sinistra, ombra basso-destra)
-            g.fillStyle(steelD);
-            g.fillRoundedRect(40, 24, 72, 60, 10);
-            g.fillStyle(steel);
-            g.fillRoundedRect(42, 26, 68, 56, 9);
-            g.fillStyle(steelL);
-            g.fillRoundedRect(44, 28, 60, 12, { tl: 7, tr: 7, bl: 2, br: 2 });
-            g.fillStyle(steelD);
-            g.fillRoundedRect(46, 72, 60, 10, { tl: 2, tr: 2, bl: 7, br: 7 });
-            // giunzioni piastre + rivetti
-            g.fillStyle(steelD);
-            g.fillRect(40, 50, 72, 3);
-            [58, 80].forEach(x => g.fillRect(x, 26, 3, 56));
-            g.fillStyle(cav);
-            [50, 68, 90, 102].forEach(x => [32, 44, 64, 76].forEach(y => g.fillCircle(x, y, 2)));
-            // ruggine + verderame + suture (cadaveri cuciti)
-            g.fillStyle(rust, 0.6);
-            [54, 86, 100].forEach(x => g.fillRect(x, 30, 2, 40));
-            g.fillStyle(rustD, 0.5);
-            [55, 87].forEach(x => g.fillRect(x, 48, 2, 28));
-            g.fillStyle(verde, 0.5);
-            g.fillRect(42, 80, 68, 2);
-            g.fillRect(108, 30, 2, 50);
-            g.fillStyle(sutur);
-            g.fillRect(64, 28, 2, 52);
-            g.fillStyle(stitch);
-            for (let y = 30; y < 80; y += 8)
-                g.fillRect(61, y, 8, 1);
-            // spalle a cupola
-            g.fillStyle(steelD);
-            g.fillEllipse(48, 26, 30, 22);
-            g.fillEllipse(104, 28, 28, 20);
-            g.fillStyle(steel);
-            g.fillEllipse(48, 25, 26, 18);
-            g.fillEllipse(104, 27, 24, 16);
-            g.fillStyle(steelL, 0.6);
-            g.fillEllipse(44, 21, 12, 6);
-            g.fillEllipse(100, 23, 10, 5);
-            // testa piccola incassata dietro una gabbia
-            g.fillStyle(flesh);
-            g.fillRoundedRect(60, 12, 20, 16, 5);
-            g.fillStyle(0x120c08);
-            g.fillRect(63, 16, 14, 7);
-            g.fillStyle(amber, 0.85);
-            g.fillRect(64, 18, 3, 3);
-            g.fillRect(72, 18, 3, 3);
-            g.fillStyle(steelD);
-            [64, 68, 72, 76].forEach(x => g.fillRect(x, 13, 1, 14));
-            // cavità del NUCLEO (punto debole) al centro petto — il glow è un overlay a runtime
-            g.fillStyle(steelL, 0.4);
-            g.fillCircle(72, 54, 12);
-            g.fillStyle(0x000000);
-            g.fillCircle(72, 54, 11);
-            g.fillStyle(cav);
-            g.fillCircle(72, 54, 9);
-            g.fillStyle(rustD);
-            g.fillCircle(72, 54, 6);
-            // braccio-mazza (destra) — asimmetria
-            g.fillStyle(steelD);
-            g.fillRoundedRect(108, 46, 16, 34, 5);
-            g.fillStyle(steel);
-            g.fillRoundedRect(109, 47, 14, 30, 5);
-            g.fillStyle(cav);
-            [113, 119].forEach(x => [52, 62, 72].forEach(y => g.fillCircle(x, y, 1.6)));
-            g.fillStyle(rust, 0.5);
-            g.fillRect(110, 50, 2, 26);
-            // SCUDO antisommossa (sinistra) — gancio di silhouette
-            g.fillStyle(steelD);
-            g.fillPoints([{ x: 14, y: 18 }, { x: 40, y: 24 }, { x: 40, y: 84 }, { x: 14, y: 90 }], true);
-            g.fillStyle(steel);
-            g.fillPoints([{ x: 16, y: 21 }, { x: 38, y: 26 }, { x: 38, y: 82 }, { x: 16, y: 87 }], true);
-            g.fillStyle(steelL, 0.5);
-            g.fillPoints([{ x: 18, y: 23 }, { x: 30, y: 26 }, { x: 30, y: 34 }, { x: 18, y: 32 }], true);
-            g.fillStyle(0x0e1418);
-            g.fillRect(18, 48, 20, 8); // feritoia
-            g.fillStyle(0x2c5470, 0.4);
-            g.fillRect(20, 50, 12, 3);
-            g.fillStyle(cav);
-            [20, 34].forEach(x => [28, 40, 66, 80].forEach(y => g.fillCircle(x, y, 2)));
-            g.fillStyle(rust, 0.55);
-            [24, 30].forEach(x => g.fillRect(x, 30, 2, 44));
-            g.fillStyle(verde, 0.5);
-            g.fillRect(16, 84, 24, 2);
-            g.fillStyle(amber, 0.85);
-            g.fillRect(18, 60, 20, 4); // striscia hazard
-            g.fillStyle(0x000000, 0.8);
-            [19, 25, 31].forEach(x => g.fillRect(x, 60, 3, 4));
-            g.generateTexture('boss_colossus', 128, 104);
-            g.destroy();
-        }
-        // ── PROIETTILE del Bastione — "Proietto" · 18×12 (energia corazzata) ──
-        if (!scene.textures.exists('boss_shell')) {
-            const g = mk();
-            g.fillStyle(0x2a1c14);
-            g.fillRoundedRect(3, 2, 12, 8, 3);
-            g.fillStyle(0x6b5240);
-            g.fillRoundedRect(3, 2, 7, 8, 3);
-            g.fillStyle(0xff7722, 0.9);
-            g.fillCircle(11, 6, 4);
-            g.fillStyle(0xffd27a);
-            g.fillCircle(11, 6, 2);
-            g.fillStyle(0xffffff, 0.85);
-            g.fillCircle(12, 5, 1);
-            g.fillStyle(0xff5500, 0.7);
-            g.fillTriangle(0, 4, 0, 8, 4, 6);
-            g.generateTexture('boss_shell', 18, 12);
-            g.destroy();
-        }
-    }
     // ─── World & entities ────────────────────────────────────────────────────────
     buildWorld() {
         const env = ENVIRONMENTS[this.envIndex];
         // Sfondo + fasce
-        this.add.rectangle(W / 2, H / 2, W, H, env.bgColor);
-        this.add.rectangle(W / 2, ROAD_TOP / 2, W, ROAD_TOP, env.skyColor);
-        this.add.rectangle(W / 2, (ROAD_BOTTOM + H) / 2, W, H - ROAD_BOTTOM, env.groundColor);
+        this.add.rectangle(this.designW / 2, H / 2, this.designW, H, env.bgColor);
+        this.add.rectangle(this.designW / 2, ROAD_TOP / 2, this.designW, ROAD_TOP, env.skyColor);
+        this.add.rectangle(this.designW / 2, (ROAD_BOTTOM + H) / 2, this.designW, H - ROAD_BOTTOM, env.groundColor);
         // Strada di base (rettangolo piatto + spallette esterne): l'asfalto tileato
         // dell'Environment la copre, le spallette restano come terza fascia del ciglio.
-        this.add.rectangle(W / 2, ROAD_CENTER, W, ROAD_BOTTOM - ROAD_TOP, env.roadColor);
-        this.add.rectangle(W / 2, ROAD_TOP - 10, W, 16, env.shoulderColor);
-        this.add.rectangle(W / 2, ROAD_BOTTOM + 10, W, 16, env.shoulderColor);
+        this.add.rectangle(this.designW / 2, ROAD_CENTER, this.designW, ROAD_BOTTOM - ROAD_TOP, env.roadColor);
+        this.add.rectangle(this.designW / 2, ROAD_TOP - 10, this.designW, 16, env.shoulderColor);
+        this.add.rectangle(this.designW / 2, ROAD_BOTTOM + 10, this.designW, 16, env.shoulderColor);
         // Ambiente & Strada (docs/ART_BIBLE_AMBIENTE.md): profondità (parallasse far/near),
         // superficie (asfalto tileato + ciglio rumble), illuminazione (gradiente cielo,
         // luce di carreggiata, fari) e memoria (decal dinamici).
-        this.environment = new Environment(this, { W, H, roadTop: ROAD_TOP, roadBottom: ROAD_BOTTOM, roadCenter: ROAD_CENTER, scrollSpeed: SCROLL_SPEED }, env, this.envIndex);
+        this.environment = new Environment(this, { W: this.designW, H, roadTop: ROAD_TOP, roadBottom: ROAD_BOTTOM, roadCenter: ROAD_CENTER, scrollSpeed: SCROLL_SPEED }, env, this.envIndex);
         // Strisce di corsia ambientate: colore della linea d'ambiente, consumate, qualche dash "mancante"
-        const count = Math.ceil(W / STRIPE_GAP) + 3;
+        const count = Math.ceil(this.designW / STRIPE_GAP) + 3;
         for (let i = 0; i < count; i++) {
             const worn = (i % 6 === 4);
             const a = worn ? 0.06 : 0.20 + (i % 3) * 0.08;
@@ -1852,13 +1717,15 @@ export default class GameScene extends Phaser.Scene {
             this.stripes.push(r);
         }
         // Color grading: viraggio cromatico del mood (MULTIPLY su tutto il gameplay, sotto HUD/vignetta)
-        this.add.rectangle(W / 2, H / 2, W, H, env.grade)
+        // Color grading a tutto schermo: pinnato (scrollFactor 0) → dimensioni NATIVE del canvas,
+        // non lo spazio di design (gli oggetti scrollFactor 0 non subiscono lo zoom della camera).
+        this.add.rectangle(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, env.grade)
             .setBlendMode(Phaser.BlendModes.MULTIPLY)
             .setAlpha(env.gradeAlpha)
             .setScrollFactor(0)
             .setDepth(16);
         // Banner nome ambiente (scompare dopo 2.5s)
-        const envLabel = Ui.text(this, W / 2, ROAD_TOP - 28, env.name.toUpperCase(), {
+        const envLabel = Ui.text(this, this.designW / 2, ROAD_TOP - 28, env.name.toUpperCase(), {
             fontSize: '16px', color: UI.white, fontStyle: 'bold',
             stroke: '#000000', strokeThickness: 4,
         }).setOrigin(0.5).setDepth(18).setAlpha(0);
@@ -1873,6 +1740,7 @@ export default class GameScene extends Phaser.Scene {
     }
     buildVehicle() {
         this.vehicle = this.physics.add.sprite(VEHICLE_X, ROAD_CENTER, `vehicle_${this.vehicleKey}`);
+        this.vehicle.setScale(1 / OVERSAMPLE); // texture sovracampionata → torna a scala design
         this.vehicle.body.setCollideWorldBounds(false);
         this.vehicle.body.setSize(72, 22);
         this.vehicle.setDepth(10);
@@ -1901,9 +1769,9 @@ export default class GameScene extends Phaser.Scene {
         const D = 20, BAR_W = 110, COMP_BAR_W = 120;
         const panel = this.add.graphics().setDepth(D);
         panel.fillStyle(UI.black, 0.62);
-        panel.fillRoundedRect(0, 0, W, 84, { tl: 0, tr: 0, bl: 16, br: 16 });
+        panel.fillRoundedRect(0, 0, this.designW, 84, { tl: 0, tr: 0, bl: 16, br: 16 });
         panel.lineStyle(1, UI.strokeDim, 0.7);
-        panel.lineBetween(0, 46, W, 46);
+        panel.lineBetween(0, 46, this.designW, 46);
         Ui.text(this, 8, 8, 'SALUTE', { fontSize: '11px', color: UI.redText }).setDepth(D + 1);
         Ui.box(this, 8 + BAR_W / 2, 34, BAR_W, 10, { fill: UI.barRed, radius: 3 }).setDepth(D + 1);
         this.hudHealthFill = this.add.rectangle(8, 34, BAR_W, 10, UI.hpFill).setOrigin(0, 0.5).setDepth(D + 2);
@@ -1923,7 +1791,7 @@ export default class GameScene extends Phaser.Scene {
         this.hudAttached = Ui.text(this, 700, 6, '', { fontSize: '11px', color: '#ff8800' }).setDepth(D + 1);
         this.hudWeapon = Ui.text(this, 620, 22, '', { fontSize: '10px', color: '#ffaa44' }).setDepth(D + 1);
         this.hudCombo = Ui.text(this, 470, 6, '', { fontSize: '13px', fontStyle: 'bold', color: UI.gold }).setDepth(D + 1).setVisible(false);
-        this.hudDash = Ui.text(this, W - 10, 22, '↯ SCATTO', { fontSize: '11px', fontStyle: 'bold', color: UI.greenOk }).setOrigin(1, 0).setDepth(D + 1);
+        this.hudDash = Ui.text(this, this.designW - 10, 22, '↯ SCATTO', { fontSize: '11px', fontStyle: 'bold', color: UI.greenOk }).setOrigin(1, 0).setDepth(D + 1);
         // Selettore armi: una cifra-hotkey per ogni arma posseduta (la selezionata in oro)
         this.weaponSlots = [];
         let wsx = 620;
@@ -1947,7 +1815,7 @@ export default class GameScene extends Phaser.Scene {
         if (this.activeSurvivors.length > 0) {
             const names = { mechanic: '[M]', medic: '[+]', soldier: '[S]', explorer: '[E]' };
             const txt = this.activeSurvivors.map(s => names[s] ?? s).join(' ');
-            Ui.text(this, W - 10, 8, txt, { fontSize: '11px', color: '#cccc44' }).setOrigin(1, 0).setDepth(D + 1);
+            Ui.text(this, this.designW - 10, 8, txt, { fontSize: '11px', color: '#cccc44' }).setOrigin(1, 0).setDepth(D + 1);
         }
         const compKeys = ['engine', 'wheels', 'tank', 'turret', 'armor'];
         compKeys.forEach((key, i) => {
@@ -1958,9 +1826,9 @@ export default class GameScene extends Phaser.Scene {
             const fill = this.add.rectangle(sx, 72, COMP_BAR_W, 7, comp.baseColor).setOrigin(0, 0.5).setDepth(D + 2);
             comp.fill = fill;
         });
-        Ui.text(this, W / 2, H - 6, '↑↓ Muovi · SPAZIO Spara · 1-5/Q Arma · SHIFT Scatto', { fontSize: '11px', color: UI.disabled }).setOrigin(0.5, 1).setDepth(D);
+        Ui.text(this, this.designW / 2, H - 6, '↑↓ Muovi · SPAZIO Spara · 1-5/Q Arma · SHIFT Scatto', { fontSize: '11px', color: UI.disabled }).setOrigin(0.5, 1).setDepth(D);
         Ui.text(this, 4, H - 6, '0=Debug', { fontSize: '9px', color: '#2a3a2a' }).setOrigin(0, 1).setDepth(D);
-        this.hudDebug = Ui.text(this, W - 6, H - 6, '', { fontSize: '10px', color: '#00ff88', fontStyle: 'bold' }).setOrigin(1, 1).setDepth(D + 5);
+        this.hudDebug = Ui.text(this, this.designW - 6, H - 6, '', { fontSize: '10px', color: '#00ff88', fontStyle: 'bold' }).setOrigin(1, 1).setDepth(D + 5);
     }
     buildInput() {
         this.cursors = this.input.keyboard.createCursorKeys();
@@ -2278,16 +2146,16 @@ export default class GameScene extends Phaser.Scene {
     cleanOffScreen() {
         const clean = (g, l, r) => g.getChildren().forEach(s => { if (s.active && (s.x < l || s.x > r))
             s.destroy(); });
-        clean(this.zombies, -100, W + 100);
-        clean(this.fuelCans, -80, W + 80);
-        clean(this.toxicClouds, -80, W + 80);
-        clean(this.rockets, -20, W + 60);
-        clean(this.bossProjectiles, -80, W + 80);
+        clean(this.zombies, -100, this.designW + 100);
+        clean(this.fuelCans, -80, this.designW + 80);
+        clean(this.toxicClouds, -80, this.designW + 80);
+        clean(this.rockets, -20, this.designW + 60);
+        clean(this.bossProjectiles, -80, this.designW + 80);
         // Bullets respect per-projectile maxX (lanciafiamme ha range breve)
         this.bullets.getChildren().forEach(s => {
             if (!s.active)
                 return;
-            const maxX = s.getData('maxX') ?? W + 40;
+            const maxX = s.getData('maxX') ?? this.designW + 40;
             if (s.x < -20 || s.x > maxX)
                 s.destroy();
         });
@@ -2322,7 +2190,7 @@ export default class GameScene extends Phaser.Scene {
             }
             // Respiro / gonfiore (squash-stretch del volume)
             if (m.wob > 0) {
-                const base = ZOMBIE_STATS[type].scale;
+                const base = ZOMBIE_STATS[type].scale / OVERSAMPLE;
                 const w = Math.sin(t * m.spd * 0.7 + ph) * m.wob;
                 z.setScale(base * (1 + w), base * (1 - w));
             }
@@ -2382,8 +2250,8 @@ export default class GameScene extends Phaser.Scene {
             const fromTop = Math.random() < 0.5;
             const startY = fromTop ? ROAD_TOP - 30 : ROAD_BOTTOM + 30;
             const targetY = Phaser.Math.Between(ROAD_TOP + 22, ROAD_BOTTOM - 22);
-            const z = this.zombies.create(W + 30, startY, 'zombie_jumper');
-            z.setScale(stats.scale).setData('hp', stats.hp).setData('type', 'jumper');
+            const z = this.zombies.create(this.designW + 30, startY, 'zombie_jumper');
+            z.setScale(stats.scale / OVERSAMPLE).setData('hp', stats.hp).setData('type', 'jumper');
             z.setData('rockPhase', Math.random() * 6.28).setData('entering', true);
             z.setVelocityX(-(stats.speed + SCROLL_SPEED)).setDepth(9).setBodySize(20, 28);
             z.play('walk_jumper');
@@ -2397,8 +2265,8 @@ export default class GameScene extends Phaser.Scene {
         const count = type === 'common' && Math.random() < 0.25 ? Phaser.Math.Between(2, 3) : 1;
         for (let i = 0; i < count; i++) {
             const y = Phaser.Math.Clamp(baseY + i * 28 * (Math.random() > 0.5 ? 1 : -1), ROAD_TOP + 22, ROAD_BOTTOM - 22);
-            const z = this.zombies.create(W + 30 + i * 20, y, `zombie_${type}`);
-            z.setScale(stats.scale).setData('hp', stats.hp).setData('type', type);
+            const z = this.zombies.create(this.designW + 30 + i * 20, y, `zombie_${type}`);
+            z.setScale(stats.scale / OVERSAMPLE).setData('hp', stats.hp).setData('type', type);
             z.setData('rockPhase', Math.random() * 6.28);
             z.setVelocityX(-(stats.speed + SCROLL_SPEED)).setDepth(9).setBodySize(20, 28);
             z.play(`walk_${type}`);
@@ -2406,13 +2274,13 @@ export default class GameScene extends Phaser.Scene {
         }
     }
     spawnGiant() {
-        const z = this.zombies.create(W + 60, ROAD_CENTER, 'zombie_giant');
-        z.setScale(ZOMBIE_STATS.giant.scale).setData('hp', ZOMBIE_STATS.giant.hp).setData('type', 'giant');
+        const z = this.zombies.create(this.designW + 60, ROAD_CENTER, 'zombie_giant');
+        z.setScale(ZOMBIE_STATS.giant.scale / OVERSAMPLE).setData('hp', ZOMBIE_STATS.giant.hp).setData('type', 'giant');
         z.setData('rockPhase', Math.random() * 6.28);
         z.setVelocityX(-(ZOMBIE_STATS.giant.speed + SCROLL_SPEED)).setDepth(9).setBodySize(38, 50);
         z.play('walk_giant');
         z.anims.setProgress(Math.random());
-        const warn = Ui.text(this, W - 60, H / 2, '⚠ GIGANTE!', {
+        const warn = Ui.text(this, this.designW - 60, H / 2, '⚠ GIGANTE!', {
             fontSize: '22px', color: '#ff4400', fontStyle: 'bold',
             stroke: '#000000', strokeThickness: 4,
         }).setOrigin(0.5).setDepth(25);
@@ -2421,7 +2289,7 @@ export default class GameScene extends Phaser.Scene {
     spawnFuelCan() {
         if (!this.alive || this.missionDone)
             return;
-        const f = this.fuelCans.create(W + 20, Phaser.Math.Between(ROAD_TOP + 22, ROAD_BOTTOM - 22), 'fuel_can');
+        const f = this.fuelCans.create(this.designW + 20, Phaser.Math.Between(ROAD_TOP + 22, ROAD_BOTTOM - 22), 'fuel_can');
         f.setVelocityX(-SCROLL_SPEED).setDepth(6);
     }
     fireWeapon() {
@@ -2430,11 +2298,11 @@ export default class GameScene extends Phaser.Scene {
         switch (this.currentWeapon) {
             case 'mg':
             case 'rifle':
-                this.spawnBullet(vx, vy, w.damage, w.speed, w.color, W + 40);
+                this.spawnBullet(vx, vy, w.damage, w.speed, w.color, this.designW + 40);
                 break;
             case 'double_mg':
-                this.spawnBullet(vx, vy - 8, w.damage, w.speed, w.color, W + 40);
-                this.spawnBullet(vx, vy + 8, w.damage, w.speed, w.color, W + 40);
+                this.spawnBullet(vx, vy - 8, w.damage, w.speed, w.color, this.designW + 40);
+                this.spawnBullet(vx, vy + 8, w.damage, w.speed, w.color, this.designW + 40);
                 break;
             case 'flamethrower':
                 this.spawnBullet(vx, vy + Phaser.Math.Between(-6, 6), 1, w.speed, w.color, vx - 50 + w.range);
@@ -2459,7 +2327,7 @@ export default class GameScene extends Phaser.Scene {
         r.body.setSize(22, 8);
     }
     fireAutoShot(y) {
-        this.spawnBullet(this.vehicle.x + 50, y, 1, BULLET_SPEED, 0x00ffff, W + 40);
+        this.spawnBullet(this.vehicle.x + 50, y, 1, BULLET_SPEED, 0x00ffff, this.designW + 40);
         this.sfx?.playShot();
     }
     getNearestZombieY() {
@@ -2674,10 +2542,10 @@ export default class GameScene extends Phaser.Scene {
         const hp = zombie.getData('hp');
         zombie.destroy();
         const sprite = this.add.sprite(this.vehicle.x + slot.dx, this.vehicle.y + slot.dy, `zombie_${type}`);
-        sprite.setScale(0.68).setDepth(11).setTint(type === 'jumper' ? 0xffcc00 : 0xff8800);
+        sprite.setScale(0.68 / OVERSAMPLE).setDepth(11).setTint(type === 'jumper' ? 0xffcc00 : 0xff8800);
         sprite.play(`walk_${type}`);
         sprite.anims.setProgress(Math.random());
-        this.tweens.add({ targets: sprite, scaleX: 0.84, scaleY: 0.84, yoyo: true, duration: 110, repeat: 1 });
+        this.tweens.add({ targets: sprite, scaleX: 0.84 / OVERSAMPLE, scaleY: 0.84 / OVERSAMPLE, yoyo: true, duration: 110, repeat: 1 });
         this.attachedZombies.push({ sprite, slotIndex, comp: slot.comp, hp, timer: ATTACH_DAMAGE_INTERVAL });
         this.cameras.main.shake(70, 0.005);
         this.sfx?.playZombieAttach();
@@ -2752,7 +2620,7 @@ export default class GameScene extends Phaser.Scene {
         this.sfx?.stopEngine();
         this.zombies.setVelocityX(0);
         this.fuelCans.setVelocityX(0);
-        const cx = W / 2, cy = H / 2;
+        const cx = this.designW / 2, cy = H / 2;
         Ui.box(this, cx, cy, 500, 260, { fill: UI.black, fillAlpha: 0.9, radius: 16, stroke: UI.greenSig, strokeAlpha: 0.45 }).setDepth(30);
         Ui.text(this, cx, cy - 95, 'MISSIONE COMPLETATA!', {
             fontSize: '32px', color: UI.green, fontStyle: 'bold',
@@ -2801,7 +2669,7 @@ export default class GameScene extends Phaser.Scene {
         this.bullets.setVelocityX(0);
         this.fuelCans.setVelocityX(0);
         this.time.delayedCall(700, () => {
-            const cx = W / 2, cy = H / 2;
+            const cx = this.designW / 2, cy = H / 2;
             Ui.box(this, cx, cy, 440, 260, { fill: UI.black, fillAlpha: 0.88, radius: 16, stroke: UI.redCrit, strokeAlpha: 0.55 }).setDepth(30);
             Ui.text(this, cx, cy - 80, 'GAME OVER', {
                 fontSize: '50px', color: '#ff3333', fontStyle: 'bold',
@@ -2824,7 +2692,7 @@ export default class GameScene extends Phaser.Scene {
         const cfg = BOSS_CONFIG[bossType];
         this.bossMaxHp = cfg.hp;
         // Alert
-        const warn = Ui.text(this, W / 2, H / 2, `⚠  ${cfg.name.toUpperCase()}  ⚠`, {
+        const warn = Ui.text(this, this.designW / 2, H / 2, `⚠  ${cfg.name.toUpperCase()}  ⚠`, {
             fontSize: '28px', color: '#ff4400', fontStyle: 'bold',
             stroke: '#000000', strokeThickness: 5,
         }).setOrigin(0.5).setDepth(28).setAlpha(0);
@@ -2836,43 +2704,21 @@ export default class GameScene extends Phaser.Scene {
         });
         this.cameras.main.shake(300, 0.016);
         this.sfx?.playExplosion();
-        if (bossType === 'armored_colossus') {
-            this.spawnColossus(cfg); // slice AAA: silhouette + macchina a stati propria
-        }
-        else {
-            // Sprite boss legacy (riusa zombie_giant scalato e tintato)
-            const boss = this.bossGroup.create(W + 90, ROAD_CENTER, 'zombie_giant');
-            boss.setScale(cfg.scaleX, cfg.scaleY).setTint(cfg.tint).setDepth(12);
-            boss.play('walk_giant');
-            boss.setData('bossType', bossType);
-            boss.setData('hp', cfg.hp);
-            const t1init = bossType === 'giant_worm' ? 4000 : bossType === 'radioactive_beast' ? 2500 : 8000;
-            boss.setData('timer1', t1init);
-            boss.setData('lastVehicleHit', 0);
-            boss.body.setSize(cfg.bodyW, cfg.bodyH);
-            this.bossSprite = boss;
-        }
-        this.showBossHUD(cfg.name);
-    }
-    spawnColossus(cfg) {
-        const boss = this.bossGroup.create(W + 120, ROAD_CENTER, 'boss_colossus');
-        boss.setDepth(12);
-        boss.setData('bossType', 'armored_colossus');
+        // Sprite boss (riusa zombie_giant scalato e tintato)
+        const boss = this.bossGroup.create(this.designW + 90, ROAD_CENTER, 'zombie_giant');
+        boss.setScale(cfg.scaleX / OVERSAMPLE, cfg.scaleY / OVERSAMPLE).setTint(cfg.tint).setDepth(12);
+        boss.play('walk_giant');
+        boss.setData('bossType', bossType);
         boss.setData('hp', cfg.hp);
+        const t1init = bossType === 'armored_colossus' ? 3000
+            : bossType === 'giant_worm' ? 4000
+                : bossType === 'radioactive_beast' ? 2500
+                    : 8000;
+        boss.setData('timer1', t1init);
         boss.setData('lastVehicleHit', 0);
-        boss.body.setSize(84, 72);
+        boss.body.setSize(cfg.bodyW, cfg.bodyH);
         this.bossSprite = boss;
-        // stato iniziale della macchina a stati
-        this.bossPhase = 1;
-        this.bossState = 'idle';
-        this.bossStateTimer = 0;
-        this.bossActionTimer = COLOSSUS_TUNE.actionGap;
-        this.bossAttack = '';
-        this.bossVulnerable = false;
-        this.bossChargeY = ROAD_CENTER;
-        // nucleo emissivo (punto debole): overlay additivo che pulsa e si accende quando vulnerabile
-        this.bossCore = this.add.image(boss.x, boss.y, 'fx_light')
-            .setTint(0xff7722).setBlendMode(Phaser.BlendModes.ADD).setDepth(13).setScale(0.5).setAlpha(0);
+        this.showBossHUD(cfg.name);
     }
     updateBoss(delta) {
         if (!this.bossSprite || !this.bossActive)
@@ -2883,30 +2729,18 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
         const bossType = boss.getData('bossType');
-        if (bossType === 'armored_colossus')
-            this.updateColossus(boss, delta);
-        else
-            this.updateBossLegacy(boss, delta);
-        // Barra HP (comune a tutti i boss)
-        const hp = boss.getData('hp');
-        if (this.bossHudFill) {
-            this.bossHudFill.displayWidth = Math.max(0, (hp / this.bossMaxHp) * 440);
-            const pct = hp / this.bossMaxHp;
-            this.bossHudFill.setFillStyle(pct < 0.25 ? 0xff2200 : pct < 0.55 ? 0xff8800 : 0xcc0000);
-        }
-    }
-    // ── Boss legacy (gigante ritintato): mega_mutant · giant_worm · radioactive_beast ──
-    updateBossLegacy(boss, delta) {
-        const bossType = boss.getData('bossType');
         const cfg = BOSS_CONFIG[bossType];
         const body = boss.body;
         const targetX = 560;
-        if (boss.x > targetX)
+        // Avanzamento e stop
+        if (boss.x > targetX) {
             body.setVelocityX(-cfg.speed);
+        }
         else {
             body.setVelocityX(0);
             boss.x = targetX;
         }
+        // Comportamento per tipo
         let t1 = boss.getData('timer1') - delta;
         boss.setData('timer1', t1);
         switch (bossType) {
@@ -2914,8 +2748,8 @@ export default class GameScene extends Phaser.Scene {
                 boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER + Math.sin(this.time.now / 800) * 90, 0.04);
                 if (t1 <= 0) {
                     boss.setData('timer1', 8000);
-                    this.spawnZombieAt('common', W - 80, boss.y - 44);
-                    this.spawnZombieAt('common', W - 80, boss.y + 44);
+                    this.spawnZombieAt('common', this.designW - 80, boss.y - 44);
+                    this.spawnZombieAt('common', this.designW - 80, boss.y + 44);
                 }
                 break;
             case 'giant_worm':
@@ -2923,6 +2757,13 @@ export default class GameScene extends Phaser.Scene {
                 if (t1 <= 0) {
                     boss.setData('timer1', 4000);
                     this.spawnToxicCloud(boss.x - 24, boss.y);
+                }
+                break;
+            case 'armored_colossus':
+                boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER, 0.03);
+                if (t1 <= 0) {
+                    boss.setData('timer1', 3000);
+                    this.fireBossProjectile(boss.x - 32, boss.y);
                 }
                 break;
             case 'radioactive_beast':
@@ -2936,211 +2777,48 @@ export default class GameScene extends Phaser.Scene {
                 break;
         }
         boss.y = Phaser.Math.Clamp(boss.y, ROAD_TOP + 40, ROAD_BOTTOM - 40);
-    }
-    // ── COLOSSO CORAZZATO (slice AAA): macchina a stati + fasi + punto debole ──
-    phaseTune() {
-        const T = COLOSSUS_TUNE;
-        return this.bossPhase === 2
-            ? { actionGap: T.p2.actionGap, telCharge: T.p2.telCharge, telVolley: T.p2.telVolley, volleyShots: T.p2.volleyShots }
-            : { actionGap: T.actionGap, telCharge: T.telCharge, telVolley: T.telVolley, volleyShots: T.volleyShots };
-    }
-    updateColossus(boss, delta) {
-        const T = COLOSSUS_TUNE;
-        const body = boss.body;
+        // Aggiorna barra HP
         const hp = boss.getData('hp');
-        if (this.bossPhase === 1 && hp <= this.bossMaxHp * 0.5)
-            this.enterBossPhase2();
-        // Nucleo emissivo: segue il petto, fioco a scudo alzato, acceso quando vulnerabile
-        if (this.bossCore) {
-            this.bossCore.x = boss.x + 8;
-            this.bossCore.y = boss.y + 2;
-            const pulse = 0.12 * Math.sin(this.time.now / (this.bossVulnerable ? 110 : 320));
-            this.bossCore.setAlpha((this.bossVulnerable ? 0.85 : 0.16) + pulse);
-            this.bossCore.setScale((this.bossVulnerable ? 0.95 : 0.5) + pulse * 0.3);
+        if (this.bossHudFill) {
+            this.bossHudFill.displayWidth = Math.max(0, (hp / this.bossMaxHp) * 440);
+            const pct = hp / this.bossMaxHp;
+            this.bossHudFill.setFillStyle(pct < 0.25 ? 0xff2200 : pct < 0.55 ? 0xff8800 : 0xcc0000);
         }
-        // Indicatore HUD del punto debole (pulsa quando il nucleo è esposto)
-        if (this.bossWeakText)
-            this.bossWeakText.setAlpha(this.bossVulnerable ? 0.55 + 0.45 * Math.abs(Math.sin(this.time.now / 120)) : 0);
-        switch (this.bossState) {
-            case 'idle':
-                if (boss.x > T.targetX) {
-                    body.setVelocityX(-T.approachSpeed);
-                }
-                else {
-                    body.setVelocityX(0);
-                    boss.x = T.targetX;
-                    boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER + Math.sin(this.time.now / 700) * T.bob, 0.04);
-                    this.bossActionTimer -= delta;
-                    if (this.bossActionTimer <= 0)
-                        this.startBossTelegraph();
-                }
-                break;
-            case 'telegraph':
-                body.setVelocityX(0);
-                boss.x = T.targetX + Math.sin(this.time.now / 38) * 2; // quiver di carica
-                this.bossStateTimer -= delta;
-                if (this.bossStateTimer <= 0)
-                    this.executeBossAttack();
-                break;
-            case 'charge':
-                boss.y = Phaser.Math.Linear(boss.y, this.bossChargeY, 0.2);
-                if (boss.x > T.chargeMinX)
-                    body.setVelocityX(-T.chargeSpeed);
-                else
-                    this.startBossRecover();
-                break;
-            case 'volley':
-                body.setVelocityX(0);
-                this.bossStateTimer -= delta;
-                if (this.bossStateTimer <= 0)
-                    this.startBossRecover();
-                break;
-            case 'recover':
-                if (boss.x < T.targetX)
-                    body.setVelocityX(T.returnSpeed);
-                else {
-                    body.setVelocityX(0);
-                    boss.x = T.targetX;
-                }
-                boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER, 0.06);
-                this.bossStateTimer -= delta;
-                if (this.bossStateTimer <= 0 && boss.x >= T.targetX - 2) {
-                    this.bossVulnerable = false;
-                    this.bossState = 'idle';
-                    this.bossActionTimer = this.phaseTune().actionGap;
-                }
-                break;
-        }
-        boss.y = Phaser.Math.Clamp(boss.y, ROAD_TOP + 50, ROAD_BOTTOM - 50);
-    }
-    startBossTelegraph() {
-        const pt = this.phaseTune();
-        const boss = this.bossSprite;
-        this.bossAttack = Math.random() < 0.5 ? 'charge' : 'volley';
-        this.bossState = 'telegraph';
-        this.bossVulnerable = true; // il nucleo si scopre durante la preparazione (finestra per colpirlo)
-        boss.setTint(0xffcc88);
-        this.time.delayedCall(120, () => { if (boss?.active)
-            boss.clearTint(); });
-        if (this.bossAttack === 'charge') {
-            this.bossStateTimer = pt.telCharge;
-            this.bossChargeY = this.vehicle.y; // mira alla corsia attuale → si schiva
-            const line = this.add.rectangle(boss.x / 2, this.bossChargeY, boss.x, 8, 0xff3300, 0).setOrigin(0.5).setDepth(7);
-            this.tweens.add({ targets: line, alpha: 0.35, duration: 170, yoyo: true, repeat: 1, onComplete: () => line.destroy() });
-            this.cameras.main.shake(120, 0.004);
-        }
-        else {
-            this.bossStateTimer = pt.telVolley;
-            Juice.muzzleFlash(this, boss.x - 30, boss.y, 0xff8822);
-        }
-        this.sfx?.playImpact();
-    }
-    executeBossAttack() {
-        if (this.bossAttack === 'charge') {
-            this.bossState = 'charge';
-            this.cameras.main.shake(150, 0.008);
-            this.sfx?.playExplosion();
-        }
-        else {
-            this.bossState = 'volley';
-            this.bossStateTimer = 460;
-            const shots = this.phaseTune().volleyShots;
-            for (let i = 0; i < shots; i++) {
-                this.time.delayedCall(i * 110, () => {
-                    if (this.bossActive && this.bossSprite?.active) {
-                        const spread = (i - (shots - 1) / 2) * COLOSSUS_TUNE.volleySpreadDeg;
-                        this.fireColossusShell(this.bossSprite.x - 36, this.bossSprite.y, spread);
-                    }
-                });
-            }
-        }
-    }
-    startBossRecover() {
-        this.bossState = 'recover';
-        this.bossStateTimer = COLOSSUS_TUNE.recover;
-    }
-    enterBossPhase2() {
-        this.bossPhase = 2;
-        const boss = this.bossSprite;
-        this.cameras.main.shake(420, 0.02);
-        this.hitStop(60);
-        Juice.flash(this, 0xff3300, 0.32, 200);
-        Juice.lightFlash(this, boss.x, boss.y, 0xff5522, 7, 460);
-        this.sfx?.playExplosion();
-        boss.setTint(0xffaa88);
-        this.time.delayedCall(260, () => { if (boss?.active)
-            boss.clearTint(); });
-        const t = Ui.text(this, W / 2, 130, 'FASE 2 — ENRAGE', {
-            fontSize: '20px', color: '#ff5522', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
-        }).setOrigin(0.5).setDepth(28).setAlpha(0);
-        this.tweens.add({ targets: t, alpha: 1, duration: 200, yoyo: true, hold: 700, onComplete: () => t.destroy() });
-        this.bossActionTimer = Math.min(this.bossActionTimer, 600);
-    }
-    fireColossusShell(x, y, spreadDeg) {
-        const p = this.bossProjectiles.create(x, y, 'boss_shell');
-        const speed = 300;
-        const ang = Math.atan2(this.vehicle.y - y, this.vehicle.x - x) + Phaser.Math.DegToRad(spreadDeg);
-        p.setVelocity(Math.cos(ang) * speed, Math.sin(ang) * speed);
-        p.setDepth(9).setRotation(ang);
-        p.body.setSize(12, 8);
-        Juice.muzzleFlash(this, x, y, 0xff8822);
     }
     spawnZombieAt(type, x, y) {
         const stats = ZOMBIE_STATS[type];
         const z = this.zombies.create(x, Phaser.Math.Clamp(y, ROAD_TOP + 22, ROAD_BOTTOM - 22), `zombie_${type}`);
-        z.setScale(stats.scale).setData('hp', stats.hp).setData('type', type);
+        z.setScale(stats.scale / OVERSAMPLE).setData('hp', stats.hp).setData('type', type);
         z.setData('rockPhase', Math.random() * 6.28);
         z.setVelocityX(-(stats.speed + SCROLL_SPEED)).setDepth(9);
         z.body.setSize(20, 28);
         z.play(`walk_${type}`);
         z.anims.setProgress(Math.random());
     }
-    /** Danno effettivo del giocatore sul Colosso: ridotto a scudo alzato, bonus al nucleo esposto. */
-    colossusDamageMult() {
-        if (this.bossVulnerable)
-            return COLOSSUS_TUNE.weakMult;
-        return this.bossPhase === 2 ? COLOSSUS_TUNE.shieldMultP2 : COLOSSUS_TUNE.shieldMult;
-    }
-    restoreBossTint(boss) {
-        const bossType = boss.getData('bossType');
-        if (bossType === 'armored_colossus')
-            boss.clearTint();
-        else
-            boss.setTint(BOSS_CONFIG[bossType].tint);
+    fireBossProjectile(x, fromY) {
+        const p = this.bossProjectiles.create(x, fromY, 'bullet');
+        const dy = Phaser.Math.Clamp(this.vehicle.y - fromY, -80, 80);
+        p.setVelocityX(-200).setVelocityY(dy);
+        p.setScale(2.4, 1.6).setTint(0x8844ff).setDepth(9);
+        p.body.setSize(16, 6);
     }
     onBulletHitBoss(bullet, boss) {
         if (!bullet.active || !boss.active)
             return;
-        let dmg = bullet.getData('damage') ?? 1;
-        const bx = bullet.x, by = bullet.y;
+        const dmg = bullet.getData('damage') ?? 1;
         bullet.destroy();
         const bossType = boss.getData('bossType');
-        if (bossType === 'armored_colossus' && !this.bossVulnerable) {
-            // Scudo alzato: deflette (danno ridotto, scintille, nessun flash bianco)
-            this.damageBoss(boss, dmg * this.colossusDamageMult());
-            this.emitSparks(bx, by);
-            this.sfx?.playImpact();
-            return;
-        }
-        if (bossType === 'armored_colossus') {
-            dmg *= COLOSSUS_TUNE.weakMult;
-            this.spawnHitParticles(bx, by);
-        }
         this.damageBoss(boss, dmg);
         boss.setTint(0xffffff);
         this.time.delayedCall(60, () => { if (boss?.active)
-            this.restoreBossTint(boss); });
+            boss.setTint(BOSS_CONFIG[bossType].tint); });
     }
     onRocketHitBoss(rocket, boss) {
         if (!rocket.active || !boss.active)
             return;
         const rx = rocket.x, ry = rocket.y;
         rocket.destroy();
-        const bossType = boss.getData('bossType');
-        let dmg = WEAPONS.rockets.damage * 3;
-        if (bossType === 'armored_colossus')
-            dmg *= this.colossusDamageMult();
-        this.damageBoss(boss, dmg);
+        this.damageBoss(boss, WEAPONS.rockets.damage * 3);
         this.spawnHitParticles(rx, ry);
         this.spawnHitParticles(rx + 10, ry - 8);
         this.environment?.addDecal('scorch', rx, ry);
@@ -3155,12 +2833,9 @@ export default class GameScene extends Phaser.Scene {
         if (this.time.now - lastHit < 800)
             return;
         boss.setData('lastVehicleHit', this.time.now);
-        const charging = boss.getData('bossType') === 'armored_colossus' && this.bossState === 'charge';
-        this.dealDamage(charging ? 30 : 20);
-        this.damageComponent('armor', charging ? 35 : 25);
-        this.cameras.main.shake(charging ? 280 : 200, charging ? 0.02 : 0.016);
-        if (charging)
-            this.hitStop(40);
+        this.dealDamage(20);
+        this.damageComponent('armor', 25);
+        this.cameras.main.shake(200, 0.016);
         this.sfx?.playExplosion();
     }
     onBossProjectileHitVehicle(p) {
@@ -3195,9 +2870,6 @@ export default class GameScene extends Phaser.Scene {
         }
         this.bossSprite.destroy();
         this.bossSprite = null;
-        this.bossCore?.destroy();
-        this.bossCore = null;
-        this.bossVulnerable = false;
         this.cameras.main.shake(500, 0.022);
         this.hitStop(70);
         Juice.flash(this, 0xffffff, 0.5, 140);
@@ -3206,7 +2878,7 @@ export default class GameScene extends Phaser.Scene {
         this.addKillScore(500);
         this.registry.set('money', (this.registry.get('money') ?? 0) + earned);
         this.hideBossHUD();
-        const vt = Ui.text(this, W / 2, H / 2 - 10, `BOSS SCONFITTO!  +${earned} monete`, {
+        const vt = Ui.text(this, this.designW / 2, H / 2 - 10, `BOSS SCONFITTO!  +${earned} monete`, {
             fontSize: '24px', color: '#ffee00', fontStyle: 'bold',
             stroke: '#000000', strokeThickness: 5,
         }).setOrigin(0.5).setDepth(28);
@@ -3215,23 +2887,16 @@ export default class GameScene extends Phaser.Scene {
         this.time.delayedCall(2200, () => this.triggerMissionComplete());
     }
     showBossHUD(name) {
-        const cx = W / 2, barW = 440, y = 96;
+        const cx = this.designW / 2, barW = 440, y = 96;
         const bg = this.add.rectangle(cx, y, barW + 8, 20, UI.black, 0.85).setDepth(22).setAlpha(0);
         const fill = this.add.rectangle(cx - barW / 2, y, barW, 14, UI.redCrit).setOrigin(0, 0.5).setDepth(23).setAlpha(0);
         const label = Ui.text(this, cx, y - 14, name.toUpperCase(), {
             fontSize: '13px', color: UI.red, fontStyle: 'bold',
             stroke: '#000000', strokeThickness: 3,
         }).setOrigin(0.5).setDepth(23).setAlpha(0);
-        // Tacca della soglia di FASE 2 (50% HP, al centro della barra)
-        const tick = this.add.rectangle(cx, y, 2, 18, 0x000000, 0.85).setDepth(24).setAlpha(0);
-        // Indicatore PUNTO DEBOLE (mostrato a impulsi quando il nucleo è esposto — guidato da updateColossus)
-        const weak = Ui.text(this, cx, y + 14, '★ PUNTO DEBOLE', {
-            fontSize: '10px', color: '#ffcc44', fontStyle: 'bold',
-        }).setOrigin(0.5).setDepth(24).setAlpha(0);
-        this.bossWeakText = weak;
-        this.bossHudObjects = [bg, fill, label, tick, weak];
+        this.bossHudObjects = [bg, fill, label];
         this.bossHudFill = fill;
-        this.tweens.add({ targets: [bg, fill, label, tick], alpha: 1, duration: 400 });
+        this.tweens.add({ targets: this.bossHudObjects, alpha: 1, duration: 400 });
     }
     hideBossHUD() {
         if (!this.bossHudObjects.length)
@@ -3242,7 +2907,6 @@ export default class GameScene extends Phaser.Scene {
                 this.bossHudObjects.forEach(o => o.destroy());
                 this.bossHudObjects = [];
                 this.bossHudFill = undefined;
-                this.bossWeakText = undefined;
             },
         });
     }

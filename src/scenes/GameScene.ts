@@ -5,8 +5,11 @@ import Juice from '../Juice';
 import Environment from '../Environment';
 import Settings from '../Settings';
 import Ui, { UI } from '../Ui';
+import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 
-const W = 800, H = 600;
+// Spazio di design: l'altezza è fissa (H), la larghezza varia col formato (designW,
+// più ampia in 16:9). La camera in zoom adatta tutto alla risoluzione nativa — vedi Config.ts.
+const H = 600;
 const ROAD_TOP = 155, ROAD_BOTTOM = 445, ROAD_CENTER = 300;
 const VEHICLE_X = 150;
 const SCROLL_SPEED = 240;
@@ -199,9 +202,14 @@ export default class GameScene extends Phaser.Scene {
   private spawnTimer = 0;
   private spawnInterval = 2100;
 
+  /** Larghezza dello spazio di design (800 in 4:3, maggiore in 16:9 → più strada). */
+  private designW = DESIGN_W;
+
   constructor() { super({ key: 'GameScene' }); }
 
   create() {
+    // Camera in zoom: lo spazio di design riempie la risoluzione nativa scelta.
+    this.designW = setupCamera(this).designW;
     this.vehicleKey        = this.registry.get('vehicle')       ?? 'civilian_car';
     this.activeSurvivors   = this.registry.get('survivors')     ?? [];
     this.upgrades          = this.registry.get('upgrades')      ?? {};
@@ -321,15 +329,29 @@ export default class GameScene extends Phaser.Scene {
   static buildEntityTextures(scene: Phaser.Scene) {
     if (scene.textures.exists('zombie_common')) return;
     const G = (_w: number, _h: number) => scene.make.graphics({ add: false } as any) as Phaser.GameObjects.Graphics & { generateTexture(k:string,w:number,h:number):void };
-    // Aggiunge N frame numerati (0..n-1) a una texture spritesheet generata
+    // Variante SOVRACAMPIONATA per gli sprite che il giocatore osserva da vicino (zombie):
+    // scala il Graphics di OVERSAMPLE e genera la texture a OVERSAMPLE× (resta nitida sotto lo
+    // zoom della camera). Le dimensioni passate restano quelle di DESIGN — l'override le
+    // moltiplica internamente, così le chiamate (e il validatore) non cambiano.
+    const OS_G = (_w: number, _h: number) => {
+      const g = scene.make.graphics({ add: false } as any) as Phaser.GameObjects.Graphics & { generateTexture(k:string,w:number,h:number):void };
+      g.setScale(OVERSAMPLE);
+      const orig = g.generateTexture.bind(g);
+      (g as any).generateTexture = (k: string, w: number, h: number) => orig(k, w * OVERSAMPLE, h * OVERSAMPLE);
+      return g;
+    };
+    // Aggiunge N frame numerati (0..n-1) a una texture spritesheet generata.
+    // Le texture zombie sono sovracampionate (OS_G) → i frame vanno a coordinate OVERSAMPLE×;
+    // i numeri passati restano di design (lo sprite torna a scala design via osSprite).
     const AF = (key: string, fw: number, fh: number, n: number) => {
       const t = scene.textures.get(key);
-      for (let i = 0; i < n; i++) t.add(i, 0, i * fw, 0, fw, fh);
+      const s = OVERSAMPLE;
+      for (let i = 0; i < n; i++) t.add(i, 0, i * fw * s, 0, fw * s, fh * s);
     };
 
     // ── ZOMBIE COMMON · "Il Collo Rotto" (30×44 × 3) ───────────────────────────
     {
-      const g = G(90,44);
+      const g = OS_G(90,44);
       const flA=0x6f7d54, flHi=0x8a9668, flSh=0x444c33, livid=0x5a4e63;
       const musc=0x6e2a26, muscHi=0x9a3a2e, bone=0xd9cba6;
       const shA=0x3b4156, shHi=0x4d5570, shSh=0x282c3c, pants=0x34322b, eye=0xff2a10;
@@ -385,7 +407,7 @@ export default class GameScene extends Phaser.Scene {
 
     // ── ZOMBIE RUNNER · "Lo Scorticato" (26×42 × 3) ────────────────────────────
     {
-      const g = G(78,42);
+      const g = OS_G(78,42);
       const sk=0xb3a48f, skHi=0xcabba6, skSh=0x7d705e;
       const abr=0x7a2e22, abrHi=0xa8412e, rag=0x55303a, bone=0xd9cba6, eye=0xff6410;
       for (let f = 0; f < 3; f++) {
@@ -443,7 +465,7 @@ export default class GameScene extends Phaser.Scene {
 
     // ── ZOMBIE ARMORED · "Il Tutore" (38×48 × 3) ───────────────────────────────
     {
-      const g = G(114,48);
+      const g = OS_G(114,48);
       const st=0x5f6b78, stHi=0x8a97a5, stSh=0x39424c, stDD=0x20262c;
       const rustT=0x8a4a26, rustB=0x3a1d0e, verd=0x3f6b54, bloodOx=0x2a1410;
       const flesh=0x5a4e63, eye=0xffcc22;
@@ -500,7 +522,7 @@ export default class GameScene extends Phaser.Scene {
 
     // ── ZOMBIE JUMPER · "Il Ragno" (32×46 × 3) ─────────────────────────────────
     {
-      const g = G(96,46);
+      const g = OS_G(96,46);
       const sk=0x9aa83e, skHi=0xc2d05a, skSh=0x5f6a22, joint=0x20240e;
       const tend=0xd8e08a, eye=0xfff000, claw=0xe8e0c0, blood=0x7a2e22;
       for (let f = 0; f < 3; f++) {
@@ -556,7 +578,7 @@ export default class GameScene extends Phaser.Scene {
 
     // ── ZOMBIE TOXIC · "Il Gonfio" (30×48 × 3) ─────────────────────────────────
     {
-      const g = G(90,48);
+      const g = OS_G(90,48);
       const sk=0x3f7a33, skHi=0x5fa84a, skSh=0x265020, vein=0x7dff4a;
       const ooze=0x6cff3a, oozeD=0x2cbb2a, sac=0x8fd86a, eye=0x9dff5a;
       for (let f = 0; f < 3; f++) {
@@ -611,7 +633,7 @@ export default class GameScene extends Phaser.Scene {
 
     // ── ZOMBIE GIANT · "L'Innesto" (48×66 × 3) — riusato dai boss ──────────────
     {
-      const g = G(144,66);
+      const g = OS_G(144,66);
       const sk=0x5a3a2e, skHi=0x7d5240, skSh=0x38241c, livid=0x4a3a52;
       const graft=0x5a5a3a, graftHi=0x7d7d50, graftSh=0x2a2a18;
       const sut=0x1e140e, stitch=0x8a7a60, bone=0xd9c8a0, blood=0x6e2a26, eye=0xff2a10;
@@ -817,6 +839,11 @@ export default class GameScene extends Phaser.Scene {
 
     const metal = 0x4a4a52, metalL = 0x70707a, metalD = 0x26262c;
     const g = scene.make.graphics({ add: false } as any) as Phaser.GameObjects.Graphics & { generateTexture(k:string,w:number,h:number):void };
+    // Sovracampionamento: il veicolo è l'elemento più osservato → texture a OVERSAMPLE× (nitida
+    // sotto lo zoom della camera). Il disegno resta in coordinate design; lo sprite torna a scala
+    // design con setScale(1/OVERSAMPLE) in buildVehicle.
+    g.setScale(OVERSAMPLE);
+    { const orig = g.generateTexture.bind(g); (g as any).generateTexture = (k: string, w: number, h: number) => orig(k, w * OVERSAMPLE, h * OVERSAMPLE); }
 
     g.fillStyle(0x000000, 0.22); g.fillEllipse(50, 25, 96, 40);
 
@@ -1142,27 +1169,27 @@ export default class GameScene extends Phaser.Scene {
     const env = ENVIRONMENTS[this.envIndex];
 
     // Sfondo + fasce
-    this.add.rectangle(W/2, H/2, W, H, env.bgColor);
-    this.add.rectangle(W/2, ROAD_TOP / 2, W, ROAD_TOP, env.skyColor);
-    this.add.rectangle(W/2, (ROAD_BOTTOM + H) / 2, W, H - ROAD_BOTTOM, env.groundColor);
+    this.add.rectangle(this.designW/2, H/2, this.designW, H, env.bgColor);
+    this.add.rectangle(this.designW/2, ROAD_TOP / 2, this.designW, ROAD_TOP, env.skyColor);
+    this.add.rectangle(this.designW/2, (ROAD_BOTTOM + H) / 2, this.designW, H - ROAD_BOTTOM, env.groundColor);
 
     // Strada di base (rettangolo piatto + spallette esterne): l'asfalto tileato
     // dell'Environment la copre, le spallette restano come terza fascia del ciglio.
-    this.add.rectangle(W/2, ROAD_CENTER, W, ROAD_BOTTOM - ROAD_TOP, env.roadColor);
-    this.add.rectangle(W/2, ROAD_TOP    - 10, W, 16, env.shoulderColor);
-    this.add.rectangle(W/2, ROAD_BOTTOM + 10, W, 16, env.shoulderColor);
+    this.add.rectangle(this.designW/2, ROAD_CENTER, this.designW, ROAD_BOTTOM - ROAD_TOP, env.roadColor);
+    this.add.rectangle(this.designW/2, ROAD_TOP    - 10, this.designW, 16, env.shoulderColor);
+    this.add.rectangle(this.designW/2, ROAD_BOTTOM + 10, this.designW, 16, env.shoulderColor);
 
     // Ambiente & Strada (docs/ART_BIBLE_AMBIENTE.md): profondità (parallasse far/near),
     // superficie (asfalto tileato + ciglio rumble), illuminazione (gradiente cielo,
     // luce di carreggiata, fari) e memoria (decal dinamici).
     this.environment = new Environment(
       this,
-      { W, H, roadTop: ROAD_TOP, roadBottom: ROAD_BOTTOM, roadCenter: ROAD_CENTER, scrollSpeed: SCROLL_SPEED },
+      { W: this.designW, H, roadTop: ROAD_TOP, roadBottom: ROAD_BOTTOM, roadCenter: ROAD_CENTER, scrollSpeed: SCROLL_SPEED },
       env, this.envIndex,
     );
 
     // Strisce di corsia ambientate: colore della linea d'ambiente, consumate, qualche dash "mancante"
-    const count = Math.ceil(W / STRIPE_GAP) + 3;
+    const count = Math.ceil(this.designW / STRIPE_GAP) + 3;
     for (let i = 0; i < count; i++) {
       const worn = (i % 6 === 4);
       const a = worn ? 0.06 : 0.20 + (i % 3) * 0.08;
@@ -1171,14 +1198,16 @@ export default class GameScene extends Phaser.Scene {
     }
 
     // Color grading: viraggio cromatico del mood (MULTIPLY su tutto il gameplay, sotto HUD/vignetta)
-    this.add.rectangle(W / 2, H / 2, W, H, env.grade)
+    // Color grading a tutto schermo: pinnato (scrollFactor 0) → dimensioni NATIVE del canvas,
+    // non lo spazio di design (gli oggetti scrollFactor 0 non subiscono lo zoom della camera).
+    this.add.rectangle(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, env.grade)
       .setBlendMode(Phaser.BlendModes.MULTIPLY)
       .setAlpha(env.gradeAlpha)
       .setScrollFactor(0)
       .setDepth(16);
 
     // Banner nome ambiente (scompare dopo 2.5s)
-    const envLabel = Ui.text(this, W / 2, ROAD_TOP - 28, env.name.toUpperCase(), {
+    const envLabel = Ui.text(this, this.designW / 2, ROAD_TOP - 28, env.name.toUpperCase(), {
       fontSize: '16px', color: UI.white, fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(18).setAlpha(0);
@@ -1195,6 +1224,7 @@ export default class GameScene extends Phaser.Scene {
 
   private buildVehicle() {
     this.vehicle = this.physics.add.sprite(VEHICLE_X, ROAD_CENTER, `vehicle_${this.vehicleKey}`);
+    this.vehicle.setScale(1 / OVERSAMPLE); // texture sovracampionata → torna a scala design
     (this.vehicle.body as Phaser.Physics.Arcade.Body).setCollideWorldBounds(false);
     (this.vehicle.body as Phaser.Physics.Arcade.Body).setSize(72, 22);
     this.vehicle.setDepth(10);
@@ -1234,8 +1264,8 @@ export default class GameScene extends Phaser.Scene {
   private buildHUD(missionNum: number) {
     const D = 20, BAR_W = 110, COMP_BAR_W = 120;
     const panel = this.add.graphics().setDepth(D);
-    panel.fillStyle(UI.black, 0.62); panel.fillRoundedRect(0,0,W,84,{ tl:0, tr:0, bl:16, br:16 });
-    panel.lineStyle(1,UI.strokeDim,0.7); panel.lineBetween(0,46,W,46);
+    panel.fillStyle(UI.black, 0.62); panel.fillRoundedRect(0,0,this.designW,84,{ tl:0, tr:0, bl:16, br:16 });
+    panel.lineStyle(1,UI.strokeDim,0.7); panel.lineBetween(0,46,this.designW,46);
 
     Ui.text(this, 8,8,'SALUTE',{fontSize:'11px',color:UI.redText}).setDepth(D+1);
     Ui.box(this, 8+BAR_W/2,34,BAR_W,10,{ fill:UI.barRed, radius:3 }).setDepth(D+1);
@@ -1256,7 +1286,7 @@ export default class GameScene extends Phaser.Scene {
     this.hudAttached = Ui.text(this, 700,6,'',{fontSize:'11px',color:'#ff8800'}).setDepth(D+1);
     this.hudWeapon   = Ui.text(this, 620,22,'',{fontSize:'10px',color:'#ffaa44'}).setDepth(D+1);
     this.hudCombo    = Ui.text(this, 470,6,'',{fontSize:'13px',fontStyle:'bold',color:UI.gold}).setDepth(D+1).setVisible(false);
-    this.hudDash     = Ui.text(this, W-10,22,'↯ SCATTO',{fontSize:'11px',fontStyle:'bold',color:UI.greenOk}).setOrigin(1,0).setDepth(D+1);
+    this.hudDash     = Ui.text(this, this.designW-10,22,'↯ SCATTO',{fontSize:'11px',fontStyle:'bold',color:UI.greenOk}).setOrigin(1,0).setDepth(D+1);
     // Selettore armi: una cifra-hotkey per ogni arma posseduta (la selezionata in oro)
     this.weaponSlots = [];
     let wsx = 620;
@@ -1281,7 +1311,7 @@ export default class GameScene extends Phaser.Scene {
     if (this.activeSurvivors.length > 0) {
       const names: Record<string,string> = { mechanic:'[M]', medic:'[+]', soldier:'[S]', explorer:'[E]' };
       const txt = this.activeSurvivors.map(s => names[s]??s).join(' ');
-      Ui.text(this, W-10,8,txt,{fontSize:'11px',color:'#cccc44'}).setOrigin(1,0).setDepth(D+1);
+      Ui.text(this, this.designW-10,8,txt,{fontSize:'11px',color:'#cccc44'}).setOrigin(1,0).setDepth(D+1);
     }
 
     const compKeys: ComponentKey[] = ['engine','wheels','tank','turret','armor'];
@@ -1294,9 +1324,9 @@ export default class GameScene extends Phaser.Scene {
       comp.fill = fill;
     });
 
-    Ui.text(this, W/2,H-6,'↑↓ Muovi · SPAZIO Spara · 1-5/Q Arma · SHIFT Scatto',{fontSize:'11px',color:UI.disabled}).setOrigin(0.5,1).setDepth(D);
+    Ui.text(this, this.designW/2,H-6,'↑↓ Muovi · SPAZIO Spara · 1-5/Q Arma · SHIFT Scatto',{fontSize:'11px',color:UI.disabled}).setOrigin(0.5,1).setDepth(D);
     Ui.text(this, 4,H-6,'0=Debug',{fontSize:'9px',color:'#2a3a2a'}).setOrigin(0,1).setDepth(D);
-    this.hudDebug = Ui.text(this, W-6,H-6,'',{fontSize:'10px',color:'#00ff88',fontStyle:'bold'}).setOrigin(1,1).setDepth(D+5);
+    this.hudDebug = Ui.text(this, this.designW-6,H-6,'',{fontSize:'10px',color:'#00ff88',fontStyle:'bold'}).setOrigin(1,1).setDepth(D+5);
   }
 
   private buildInput() {
@@ -1602,15 +1632,15 @@ export default class GameScene extends Phaser.Scene {
   private cleanOffScreen() {
     const clean = (g: Phaser.Physics.Arcade.Group, l: number, r: number) =>
       (g.getChildren() as Phaser.Physics.Arcade.Sprite[]).forEach(s => { if (s.active && (s.x<l||s.x>r)) s.destroy(); });
-    clean(this.zombies,    -100, W+100);
-    clean(this.fuelCans,   -80,  W+80);
-    clean(this.toxicClouds,-80,  W+80);
-    clean(this.rockets,         -20,  W+60);
-    clean(this.bossProjectiles, -80,  W+80);
+    clean(this.zombies,    -100, this.designW+100);
+    clean(this.fuelCans,   -80,  this.designW+80);
+    clean(this.toxicClouds,-80,  this.designW+80);
+    clean(this.rockets,         -20,  this.designW+60);
+    clean(this.bossProjectiles, -80,  this.designW+80);
     // Bullets respect per-projectile maxX (lanciafiamme ha range breve)
     (this.bullets.getChildren() as Phaser.Physics.Arcade.Sprite[]).forEach(s => {
       if (!s.active) return;
-      const maxX = (s.getData('maxX') as number) ?? W + 40;
+      const maxX = (s.getData('maxX') as number) ?? this.designW + 40;
       if (s.x < -20 || s.x > maxX) s.destroy();
     });
   }
@@ -1648,7 +1678,7 @@ export default class GameScene extends Phaser.Scene {
 
       // Respiro / gonfiore (squash-stretch del volume)
       if (m.wob > 0) {
-        const base = ZOMBIE_STATS[type].scale;
+        const base = ZOMBIE_STATS[type].scale / OVERSAMPLE;
         const w = Math.sin(t * m.spd * 0.7 + ph) * m.wob;
         z.setScale(base * (1 + w), base * (1 - w));
       }
@@ -1709,8 +1739,8 @@ export default class GameScene extends Phaser.Scene {
       const fromTop = Math.random() < 0.5;
       const startY  = fromTop ? ROAD_TOP - 30 : ROAD_BOTTOM + 30;
       const targetY = Phaser.Math.Between(ROAD_TOP + 22, ROAD_BOTTOM - 22);
-      const z = this.zombies.create(W + 30, startY, 'zombie_jumper') as Phaser.Physics.Arcade.Sprite;
-      z.setScale(stats.scale).setData('hp', stats.hp).setData('type', 'jumper');
+      const z = this.zombies.create(this.designW + 30, startY, 'zombie_jumper') as Phaser.Physics.Arcade.Sprite;
+      z.setScale(stats.scale / OVERSAMPLE).setData('hp', stats.hp).setData('type', 'jumper');
       z.setData('rockPhase', Math.random() * 6.28).setData('entering', true);
       z.setVelocityX(-(stats.speed + SCROLL_SPEED)).setDepth(9).setBodySize(20,28);
       z.play('walk_jumper'); z.anims.setProgress(Math.random());
@@ -1723,8 +1753,8 @@ export default class GameScene extends Phaser.Scene {
     const count = type === 'common' && Math.random() < 0.25 ? Phaser.Math.Between(2,3) : 1;
     for (let i = 0; i < count; i++) {
       const y = Phaser.Math.Clamp(baseY + i*28*(Math.random()>0.5?1:-1), ROAD_TOP+22, ROAD_BOTTOM-22);
-      const z = this.zombies.create(W+30+i*20, y, `zombie_${type}`) as Phaser.Physics.Arcade.Sprite;
-      z.setScale(stats.scale).setData('hp', stats.hp).setData('type', type);
+      const z = this.zombies.create(this.designW+30+i*20, y, `zombie_${type}`) as Phaser.Physics.Arcade.Sprite;
+      z.setScale(stats.scale / OVERSAMPLE).setData('hp', stats.hp).setData('type', type);
       z.setData('rockPhase', Math.random() * 6.28);
       z.setVelocityX(-(stats.speed + SCROLL_SPEED)).setDepth(9).setBodySize(20,28);
       z.play(`walk_${type}`); z.anims.setProgress(Math.random());
@@ -1732,12 +1762,12 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private spawnGiant() {
-    const z = this.zombies.create(W + 60, ROAD_CENTER, 'zombie_giant') as Phaser.Physics.Arcade.Sprite;
-    z.setScale(ZOMBIE_STATS.giant.scale).setData('hp', ZOMBIE_STATS.giant.hp).setData('type', 'giant');
+    const z = this.zombies.create(this.designW + 60, ROAD_CENTER, 'zombie_giant') as Phaser.Physics.Arcade.Sprite;
+    z.setScale(ZOMBIE_STATS.giant.scale / OVERSAMPLE).setData('hp', ZOMBIE_STATS.giant.hp).setData('type', 'giant');
     z.setData('rockPhase', Math.random() * 6.28);
     z.setVelocityX(-(ZOMBIE_STATS.giant.speed + SCROLL_SPEED)).setDepth(9).setBodySize(38,50);
     z.play('walk_giant'); z.anims.setProgress(Math.random());
-    const warn = Ui.text(this, W - 60, H/2, '⚠ GIGANTE!', {
+    const warn = Ui.text(this, this.designW - 60, H/2, '⚠ GIGANTE!', {
       fontSize: '22px', color: '#ff4400', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(25);
@@ -1746,7 +1776,7 @@ export default class GameScene extends Phaser.Scene {
 
   private spawnFuelCan() {
     if (!this.alive || this.missionDone) return;
-    const f = this.fuelCans.create(W+20, Phaser.Math.Between(ROAD_TOP+22, ROAD_BOTTOM-22), 'fuel_can') as Phaser.Physics.Arcade.Sprite;
+    const f = this.fuelCans.create(this.designW+20, Phaser.Math.Between(ROAD_TOP+22, ROAD_BOTTOM-22), 'fuel_can') as Phaser.Physics.Arcade.Sprite;
     f.setVelocityX(-SCROLL_SPEED).setDepth(6);
   }
 
@@ -1756,11 +1786,11 @@ export default class GameScene extends Phaser.Scene {
     switch (this.currentWeapon) {
       case 'mg':
       case 'rifle':
-        this.spawnBullet(vx, vy, w.damage, w.speed, w.color, W + 40);
+        this.spawnBullet(vx, vy, w.damage, w.speed, w.color, this.designW + 40);
         break;
       case 'double_mg':
-        this.spawnBullet(vx, vy - 8, w.damage, w.speed, w.color, W + 40);
-        this.spawnBullet(vx, vy + 8, w.damage, w.speed, w.color, W + 40);
+        this.spawnBullet(vx, vy - 8, w.damage, w.speed, w.color, this.designW + 40);
+        this.spawnBullet(vx, vy + 8, w.damage, w.speed, w.color, this.designW + 40);
         break;
       case 'flamethrower':
         this.spawnBullet(vx, vy + Phaser.Math.Between(-6, 6), 1, w.speed, w.color, vx - 50 + w.range);
@@ -1787,7 +1817,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private fireAutoShot(y: number) {
-    this.spawnBullet(this.vehicle.x + 50, y, 1, BULLET_SPEED, 0x00ffff, W + 40);
+    this.spawnBullet(this.vehicle.x + 50, y, 1, BULLET_SPEED, 0x00ffff, this.designW + 40);
     this.sfx?.playShot();
   }
 
@@ -1991,9 +2021,9 @@ export default class GameScene extends Phaser.Scene {
     zombie.destroy();
 
     const sprite = this.add.sprite(this.vehicle.x+slot.dx, this.vehicle.y+slot.dy, `zombie_${type}`);
-    sprite.setScale(0.68).setDepth(11).setTint(type==='jumper' ? 0xffcc00 : 0xff8800);
+    sprite.setScale(0.68 / OVERSAMPLE).setDepth(11).setTint(type==='jumper' ? 0xffcc00 : 0xff8800);
     sprite.play(`walk_${type}`); sprite.anims.setProgress(Math.random());
-    this.tweens.add({ targets: sprite, scaleX: 0.84, scaleY: 0.84, yoyo: true, duration: 110, repeat: 1 });
+    this.tweens.add({ targets: sprite, scaleX: 0.84 / OVERSAMPLE, scaleY: 0.84 / OVERSAMPLE, yoyo: true, duration: 110, repeat: 1 });
     this.attachedZombies.push({ sprite, slotIndex, comp: slot.comp, hp, timer: ATTACH_DAMAGE_INTERVAL });
     this.cameras.main.shake(70, 0.005);
     this.sfx?.playZombieAttach();
@@ -2075,7 +2105,7 @@ export default class GameScene extends Phaser.Scene {
     this.zombies.setVelocityX(0);
     this.fuelCans.setVelocityX(0);
 
-    const cx = W/2, cy = H/2;
+    const cx = this.designW/2, cy = H/2;
     Ui.box(this, cx,cy,500,260,{ fill:UI.black, fillAlpha:0.9, radius:16, stroke:UI.greenSig, strokeAlpha:0.45 }).setDepth(30);
     Ui.text(this, cx,cy-95,'MISSIONE COMPLETATA!',{
       fontSize:'32px', color:UI.green, fontStyle:'bold',
@@ -2130,7 +2160,7 @@ export default class GameScene extends Phaser.Scene {
     this.fuelCans.setVelocityX(0);
 
     this.time.delayedCall(700, () => {
-      const cx = W/2, cy = H/2;
+      const cx = this.designW/2, cy = H/2;
       Ui.box(this, cx,cy,440,260,{ fill:UI.black, fillAlpha:0.88, radius:16, stroke:UI.redCrit, strokeAlpha:0.55 }).setDepth(30);
       Ui.text(this, cx,cy-80,'GAME OVER',{
         fontSize:'50px', color:'#ff3333', fontStyle:'bold',
@@ -2157,7 +2187,7 @@ export default class GameScene extends Phaser.Scene {
     this.bossMaxHp = cfg.hp;
 
     // Alert
-    const warn = Ui.text(this, W / 2, H / 2, `⚠  ${cfg.name.toUpperCase()}  ⚠`, {
+    const warn = Ui.text(this, this.designW / 2, H / 2, `⚠  ${cfg.name.toUpperCase()}  ⚠`, {
       fontSize: '28px', color: '#ff4400', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 5,
     }).setOrigin(0.5).setDepth(28).setAlpha(0);
@@ -2171,8 +2201,8 @@ export default class GameScene extends Phaser.Scene {
     this.sfx?.playExplosion();
 
     // Sprite boss (riusa zombie_giant scalato e tintato)
-    const boss = this.bossGroup.create(W + 90, ROAD_CENTER, 'zombie_giant') as Phaser.Physics.Arcade.Sprite;
-    boss.setScale(cfg.scaleX, cfg.scaleY).setTint(cfg.tint).setDepth(12);
+    const boss = this.bossGroup.create(this.designW + 90, ROAD_CENTER, 'zombie_giant') as Phaser.Physics.Arcade.Sprite;
+    boss.setScale(cfg.scaleX / OVERSAMPLE, cfg.scaleY / OVERSAMPLE).setTint(cfg.tint).setDepth(12);
     boss.play('walk_giant');
     boss.setData('bossType', bossType);
     boss.setData('hp', cfg.hp);
@@ -2215,8 +2245,8 @@ export default class GameScene extends Phaser.Scene {
         boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER + Math.sin(this.time.now / 800) * 90, 0.04);
         if (t1 <= 0) {
           boss.setData('timer1', 8000);
-          this.spawnZombieAt('common', W - 80, boss.y - 44);
-          this.spawnZombieAt('common', W - 80, boss.y + 44);
+          this.spawnZombieAt('common', this.designW - 80, boss.y - 44);
+          this.spawnZombieAt('common', this.designW - 80, boss.y + 44);
         }
         break;
 
@@ -2263,7 +2293,7 @@ export default class GameScene extends Phaser.Scene {
     const z = this.zombies.create(
       x, Phaser.Math.Clamp(y, ROAD_TOP + 22, ROAD_BOTTOM - 22), `zombie_${type}`
     ) as Phaser.Physics.Arcade.Sprite;
-    z.setScale(stats.scale).setData('hp', stats.hp).setData('type', type);
+    z.setScale(stats.scale / OVERSAMPLE).setData('hp', stats.hp).setData('type', type);
     z.setData('rockPhase', Math.random() * 6.28);
     z.setVelocityX(-(stats.speed + SCROLL_SPEED)).setDepth(9);
     (z.body as Phaser.Physics.Arcade.Body).setSize(20, 28);
@@ -2355,7 +2385,7 @@ export default class GameScene extends Phaser.Scene {
     this.registry.set('money', (this.registry.get('money') ?? 0) + earned);
     this.hideBossHUD();
 
-    const vt = Ui.text(this, W / 2, H / 2 - 10, `BOSS SCONFITTO!  +${earned} monete`, {
+    const vt = Ui.text(this, this.designW / 2, H / 2 - 10, `BOSS SCONFITTO!  +${earned} monete`, {
       fontSize: '24px', color: '#ffee00', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 5,
     }).setOrigin(0.5).setDepth(28);
@@ -2366,7 +2396,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private showBossHUD(name: string) {
-    const cx = W / 2, barW = 440, y = 96;
+    const cx = this.designW / 2, barW = 440, y = 96;
     const bg    = this.add.rectangle(cx, y, barW + 8, 20, UI.black, 0.85).setDepth(22).setAlpha(0);
     const fill  = this.add.rectangle(cx - barW / 2, y, barW, 14, UI.redCrit).setOrigin(0, 0.5).setDepth(23).setAlpha(0);
     const label = Ui.text(this, cx, y - 14, name.toUpperCase(), {

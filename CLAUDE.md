@@ -32,6 +32,7 @@ Lo script confronta i numeri del codice con quelli scritti nell'art bible e **fa
 - **Stack:** Phaser 3.90 + TypeScript + Vite. UI in **italiano**.
 - **Grafica:** **100% procedurale** (Graphics API → `generateTexture`). **Nessun PNG / nessun asset esterno.**
 - **Audio:** procedurale (Web Audio API) in `src/SoundManager.ts`.
+- **Risoluzione & scaling:** il gioco è **simulato in spazio di design 800×600** e la camera di ogni scena va in **zoom** per riempire la risoluzione nativa scelta dal giocatore (menu Impostazioni → `Config.RESOLUTIONS`, preset 4:3 e 16:9, + schermo intero). Vedi **Risoluzione & scaling** sotto.
 
 ## Comandi
 
@@ -56,6 +57,17 @@ Lo script confronta i numeri del codice con quelli scritti nell'art bible e **fa
 | Personalità di movimento + VFX | `ZOMBIE_MOTION`, `updateZombieMotion()`, `emitZombieFx()` |
 | Boss di fine regione | `BOSS_CONFIG`, `spawnBoss()`, `updateBoss()` |
 | Juice / game-feel (hit-stop, vignetta, bloom, muzzle-flash, transizioni) | `src/Juice.ts` |
+| Risoluzione, preset, zoom camera, sovracampionamento | `src/Config.ts` |
+
+## Risoluzione & scaling
+
+Tutto vive in uno **spazio di design alto 600** (`DESIGN_H`); larghezza di riferimento `DESIGN_W=800` (4:3). A inizio `create()` ogni scena chiama `setupCamera(this)` che mette la camera in **zoom S = altezzaCanvas / 600** e la centra, così lo spazio di design riempie la risoluzione nativa.
+
+- **Larghezza `designW`** = `larghezzaCanvas / S` (= 800 in 4:3, **maggiore in 16:9** → si vede **più strada**: il veicolo resta a sinistra, gli spawn arrivano dal bordo destro). Usa `designW` per centri/ancoraggi orizzontali; **mai** la vecchia costante 800.
+- **Geometria del mondo** (`H`, `ROAD_TOP/CENTER/BOTTOM`, velocità, timer) **invariata** in spazio design → gameplay e bilanciamento identici a ogni risoluzione.
+- **Overlay a tutto schermo** (vignetta/grana/scanline/aberrazione/grading/flash) usano `setScrollFactor(0)`: **NON** subiscono lo zoom → vanno dimensionati in **pixel nativi** (`scene.scale.width/height`), non in `designW`.
+- **Nitidezza nativa:** le texture più osservate (zombie, veicolo) sono generate a **`OVERSAMPLE`× (=2)** via la factory `OS_G` e gli sprite tornano a scala design con `setScale(x / OVERSAMPLE)`; il testo è nitido grazie a `Ui.text` → `setResolution(OVERSAMPLE)`. Le **hitbox** sono esplicite (`setBodySize`/`setSize` in unità design) → invariate dal sovracampionamento. L'ambiente (strada/parallasse) resta a risoluzione design (morbidezza trascurabile su superficie scura).
+- I numeri di design nelle chiamate `generateTexture`/`AF` restano invariati (il fattore OVERSAMPLE è applicato internamente) → il validatore art bible **non** cambia.
 
 ## Convenzioni
 

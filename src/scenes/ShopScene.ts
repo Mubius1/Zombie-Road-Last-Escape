@@ -4,8 +4,9 @@ import GameScene from './GameScene';
 import Juice from '../Juice';
 import Settings from '../Settings';
 import Ui, { UI, MENU_VIGNETTE } from '../Ui';
+import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 
-const W = 800, H = 600;
+const H = 600;
 
 interface ShopItem {
   key: string; label: string; cost: number; desc: string; oneTime: boolean;
@@ -35,6 +36,10 @@ export default class ShopScene extends Phaser.Scene {
   /** true quando la scena si ri-disegna dopo un acquisto (niente nuova dissolvenza). */
   private replay = false;
 
+  /** Larghezza di design e offset per centrare il blocco-contenuti (800px) in 16:9. */
+  private designW = DESIGN_W;
+  private ox = 0;
+
   constructor() { super({ key: 'ShopScene' }); }
 
   init(data: { replay?: boolean }) {
@@ -42,6 +47,9 @@ export default class ShopScene extends Phaser.Scene {
   }
 
   create() {
+    this.designW = setupCamera(this).designW;
+    this.ox = (this.designW - DESIGN_W) / 2;
+
     this.money          = this.registry.get('money')         ?? 0;
     this.upgrades       = { ...(this.registry.get('upgrades') ?? {}) };
     this.currentVehicle = this.registry.get('vehicle')       ?? 'civilian_car';
@@ -85,18 +93,18 @@ export default class ShopScene extends Phaser.Scene {
     // profondità e tenere leggibili pannelli e card. Scena-locale, non un token di chrome.
     const bg = this.add.graphics();
     bg.fillGradientStyle(0x1a1a26, 0x1a1a26, 0x101018, 0x12121c, 1, 1, 1, 1);
-    bg.fillRect(0, 0, W, H);
-    this.add.rectangle(W/2, 32, W, 64, UI.panelAlt);
+    bg.fillRect(0, 0, this.designW, H);
+    this.add.rectangle(this.designW/2, 32, this.designW, 64, UI.panelAlt);
 
-    Ui.text(this, W/2, 8, `GARAGE  —  Fine Missione ${this.missionNum - 1}`, {
+    Ui.text(this, this.designW/2, 8, `GARAGE  —  Fine Missione ${this.missionNum - 1}`, {
       fontSize: '20px', color: UI.greenSoft, fontStyle: 'bold',
     }).setOrigin(0.5, 0);
 
-    this.moneyText = Ui.text(this, W - 12, 8, `★ ${this.money} monete`, {
+    this.moneyText = Ui.text(this, this.designW - 12, 8, `★ ${this.money} monete`, {
       fontSize: '18px', color: UI.gold,
     }).setOrigin(1, 0);
 
-    Ui.text(this, W/2, 46, `Missione successiva: ${this.missionNum}`, {
+    Ui.text(this, this.designW/2, 46, `Missione successiva: ${this.missionNum}`, {
       fontSize: '12px', color: UI.faint,
     }).setOrigin(0.5, 0);
 
@@ -110,13 +118,13 @@ export default class ShopScene extends Phaser.Scene {
   }
 
   private drawDivider(y: number) {
-    this.add.rectangle(W/2, y, W, 1, UI.stroke);
+    this.add.rectangle(this.designW/2, y, this.designW, 1, UI.stroke);
   }
 
   // ─── Upgrades panel (left) ───────────────────────────────────────────────────
 
   private drawUpgradesPanel() {
-    const px = 14, py = 76;
+    const px = 14 + this.ox, py = 76;
     Ui.text(this, px, py, 'POTENZIAMENTI', { fontSize: '13px', color: UI.blueInfo, fontStyle: 'bold' });
 
     SHOP_ITEMS.forEach((item, i) => {
@@ -145,7 +153,7 @@ export default class ShopScene extends Phaser.Scene {
   }
 
   private drawWeaponsPanel() {
-    const px = 14, py = 322;
+    const px = 14 + this.ox, py = 322;
     this.drawDivider(py - 4);
     Ui.text(this, px, py, 'ARMI', { fontSize: '13px', color: '#ff9944', fontStyle: 'bold' });
 
@@ -193,7 +201,7 @@ export default class ShopScene extends Phaser.Scene {
   // ─── Survivors panel (right) ─────────────────────────────────────────────────
 
   private drawSurvivorsPanel() {
-    const px = 490, py = 76;
+    const px = 490 + this.ox, py = 76;
     Ui.text(this, px, py, 'SOPRAVVISSUTI', { fontSize: '13px', color: UI.goldDim, fontStyle: 'bold' });
 
     // Recruited list
@@ -233,11 +241,11 @@ export default class ShopScene extends Phaser.Scene {
 
   private drawVehiclesPanel() {
     const py = 428;
-    Ui.text(this, 14, py, 'VEICOLI', { fontSize: '13px', color: UI.blueBright, fontStyle: 'bold' });
+    Ui.text(this, 14 + this.ox, py, 'VEICOLI', { fontSize: '13px', color: UI.blueBright, fontStyle: 'bold' });
 
     VEHICLE_KEYS.forEach((key, i) => {
       const v = VEHICLES[key];
-      const vx = 14 + i * 112;
+      const vx = 14 + this.ox + i * 112;
       const owned    = this.ownedVehicles.includes(key);
       const selected = this.currentVehicle === key;
       const canBuy   = !owned && this.money >= v.price;
@@ -249,7 +257,7 @@ export default class ShopScene extends Phaser.Scene {
       }).setInteractive(owned || canBuy);
 
       // Anteprima reale: lo sprite del veicolo (sbiadito se non posseduto)
-      this.add.image(vx + 50, py + 30, `vehicle_${key}`).setScale(0.7).setAlpha(owned ? 1 : 0.4);
+      this.add.image(vx + 50, py + 30, `vehicle_${key}`).setScale(0.7 / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
       Ui.text(this, vx + 50, py + 50, v.name, {
         fontSize: '8px', color: owned ? UI.text : '#444444', wordWrap: { width: 100 }, align: 'center',
       }).setOrigin(0.5, 0);
@@ -279,7 +287,7 @@ export default class ShopScene extends Phaser.Scene {
   // ─── Continue button ─────────────────────────────────────────────────────────
 
   private drawContinueButton() {
-    Ui.button(this, W/2, H - 28, 240, 44, 'CONTINUA  ▶', {
+    Ui.button(this, this.designW/2, H - 28, 240, 44, 'CONTINUA  ▶', {
       fill: 0x1a3a1a, hover: 0x224422, color: UI.green,
       onClick: () => this.continueGame(),
     });

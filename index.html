@@ -3,7 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Phaser Game Starter</title>
+    <title>Zombie Road: Last Escape</title>
+    <style>
+      /* Sfondo nero per le bande di letterbox; il canvas è centrato e adattato
+         dallo Scale Manager (FIT + CENTER_BOTH) entro l'intera viewport. */
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      #game-container { width: 100vw; height: 100vh; }
+      #game-container canvas { display: block; }
+    </style>
   </head>
   <body>
     <div id="game-container"></div>

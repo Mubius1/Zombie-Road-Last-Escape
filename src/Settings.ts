@@ -10,10 +10,14 @@ export interface SettingsData {
   volume: number;
   /** Overlay filmico (vignetta + grana + scanline + aberrazione cromatica). */
   screenFx: boolean;
+  /** Indice della risoluzione scelta nei preset di Config.RESOLUTIONS (0 = baseline 800×600). */
+  resolution: number;
+  /** Preferenza schermo intero (l'attivazione effettiva richiede un click — vincolo browser). */
+  fullscreen: boolean;
 }
 
 const STORAGE_KEY = 'zombieRoad.settings.v1';
-const DEFAULTS: SettingsData = { volume: 1, screenFx: true };
+const DEFAULTS: SettingsData = { volume: 1, screenFx: true, resolution: 0, fullscreen: false };
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
@@ -23,8 +27,10 @@ function loadSettings(): SettingsData {
     if (!raw) return { ...DEFAULTS };
     const p = JSON.parse(raw) as Partial<SettingsData>;
     return {
-      volume:   typeof p.volume === 'number'    ? clamp01(p.volume) : DEFAULTS.volume,
-      screenFx: typeof p.screenFx === 'boolean' ? p.screenFx        : DEFAULTS.screenFx,
+      volume:     typeof p.volume === 'number'     ? clamp01(p.volume)         : DEFAULTS.volume,
+      screenFx:   typeof p.screenFx === 'boolean'  ? p.screenFx                : DEFAULTS.screenFx,
+      resolution: typeof p.resolution === 'number' ? Math.max(0, p.resolution | 0) : DEFAULTS.resolution,
+      fullscreen: typeof p.fullscreen === 'boolean' ? p.fullscreen             : DEFAULTS.fullscreen,
     };
   } catch {
     return { ...DEFAULTS };
@@ -39,6 +45,12 @@ export default class Settings {
 
   static get screenFx(): boolean { return this.data.screenFx; }
   static set screenFx(v: boolean) { this.data.screenFx = v; this.save(); }
+
+  static get resolution(): number { return this.data.resolution; }
+  static set resolution(v: number) { this.data.resolution = Math.max(0, v | 0); this.save(); }
+
+  static get fullscreen(): boolean { return this.data.fullscreen; }
+  static set fullscreen(v: boolean) { this.data.fullscreen = v; this.save(); }
 
   private static save() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data)); } catch { /* storage non disponibile */ }

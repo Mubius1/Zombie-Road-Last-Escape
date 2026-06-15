@@ -43,6 +43,8 @@ export default class Juice {
      * menu dove i contenuti vivono ai bordi e non devono essere mangiati dall'ombra.
      */
     static addOverlay(scene, depth = 18, vignette = 1) {
+        // Dimensioni NATIVE del canvas: questi overlay sono pinnati allo schermo (scrollFactor 0)
+        // e NON subiscono lo zoom della camera, quindi vanno dimensionati al canvas reale.
         const W = scene.scale.width, H = scene.scale.height;
         const ex = Math.round(W * 0.26), ey = Math.round(H * 0.26);
         const a = 0.5 * vignette, b = 0.55 * vignette;
@@ -80,6 +82,7 @@ export default class Juice {
     // ─── Bagliori / flash (post-processing finto) ─────────────────────────────
     /** Lampo a schermo intero (impatti grossi: esplosioni, morte boss). */
     static flash(scene, color = 0xffffff, alpha = 0.4, ms = 120) {
+        // Native: il lampo è pinnato allo schermo (scrollFactor 0), fuori dallo zoom della camera.
         const W = scene.scale.width, H = scene.scale.height;
         const r = scene.add.rectangle(W / 2, H / 2, W, H, color, alpha).setScrollFactor(0).setDepth(40);
         scene.tweens.add({ targets: r, alpha: 0, duration: ms, onComplete: () => r.destroy() });
