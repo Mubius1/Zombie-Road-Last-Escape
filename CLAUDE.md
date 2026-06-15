@@ -4,9 +4,14 @@
 
 ## ⛔ Regola n.1 (prioritaria)
 
-**Prima di scrivere codice, consulta [`docs/ART_BIBLE_ZOMBIES.md`](docs/ART_BIBLE_ZOMBIES.md) per verificare i vincoli di stile e i parametri di movimento.**
+**Prima di scrivere codice, consulta l'art bible pertinente per verificare i vincoli di stile e i parametri:**
 
-Vale per qualsiasi modifica a nemici, grafica procedurale, animazioni o effetti. L'art bible è la **fonte di verità** estetica e di game-feel: non improvvisare palette, pose o numeri di movimento — segui (o aggiorna esplicitamente) le sue schede.
+- [`docs/ART_BIBLE_ZOMBIES.md`](docs/ART_BIBLE_ZOMBIES.md) — nemici/boss + **Standard di Produzione AAA** (vale per tutto il titolo).
+- [`docs/ART_BIBLE_AMBIENTE.md`](docs/ART_BIBLE_AMBIENTE.md) — strada, sfondo a strati, illuminazione del mondo.
+- [`docs/ART_BIBLE_OGGETTI.md`](docs/ART_BIBLE_OGGETTI.md) — veicoli, armi/proiettili, pickup, componenti, sopravvissuti.
+- [`docs/ART_BIBLE_INTERFACCE.md`](docs/ART_BIBLE_INTERFACCE.md) — UI/HUD: titolo, HUD di gioco, negozio, impostazioni/pausa, overlay di esito, debug.
+
+Vale per qualsiasi modifica a nemici, veicoli, armi, oggetti, **interfacce/HUD**, grafica procedurale, animazioni o effetti. Le art bible sono la **fonte di verità** estetica e di game-feel: non improvvisare palette, pose o numeri — segui (o aggiorna esplicitamente) le loro schede.
 
 ## ⚠️ Regola n.2 (anti-deriva)
 
@@ -50,6 +55,7 @@ Lo script confronta i numeri del codice con quelli scritti nell'art bible e **fa
 | Statistiche nemici | `ZOMBIE_STATS` |
 | Personalità di movimento + VFX | `ZOMBIE_MOTION`, `updateZombieMotion()`, `emitZombieFx()` |
 | Boss di fine regione | `BOSS_CONFIG`, `spawnBoss()`, `updateBoss()` |
+| Juice / game-feel (hit-stop, vignetta, bloom, muzzle-flash, transizioni) | `src/Juice.ts` |
 
 ## Convenzioni
 

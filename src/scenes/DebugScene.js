@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import GameScene, { BOSS_CONFIG, BOSS_ORDER } from './GameScene';
 import { VEHICLES, VEHICLE_KEYS, WEAPONS, WEAPON_KEYS, SURVIVORS } from '../GameData';
+import Juice from '../Juice';
+import Ui, { UI } from '../Ui';
 const W = 800, H = 600;
 const ZOMBIE_INFO = [
     { key: 'zombie_common', label: 'Comune' },
@@ -23,12 +25,12 @@ export default class DebugScene extends Phaser.Scene {
         // Genera TUTTE le texture (tutti i veicoli + entità)
         GameScene.buildEntityTextures(this);
         VEHICLE_KEYS.forEach(k => GameScene.buildVehicleTexture(this, k));
-        this.add.rectangle(W / 2, H / 2, W, H, 0x0a0a12);
-        this.add.text(W / 2, 6, 'MODALITÀ DEBUG — Galleria Modelli & Test', {
-            fontSize: '16px', color: '#66ddff', fontStyle: 'bold',
+        this.add.rectangle(W / 2, H / 2, W, H, UI.bgDeep);
+        Ui.text(this, W / 2, 6, 'MODALITÀ DEBUG — Galleria Modelli & Test', {
+            fontSize: '16px', color: UI.cyanDebug, fontStyle: 'bold',
         }).setOrigin(0.5, 0);
-        this.add.text(W / 2, 26, 'Clicca un veicolo o un\'arma per provarlo · pulsanti in basso per i test', {
-            fontSize: '10px', color: '#556677',
+        Ui.text(this, W / 2, 26, 'Clicca un veicolo o un\'arma per provarlo · pulsanti in basso per i test', {
+            fontSize: '10px', color: UI.faint,
         }).setOrigin(0.5, 0);
         this.drawVehicles(46);
         this.drawZombies(148);
@@ -36,10 +38,11 @@ export default class DebugScene extends Phaser.Scene {
         this.drawObjects(338);
         this.drawWeapons(404);
         this.drawButtons(470);
+        Juice.fadeIn(this, 250);
     }
     // ─── Helpers ─────────────────────────────────────────────────────────────────
-    sectionTitle(x, y, text, color = '#88aaff') {
-        this.add.text(x, y, text, { fontSize: '12px', color, fontStyle: 'bold' });
+    sectionTitle(x, y, text, color = UI.blueBright) {
+        Ui.text(this, x, y, text, { fontSize: '12px', color, fontStyle: 'bold' });
     }
     cell(cx, cy, w, h, interactive = false) {
         const r = this.add.rectangle(cx, cy, w, h, 0x33343c).setStrokeStyle(1, 0x4a4a55);
@@ -52,31 +55,31 @@ export default class DebugScene extends Phaser.Scene {
     }
     // ─── Sections ────────────────────────────────────────────────────────────────
     drawVehicles(y) {
-        this.sectionTitle(12, y, 'VEICOLI  (clicca = prova)', '#88bbff');
+        this.sectionTitle(12, y, 'VEICOLI  (clicca = prova)', UI.blueBright);
         const top = y + 20;
         VEHICLE_KEYS.forEach((key, i) => {
             const cx = 60 + i * 103;
             const cell = this.cell(cx, top + 22, 98, 48, true);
             cell.on('pointerdown', () => this.testVehicle(key));
             this.add.image(cx, top + 22, `vehicle_${key}`).setOrigin(0.5);
-            this.add.text(cx, top + 48, VEHICLES[key].name, {
+            Ui.text(this, cx, top + 48, VEHICLES[key].name, {
                 fontSize: '8px', color: '#bbbbcc', align: 'center', wordWrap: { width: 100 },
             }).setOrigin(0.5, 0);
         });
     }
     drawZombies(y) {
-        this.sectionTitle(12, y, 'ZOMBI', '#88ff88');
+        this.sectionTitle(12, y, 'ZOMBI', UI.greenSoft);
         const top = y + 18;
         ZOMBIE_INFO.forEach((z, i) => {
             const cx = 66 + i * 122;
             this.cell(cx, top + 30, 116, 60);
             const type = z.key.replace('zombie_', '');
             this.add.sprite(cx, top + 30, z.key).setOrigin(0.5).play(`walk_${type}`);
-            this.add.text(cx, top + 56, z.label, { fontSize: '10px', color: '#aaddaa' }).setOrigin(0.5, 0);
+            Ui.text(this, cx, top + 56, z.label, { fontSize: '10px', color: '#aaddaa' }).setOrigin(0.5, 0);
         });
     }
     drawBosses(y) {
-        this.sectionTitle(12, y, 'BOSS  (texture gigante con tinta/scala)', '#ff8888');
+        this.sectionTitle(12, y, 'BOSS  (texture gigante con tinta/scala)', UI.redText);
         const top = y + 18;
         BOSS_ORDER.forEach((bt, i) => {
             const cfg = BOSS_CONFIG[bt];
@@ -87,18 +90,18 @@ export default class DebugScene extends Phaser.Scene {
             this.add.sprite(cx, top + 30, 'zombie_giant')
                 .setOrigin(0.5).setScale(cfg.scaleX * shrink, cfg.scaleY * shrink).setTint(cfg.tint)
                 .play('walk_giant');
-            this.add.text(cx, top + 50, cfg.name, { fontSize: '9px', color: '#ffaaaa', fontStyle: 'bold' }).setOrigin(0.5, 0);
-            this.add.text(cx, top + 62, `HP ${cfg.hp} · ★${cfg.reward}`, { fontSize: '8px', color: '#886666' }).setOrigin(0.5, 0);
+            Ui.text(this, cx, top + 50, cfg.name, { fontSize: '9px', color: UI.redSoft, fontStyle: 'bold' }).setOrigin(0.5, 0);
+            Ui.text(this, cx, top + 62, `HP ${cfg.hp} · ★${cfg.reward}`, { fontSize: '8px', color: '#886666' }).setOrigin(0.5, 0);
         });
     }
     drawObjects(y) {
-        this.sectionTitle(12, y, 'PROIETTILI & OGGETTI', '#ffcc66');
+        this.sectionTitle(12, y, 'PROIETTILI & OGGETTI', UI.goldDim);
         const top = y + 16;
         OBJECT_INFO.forEach((o, i) => {
             const cx = 70 + i * 110;
             this.cell(cx, top + 22, 104, 44);
             this.add.image(cx, top + 22, o.key).setOrigin(0.5).setScale(o.scale);
-            this.add.text(cx, top + 40, o.label, { fontSize: '9px', color: '#ddcc99' }).setOrigin(0.5, 0);
+            Ui.text(this, cx, top + 40, o.label, { fontSize: '9px', color: '#ddcc99' }).setOrigin(0.5, 0);
         });
     }
     drawWeapons(y) {
@@ -110,13 +113,13 @@ export default class DebugScene extends Phaser.Scene {
             const cell = this.cell(cx, top + 18, 104, 34, true);
             cell.on('pointerdown', () => this.testWeapon(key));
             this.add.rectangle(cx, top + 10, 70, 8, w.color);
-            this.add.text(cx, top + 18, w.name, { fontSize: '9px', color: '#ffddaa' }).setOrigin(0.5, 0);
+            Ui.text(this, cx, top + 18, w.name, { fontSize: '9px', color: '#ffddaa' }).setOrigin(0.5, 0);
         });
     }
     drawButtons(y) {
         const mk = (x, w, label, color, cb) => {
             const b = this.add.rectangle(x, y, w, 30, color).setInteractive({ useHandCursor: true });
-            this.add.text(x, y, label, { fontSize: '11px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+            Ui.text(this, x, y, label, { fontSize: '11px', color: UI.white, fontStyle: 'bold' }).setOrigin(0.5);
             b.on('pointerover', () => b.setAlpha(0.8));
             b.on('pointerout', () => b.setAlpha(1));
             b.on('pointerdown', cb);
@@ -136,14 +139,14 @@ export default class DebugScene extends Phaser.Scene {
         const y2 = y + 42;
         const mk2 = (x, w, label, color, cb) => {
             const b = this.add.rectangle(x, y2, w, 32, color).setInteractive({ useHandCursor: true });
-            this.add.text(x, y2, label, { fontSize: '13px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+            Ui.text(this, x, y2, label, { fontSize: '13px', color: UI.white, fontStyle: 'bold' }).setOrigin(0.5);
             b.on('pointerover', () => b.setAlpha(0.8));
             b.on('pointerout', () => b.setAlpha(1));
             b.on('pointerdown', cb);
         };
         mk2(140, 220, '▶ NUOVA PARTITA (reset)', 0x1a4a1a, () => this.startFresh());
-        mk2(400, 150, '🛒 NEGOZIO', 0x2a2a5a, () => this.scene.start('ShopScene'));
-        mk2(620, 220, '↩ TORNA AL GIOCO', 0x3a3a3a, () => this.scene.start('GameScene'));
+        mk2(400, 150, '🛒 NEGOZIO', 0x2a2a5a, () => Juice.go(this, 'ShopScene'));
+        mk2(620, 220, '↩ TORNA AL GIOCO', 0x3a3a3a, () => Juice.go(this, 'GameScene'));
     }
     // ─── Actions ─────────────────────────────────────────────────────────────────
     testVehicle(key) {
@@ -152,7 +155,7 @@ export default class DebugScene extends Phaser.Scene {
             owned.push(key);
         this.registry.set('ownedVehicles', owned);
         this.registry.set('vehicle', key);
-        this.scene.start('GameScene');
+        Juice.go(this, 'GameScene');
     }
     testWeapon(key) {
         const owned = this.registry.get('ownedWeapons') ?? ['mg'];
@@ -160,7 +163,7 @@ export default class DebugScene extends Phaser.Scene {
             owned.push(key);
         this.registry.set('ownedWeapons', owned);
         this.registry.set('currentWeapon', key);
-        this.scene.start('GameScene');
+        Juice.go(this, 'GameScene');
     }
     startFresh() {
         this.registry.set('missionNumber', 1);
@@ -172,12 +175,12 @@ export default class DebugScene extends Phaser.Scene {
         this.registry.set('ownedWeapons', ['mg']);
         this.registry.set('currentWeapon', 'mg');
         this.registry.set('components', null);
-        this.scene.start('GameScene');
+        Juice.go(this, 'GameScene');
     }
     toast(msg, apply) {
         apply();
-        const t = this.add.text(W / 2, 560, msg, {
-            fontSize: '14px', color: '#88ff88', fontStyle: 'bold',
+        const t = Ui.text(this, W / 2, 560, msg, {
+            fontSize: '14px', color: UI.greenSoft, fontStyle: 'bold',
             backgroundColor: '#003300', padding: { x: 8, y: 4 },
         }).setOrigin(0.5).setDepth(50);
         this.tweens.add({ targets: t, alpha: 0, y: 540, duration: 1200, onComplete: () => t.destroy() });

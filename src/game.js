@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
+import MenuScene from './scenes/MenuScene';
 import GameScene from './scenes/GameScene';
 import ShopScene from './scenes/ShopScene';
 import DebugScene from './scenes/DebugScene';
+import SettingsScene from './scenes/SettingsScene';
 export default class Game {
     start() {
         const config = {
@@ -10,7 +12,7 @@ export default class Game {
             parent: 'game-container',
             width: 800,
             height: 600,
-            scene: [GameScene, ShopScene, DebugScene],
+            scene: [MenuScene, GameScene, ShopScene, DebugScene, SettingsScene],
             physics: {
                 default: 'arcade',
                 arcade: {

@@ -10,6 +10,71 @@ Questo documento è la **fonte di verità** per chiunque (umano o AI) tocchi i n
 
 ---
 
+## ⭐ Standard di Produzione AAA — *Game Feel & Coesione*
+
+> Questa sezione vale per **tutto il titolo**, non solo i nemici. Le sezioni numerate (§0–§11) sono la specifica dettagliata del roster zombi; questa è la **stella polare** che rende il prodotto "premium".
+
+### Tesi
+Un titolo sembra AAA **non** per quantità di dettaglio, ma per tre cose che possiamo ottenere anche in grafica 100% procedurale:
+**(1) coesione** — sembra disegnato da una sola mano · **(2) game feel** — ogni azione ha un peso tattile · **(3) rifinitura** — nessun bordo grezzo, nessun "prototipo".
+
+### I pilastri di produzione
+
+1. **Coesione visiva.** Una sola direzione artistica: la stessa **regola di luce** (alto-sinistra + bordo d'ombra) e la stessa logica di palette su veicolo, nemici, ambienti e UI. Nessun elemento "fuori stile". Gli accenti **emissivi** (occhi, bagliori, proiettili) sono l'unica fonte di colore saturo: tutto il resto è desaturato e malato.
+
+2. **Game feel / "juice".** *Ogni* evento di gameplay ha una risposta multisensoriale **sincronizzata**: VFX + suono + feedback schermo nello stesso frame. Niente azione "muta".
+   - **Hit-stop:** micro-pausa (time-scale → ~0.0 per 30–70 ms) sugli impatti forti (uccisione boss, colpo del gigante). Vende il peso più di qualsiasi texture.
+   - **Knockback & squash** su impatto; **flash di tinta** bianco (~80 ms) sul colpito.
+   - **Screen feedback** calibrato (vedi budget sotto), mai gratuito.
+
+3. **Illuminazione & atmosfera.** Strato sopra il gioco: **vignettatura** ai bordi, **gradiente cielo** per ambiente (già in `ENVIRONMENTS`), **luci dinamiche** che sparano (muzzle flash, esplosioni che illuminano la scena per 1–2 frame), grana/scanline tenue per coesione "filmica".
+
+4. **Color grading & mood.** Ogni ambiente ha la sua palette (già presente). Aggiungere un **overlay di grading** coerente (contrasto + viraggio) e limitare gli accenti emissivi: il malato-verde, l'arancio-fuoco e il rosso-sangue sono i nostri tre colori "firma".
+
+5. **Post-processing leggero (procedurale-friendly).** **Bloom finto** sugli emissivi (cerchio a bassa alpha dietro la sorgente), leggera aberrazione/grana CRT opzionale. Mai pesante: deve restare a 60 fps.
+
+6. **Leggibilità prima di tutto.** Gerarchia chiara: le **minacce** sono sempre leggibili sopra il rumore di fondo; l'**HUD** è pulito e non copre l'azione; il VFX non deve mai nascondere ciò che uccide il giocatore. Se "bello" e "leggibile" sono in conflitto, vince **leggibile**.
+
+7. **Rifinitura ("no rough edges").** Forme arrotondate (anti-alias), ombre a terra coerenti su tutto, **transizioni di scena** (fade/slide, mai cut secchi), schermate (titolo, game over, negozio) curate quanto il gioco. La differenza tra "indie prototipo" e "AAA" è qui.
+
+8. **Performance come feature.** 60 fps stabili sono parte dell'estetica. Budget rigidi su particelle e shake; VFX `fire-and-forget`; nessun emitter persistente per entità.
+
+### Budget di feedback schermo (camera & tempo)
+
+Calibrazione di `cameras.main.shake(durata, intensità)` per evento — la coerenza di questi numeri è ciò che fa sentire "il peso giusto":
+
+| Evento | Durata (ms) | Intensità | Hit-stop |
+|---|---|---|---|
+| Zombi aggrappato | 60 | 0.004 | — |
+| Impatto leggero (comune/corridore) | 80 | 0.005 | — |
+| Impatto pesante (corazzato) | 200 | 0.014 | — |
+| Esplosione razzo | 130 | 0.009 | ~30 ms |
+| Colpo del Gigante | 400 | 0.025 | ~50 ms |
+| Spawn boss | 300 | 0.016 | — |
+| Uccisione boss | 500 | 0.022 | ~70 ms |
+| Game over | 500 | 0.018 | — |
+
+> **Regola:** lo shake è una **spezia**. Se è sempre acceso non si sente più nulla; riservalo agli eventi che meritano peso.
+
+### Segnatura visiva di *questo* titolo
+Strada notturna desaturata · carne necrotica e metallo ossidato · **bagliori biologici malati** come unica luce viva · grana filmica leggera · impatti "succosi". Se uno screenshot non comunica *"horror su strada, sporco e tattile"*, è fuori firma.
+
+### Definition of Done — livello titolo
+- [ ] Ogni azione del giocatore ha **VFX + suono + feedback schermo** sincronizzati.
+- [ ] Palette coerente: accenti emissivi limitati ai 3 colori firma.
+- [ ] Vignettatura + grading attivi; nessuna zona "piatta" non illuminata.
+- [ ] Transizioni tra le scene (niente cut secchi).
+- [ ] HUD leggibile, non copre mai le minacce.
+- [ ] 60 fps con la massima densità di nemici prevista.
+- [ ] Nessun bordo a scaletta / ombra incoerente / schermata trascurata.
+
+> **Stato implementazione:** ✅ implementati in `src/Juice.ts` (sistema condiviso) — **hit-stop** (impatti forti: razzo 30 ms, gigante 50 ms, boss 70 ms), **vignettatura + grana** filmica, **luce dinamica** (`lightFlash` con alone morbido `fx_light` su esplosioni/razzi/morte boss + **muzzle-flash** illuminante allo sparo), **bloom finto**, **flash a schermo** sulla morte del boss e **transizioni di scena** in dissolvenza (Game ↔ Shop ↔ Debug + restart morte). **Color grading per-ambiente** (viraggio MULTIPLY) in `ENVIRONMENTS[].grade/gradeAlpha`, applicato a depth 16 (sopra il gameplay, sotto vignetta/HUD). Camera-shake e SFX procedurali erano già presenti.
+> **Ordine di profondità del compositing:** gameplay ≤15 · grading 16 · luci/FX additivi 17 · vignetta + frangia cromatica 18 · scanline CRT + grana 19 · HUD 20+ · flash globale 40.
+> **Ottiche CRT:** ✅ **scanline** (texture `fx_scanline`, righe scure ogni 3 px, alpha 0.06) e **aberrazione cromatica finta** (frangia rossa/ciano additiva ai bordi laterali, alpha 0.07) — sottili, per non intaccare la leggibilità.
+> **Roadmap residua:** nessuna pendente sul comparto visivo. Eventuali extra (curvatura CRT, sweep di luce) solo se richiesti.
+
+---
+
 ## 0. Mappa del codice (dove vive tutto)
 
 | Cosa | Dove |
@@ -21,6 +86,7 @@ Questo documento è la **fonte di verità** per chiunque (umano o AI) tocchi i n
 | Emettitori VFX | `emitZombieFx()`, `emitSparks()` |
 | Helper frame spritesheet | `AF(key, fw, fh, n)` |
 | Helper colore (schiarisci/scurisci) | `static mixColor(color, target, t)` |
+| Juice / game-feel (hit-stop, vignetta, bloom, transizioni) | `src/Juice.ts` |
 | Galleria di test | `src/scenes/DebugScene.ts` |
 
 **Chiavi texture:** `zombie_common`, `zombie_runner`, `zombie_armored`, `zombie_jumper`, `zombie_toxic`, `zombie_giant`.

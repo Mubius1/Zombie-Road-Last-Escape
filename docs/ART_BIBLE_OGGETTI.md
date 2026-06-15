@@ -1,0 +1,361 @@
+# 🚗 Art Bible — Oggetti & Equipaggiamento
+### Zombie Road: Last Escape · Direzione Artistica (qualità AAA)
+
+> **Stato:** v1.0 · vivo (living document)
+> **Ambito:** tutti gli **oggetti** non-nemico e non-ambiente: il **veicolo** del giocatore (7 varianti) e i suoi **componenti**, le **armi** e i loro **proiettili** (proiettile, razzo, fiamma, muzzle-flash), i **pickup** (tanica di carburante), gli **oggetti-effetto** (scintilla, nube tossica) e i token dei **sopravvissuti**.
+> **Riferimento di stile:** survival-horror top-down ad alta densità (es. *Dead Nation*) — **metallo sporco e tattile**, proiettili che "pesano", pickup leggibili a colpo d'occhio nel caos.
+> **Vincolo fondante:** grafica **100% procedurale** (Phaser 3 Graphics API → `generateTexture`). **Nessun PNG.**
+
+Questo documento è la **fonte di verità** per chiunque (umano o AI) tocchi un oggetto di gioco. Se modifichi un veicolo, un'arma o un pickup, aggiorna anche la sua scheda qui.
+
+> **Documenti gemelli:**
+> - [`ART_BIBLE_ZOMBIES.md`](./ART_BIBLE_ZOMBIES.md) — i nemici. Contiene la sezione **⭐ Standard di Produzione AAA**, che vale per **tutto il titolo**: è la **stella polare** condivisa. Qui **non la riscrivo** — la **applico agli oggetti**.
+> - [`ART_BIBLE_AMBIENTE.md`](./ART_BIBLE_AMBIENTE.md) — la strada e lo sfondo.
+>
+> I tre documenti coprono i tre "personaggi" della scena: **nemici** · **mondo** · **oggetti del giocatore**. Stessa mano, stessa luce, stessa palette firma.
+
+---
+
+## ⭐ Come gli oggetti servono lo Standard AAA
+
+I tre pilastri del titolo (coesione · game feel · rifinitura) tradotti sugli oggetti:
+
+- **Coesione.** Veicoli, armi e pickup usano la **stessa regola di luce** dei nemici e della strada: **alto-sinistra schiarisce, basso-destra in ombra**, più un'**ombra a terra** coerente (ellisse scura). Lo stesso **kit metallo** (acciaio desaturato) lega visivamente la torretta del veicolo, la testata del razzo e il beccuccio della tanica. Gli unici colori vivi sono gli **accenti emissivi**, gli stessi 3 colori firma del titolo: **malato-verde · arancio-fuoco · rosso-sangue**.
+- **Game feel.** *Ogni* oggetto che parte o colpisce ha la sua risposta multisensoriale: il proiettile ha **muzzle-flash** allo sparo, il razzo lascia **scorch** sull'asfalto ed **esplode con luce**, la tanica raccolta dà feedback. Niente oggetto "muto".
+- **Rifinitura.** Niente rettangolo grigio per "l'auto" o pallino giallo per "il proiettile". Ogni oggetto ha **≥3 toni**, un **gancio di silhouette**, un'**etichetta o dettaglio narrativo** (la fiamma sul razzo, l'etichetta di pericolo sulla tanica). La differenza tra "prototipo" e "AAA" è qui.
+
+> **Regola d'oro degli oggetti:** *Il ruolo prima della bellezza. In 1 frame, nel pieno del caos, il giocatore deve sapere cosa raccogliere, cosa lo sta colpendo e cos'è suo. Se "bello" e "leggibile come ruolo" sono in conflitto, vince **leggibile**.*
+
+---
+
+## 0. Mappa del codice (dove vive tutto)
+
+| Cosa | Dove |
+|---|---|
+| **Texture veicolo** (7 varianti, 100×44) | `src/scenes/GameScene.ts` → `static buildVehicleTexture()` |
+| Istanza veicolo + fisica + hitbox | `GameScene.buildVehicle()` |
+| **Componenti danneggiabili** (motore/ruote/serbatoio/torretta/corazza) | `this.components`, `ComponentData`, `damageComponent()` |
+| Punti di aggancio zombi sul veicolo | `ATTACH_SLOTS` |
+| **Texture oggetti** (proiettile, tanica, scintilla, razzo, nube tossica) | `GameScene.buildEntityTextures()` (sezione finale) |
+| Dati armi (cooldown, danno, velocità, colore, range) | `src/GameData.ts` → `WEAPONS`, `WEAPON_KEYS`, `WeaponType` |
+| Sparo / scelta proiettile per arma | `GameScene.fireWeapon()`, `spawnBullet()`, `spawnRocket()` |
+| Muzzle-flash + bloom + luce esplosione | `src/Juice.ts` → `muzzleFlash()`, `bloomBurst()`, `lightFlash()` |
+| Dati veicoli (prezzo, colore, bonus) | `src/GameData.ts` → `VEHICLES`, `VEHICLE_KEYS`, `VehicleData` |
+| Dati sopravvissuti (abilità, colore) | `src/GameData.ts` → `SURVIVORS`, `SurvivorData` |
+| Spawn tanica (intervallo, esploratore) | `GameScene.spawnFuelCan()` + timer in `create()` |
+| Effetti dei sopravvissuti (riparazioni, torretta auto) | `GameScene.updateSurvivorEffects()` |
+| Galleria di test (veicoli a scala reale) | `src/scenes/DebugScene.ts` → `drawVehicles()` |
+| Vetrina armi/veicoli nel negozio | `src/scenes/ShopScene.ts` |
+
+**Chiavi texture:** `vehicle_<chiave>` (es. `vehicle_civilian_car`), `bullet`, `rocket`, `fuel_can`, `particle`, `toxic_cloud`.
+**Chiavi VFX condivise** (in `Juice.ts`): `fx_light` (alone additivo per muzzle/bloom/luce).
+
+---
+
+## 1. I tre livelli di lettura (per gli oggetti)
+
+A risoluzione di gioco un proiettile è alto **5 px** e vola, un pickup è **22×26 px** in un campo pieno di nemici. La leggibilità vive in quest'ordine:
+
+1. **RUOLO** — in 1 frame deve dire *cosa fa per me*: lo **raccolgo** (pickup), mi **colpisce** (proiettile nemico), è **mio** (proiettile/veicolo). Il **codice colore di fazione** (§3.1) è la prima linea di lettura, prima ancora della forma.
+2. **SILHOUETTE IN MOVIMENTO** — proiettili e razzi si leggono *mentre volano*: forma allungata + scia/coda direzionale = "questo si muove e in quella direzione". Il veicolo si riconosce dalla **sagoma laterale** (berlina vs camion a 6 ruote) anche piccolo.
+3. **MATERIA & STORIA** — usura, rivetti, etichette di pericolo, bagliori emissivi: aggiungono *premium* e racconto, ma sono l'ultimo 20%.
+
+> **Regola d'oro:** *Colore di fazione corretto + silhouette di ruolo inequivocabile + 1 accento emissivo + 1 dettaglio di materia.*
+
+**Mai** un oggetto rappresentato da una primitiva nuda (cerchio/rettangolo a tinta unita). Mai.
+
+---
+
+## 2. Vincoli tecnici (non negoziabili)
+
+- **Solo primitive:** `fillRect`, `fillRoundedRect`, `fillEllipse`, `fillCircle`, `fillTriangle`, `fillPoints`, `lineBetween`. Le forme arrotondate / a poligono fanno anti-aliasing → niente "scaletta".
+- **Texture-once.** Ogni oggetto è una texture bakeata **una sola volta** (`generateTexture`) e poi istanziata/poolata. **Mai** ridisegnare un oggetto ogni frame.
+- **Proiettili = gruppi poolati.** `bullets` / `rockets` / `fuelCans` / `toxicClouds` sono `Phaser.Physics.Arcade.Group`. Riciclo, non creazione continua. Pulizia fuori schermo in `cleanOffScreen()`.
+- **Tinta a runtime per le armi.** Un'unica texture `bullet` viene **tinteggiata** con `WEAPONS[type].color` allo spawn (giallo MG, verde fucile, arancio fiamma…). Non serve una texture per arma: stessa forma, colore diverso. **Eccezione:** il **razzo** ha la sua texture dedicata (`rocket`).
+- **VFX = fire-and-forget.** Muzzle-flash, bloom e scintille si auto-distruggono via tween. **Mai** un emitter persistente per proiettile.
+- **Cosmetico ≠ gameplay.** Le `setBodySize`/hitbox dei proiettili e del veicolo sono **fisse**; bagliori, scia, ombra ed effetti **non toccano** il bilanciamento. Un'arma "pesa" di più per i suoi numeri (`damage`/`cooldown`/`speed`), non perché la texture è più grande.
+- **Contenere il disegno nella texture** (sforare bleeda). Il veicolo si disegna entro `100×44`; gli oggetti entro le dimensioni dichiarate.
+- **Performance budget:** decine di proiettili + nemici a **60 fps**. Niente effetti per-pixel, niente shader, niente blur.
+
+---
+
+## 3. Linguaggio visivo condiviso
+
+### 3.1 Codice colore di fazione (la lettura #1)
+Il colore dice *di chi è* prima ancora della forma. Tre famiglie, coerenti coi 3 colori firma:
+
+| Fazione | Colori | Dove |
+|---|---|---|
+| **Fuoco del giocatore** | giallo `#ffee00` / `#ffdd44` · verde `#44ff88` · arancio `#ff4400` / `#ff6600` · ciano `#00ffff` (torretta del Soldato) | proiettili, razzi, fiamme, muzzle-flash |
+| **Pickup / utile** | rosso-tanica `#cc3300` + **etichetta gialla** `#ffee00` con simbolo `#ff3300` | tanica di carburante |
+| **Minaccia** | verde-tossico `#00cc44`/`#44ff88` (nube), accenti nemici (vedi `ART_BIBLE_ZOMBIES`) | nube tossica, proiettili boss |
+
+> Il **player** parla coi 3 colori firma "caldi/vivi"; la **minaccia** col verde malato e il rosso-sangue. La **tanica** è l'unico oggetto che usa il **rosso + giallo di pericolo** in chiave "industriale" — è voluto: deve gridare *"benzina, prendimi"*.
+
+### 3.2 Kit metallo condiviso
+Tutto ciò che è meccanico (torrette, canne, testate, beccucci, bull bar) usa la **stessa terna acciaio**, così l'occhio le legge come "stesso mondo":
+`metallo #4a4a52` · luce `#70707a` · ombra `#26262c`. Più, per i dettagli scuri, `#222222` / `#444444`.
+
+### 3.3 Luce, ombra e stacco
+- Luce convenzionale da **alto-sinistra**: bande/strisce chiare in alto (`light`/`lighter`), `dark`/`darker` in basso e sui bordi.
+- **Ombra a terra** coerente per gli oggetti "appoggiati": il veicolo ha un'ellisse `#000000` alpha `0.22` sotto di sé (cotta nella texture). È ciò che lo stacca dall'asfalto.
+- **Accento emissivo** = il punto più luminoso/saturo dell'oggetto: il nucleo bianco del proiettile, la fiamma del razzo, il cannone a energia del veicolo sperimentale.
+
+---
+
+## 4. Schede degli oggetti
+
+> Ogni scheda: **Concept** (a cosa serve / che storia porta) · **Materia/Palette** (hex reali dal codice) · **Silhouette** (il gancio) · **VFX** · **Note di gameplay** (numeri reali, *solo cosmetico ≠ bilanciamento*).
+> Le dimensioni sono quelle della texture generata.
+
+---
+
+### 4.1 IL VEICOLO — *l'oggetto-protagonista* · texture `100×44`
+
+**Concept:** non un'auto, ma una **fortezza su ruote** improvvisata. Ogni variante è uno stadio della disperazione: dalla berlina di città rubata al mezzo militare a doppio cannone, fino al prototipo sperimentale a energia. Sale di stazza, corazza e potenza di fuoco man mano che il giocatore sopravvive.
+
+**Linguaggio condiviso a tutte le 7 varianti** (verità del codice in `buildVehicleTexture`):
+- **Ombra a terra:** `fillEllipse(50, 25, 96, 40)` in `#000000` alpha `0.22`.
+- **Base colorata per variante** (`VEHICLES[].color`) + 4 toni derivati via `mixColor`: `light` (+30% bianco), `lighter` (+52%), `dark` (−34% nero), `darker` (−58%). **Luce alto-sinistra** = banda chiara in alto, ombra in basso.
+- **Ruote:** corpo `#141414` (rounded rect) + battistrada `#2c2c2c`; i mezzi pesanti aggiungono il **mozzo** `#555555`.
+- **Vetri:** `#0e1d29` (vetro scuro) + riflesso `#2c5470` a bassa alpha (lettura "vetro azzurrino").
+- **Fari anteriori:** caldo `#fff4bc` + nucleo `#ffffff` + alone `#fff4bc` alpha `0.3`. **Fanali posteriori:** `#cc1111` + `#ff4444`.
+- **Metallo** (torrette/canne/bull bar): kit §3.2.
+
+**Le 7 silhouette (il gancio di ognuna):**
+
+| Chiave (`vehicle_…`) | Nome | Prezzo | `color` | Gancio di silhouette |
+|---|---|---|---|---|
+| `civilian_car` | Auto Civile | 0 | `#4a6fa5` (blu) | **berlina** tonda, tettuccio arrotondato, MG montata sul tetto |
+| `pickup` | Pickup | 300 | `#8B4513` (marrone) | **cabina + pianale aperto** con 5 listoni, MG sul cassone |
+| `armored_van` | Furgone Blindato | 700 | `#556B2F` (oliva) | **scatola** corazzata: piastre, **rivetti**, feritoie, torretta in scatola protettiva |
+| `military_suv` | SUV Militare | 1200 | `#4a5c2a` (verde mil.) | **alto e boxy**, ruote grandi, **bull bar** anteriore, **antenna radio** |
+| `armored_truck` | Camion Corazzato | 2000 | `#3a3a3a` (grigio) | **enorme, 6 ruote** (doppio assale post.), torretta corazzata |
+| `heavy_military` | Mezzo Pesante | 3000 | `#2a3a2a` (verde scuro) | 6 ruote enormi col mozzo, **DOPPIO CANNONE**, corazza massima |
+| `experimental` | Veicolo Sper. | 5000 | `#220044` (viola) | **angolare a cunei** (`fillPoints`), trim viola `#8833ff`, **cannone a energia** con nucleo bianco, fari viola/rosa |
+
+**Accenti emissivi speciali (sperimentale):** ruote a pod con luci viola `#8833ff`, trim viola, **cannone a energia** (`#330066`→`#8833ff`→nucleo `#ffffff`), fari anteriori `#bb44ff`, fanali rosa `#ff22aa`. È l'unico veicolo che usa un emissivo "alieno" (firma del livello finale, coerente con la Città Finale dell'ambiente).
+
+**Note di gameplay (cosmetico ≠ bilanciamento):** la scala/stazza visiva **non** è la hitbox. Statistiche reali (salute, corazza, velocità, fuoco) vivono in `VEHICLES` e nei moltiplicatori in `create()`. Più il veicolo "sembra" pesante (camion/mezzo pesante), più ha `healthBonus`/`armorBonus` e `speedMult` basso — la lettura visiva **deve** combaciare coi numeri.
+
+**Scatto / scrollata (SHIFT · `performDash`):** manovra difensiva con cooldown (`DASH_COOLDOWN`) che **stacca tutti gli zombi aggrappati** sbalzandoli via, con breve **grazia** (`DASH_GRACE`) in cui nessun nuovo zombi si attacca. Il feedback è **solo cosmetico** (tinta blu `#aaddff`, lampo, shake): **niente rotazione/scala del corpo fisico** → la hitbox del veicolo resta invariata (vedi §2). È la contromossa al sistema d'aggancio (§4.2).
+
+---
+
+### 4.2 COMPONENTI & TORRETTA — *le parti che si rompono*
+
+**Concept:** il veicolo non è un blocco di salute unico: ha **5 componenti** che gli zombi possono aggredire singolarmente (si "aggrappano" ai punti di aggancio). È il sistema che rende il danno **leggibile e localizzato** — vedi una parte cedere, non solo una barra scendere.
+
+**I 5 componenti** (verità del codice — `this.components`, colori indicatore):
+
+| Componente | Etichetta HUD | Colore indicatore | Effetto se danneggiato |
+|---|---|---|---|
+| `engine` | MOTORE | `#44cc44` | perdita di velocità verticale |
+| `wheels` | RUOTE | `#44aa88` | manovrabilità ridotta |
+| `tank` | SERBAT. | `#ff8800` | consumo/perdita di carburante |
+| `turret` | TORR. | `#8899ff` | cadenza di fuoco degradata (fino a inutilizzabile a 0) |
+| `armor` | CORAZZA | `#6688bb` | meno protezione dai colpi |
+
+**Punti di aggancio** (`ATTACH_SLOTS`, offset dal centro veicolo): corazza a destra (`dx 42`), ruote sopra/sotto (`dx 5, dy ±16`), motore dietro (`dx -40`), torretta (`dx 20, dy ±13`). Gli zombi aggrappati si disegnano **a questi offset**: la posizione del danno è fisica e leggibile.
+
+**Note di gameplay:** i colori indicatore sono **funzionali** (lettura dello stato nell'HUD), non estetici liberi — distinti tra loro per leggibilità immediata. L'upgrade **Torretta migliorata** dà `fireMult ×1.25`. **Contromossa all'aggancio:** lo **scatto** del veicolo (§4.1) stacca gli zombi aggrappati — risolve il caso del motore (slot posteriore) che i proiettili, sparando in avanti, non raggiungono.
+
+---
+
+### 4.3 ARMI — tabella di riferimento (verità del codice)
+**Concept:** le 5 armi del giocatore. Condividono la texture `bullet` (tinta a runtime, §4.4) tranne i **Razzi** (texture dedicata, §4.5). Questa tabella rispecchia **esattamente** `WEAPONS` in `src/GameData.ts` ed è verificata da `npm run validate:art`.
+
+> **Cambio arma a runtime:** le armi **possedute** si selezionano in partita coi tasti `1`–`5` (posizione in `WEAPON_KEYS`) o `Q` per ciclare; la scelta è persistita in `currentWeapon`. L'HUD mostra il selettore (cifre-hotkey, attiva in oro) — vedi `ART_BIBLE_INTERFACCE` §4.2.
+
+| Chiave (`WeaponType`) | Nome | Prezzo | Cooldown (ms) | Danno | Velocità | Colore (tinta) | Range |
+|---|---|---|---|---|---|---|---|
+| `mg` | Mitragliatrice | 0 | 280 | 1 | 680 | `#ffee00` | 9999 |
+| `double_mg` | Doppia MG | 200 | 310 | 1 | 680 | `#ffdd44` | 9999 |
+| `rifle` | Fucile Auto | 350 | 140 | 2 | 720 | `#44ff88` | 9999 |
+| `rockets` | Razzi | 550 | 900 | 5 | 340 | `#ff4400` | 9999 |
+| `flamethrower` | Lanciafiamme | 400 | 70 | 1 | 480 | `#ff6600` | 440 |
+
+> **Note:** `range 9999` = praticamente illimitato (il proiettile esce dallo schermo); il **Lanciafiamme** ha range corto reale `440`. Il `desc` di ogni arma vive nel codice/HUD, non qui.
+
+---
+
+### 4.4 PROIETTILE — `bullet` · **18×5** · *tinta a runtime*
+**Concept:** il piombo del giocatore. Una sola texture per **tutte** le armi a proiettile; cambia solo la **tinta** (colore dell'arma) allo spawn.
+
+**Palette (texture base, poi tinteggiata):**
+alone caldo `#ffdd00` alpha `0.3` (scia) · culatta `#aa8800` · **nucleo `#ffffff`** (lo sparo) · punta `#ffee44` + nucleo punta `#ffffff`.
+
+**Silhouette:** sottile e **orizzontale** con punta luminosa e coda alonata = "sta volando verso destra". Il nucleo bianco è l'accento emissivo.
+
+**VFX:** **muzzle-flash** allo sparo (`Juice.muzzleFlash`, `fx_light` additivo tinto col colore dell'arma) — **tranne il lanciafiamme**, che ne fa a meno (è già un getto continuo).
+
+**Tinta per arma:** giallo `#ffee00` (MG) · giallo caldo `#ffdd44` (Doppia MG) · **verde `#44ff88`** (Fucile) · arancio `#ff6600` (Lanciafiamme) · **ciano `#00ffff`** (torretta automatica del Soldato).
+
+---
+
+### 4.5 RAZZO — `rocket` · **28×12** · *texture dedicata*
+**Concept:** l'arma pesante. Un vero missile riconoscibile, con testata e scia di scarico — deve "leggersi" come AoE in arrivo.
+
+**Palette:**
+corpo `#cccccc` / `#eeeeee` (acciaio) · **testata `#cc2200` / `#ff4422` / `#ff6644`** · ogiva `#bb1100` (triangolo) · bande `#888888` · ugello `#444444` / `#222222` · alette `#888888` · **fiamma di scarico `#ff5500` → `#ffaa00` → `#ffffff`** (triangoli a coda, dietro l'ugello).
+
+**Silhouette:** affusolata, **testata rossa in punta + fiamma in coda** = direzione e pericolo immediati. Il più "grosso e lento" dei proiettili (velocità `340` vs `680+`): la lettura visiva di massa combacia.
+
+**VFX:** all'impatto → **esplosione** con `Juice.bloomBurst`/`lightFlash` (luce arancione che illumina la scena) + **decal `scorch`** sull'asfalto (vedi `ART_BIBLE_AMBIENTE` §7) + hit-stop ~30 ms (vedi budget in `ART_BIBLE_ZOMBIES`).
+
+**Note di gameplay:** esplosione AoE `r=90px`, `damage 5`, `cooldown 900` ms.
+
+---
+
+### 4.6 SCINTILLA / MOTE — `particle` · **12×12** · *VFX condiviso*
+**Concept:** il "mote" caldo generico — schegge d'impatto, scintille d'esplosione, frammenti. Riusato ovunque serva un puntino incandescente.
+
+**Palette:** alone `#ff6600` alpha `0.5` → `#ffaa00` → `#ffee44` → **nucleo `#ffffff`** (gradiente radiale a cerchi concentrici).
+
+**Silhouette:** punto luminoso con alone caldo. Sempre **fire-and-forget** (tween posizione + alpha → 0).
+
+> Coerente col toolkit VFX dei nemici (`emitSparks`, `ART_BIBLE_ZOMBIES` §4): stessa famiglia di scintille calde.
+
+---
+
+### 4.7 NUBE TOSSICA — `toxic_cloud` · **50×50** · *minaccia residua*
+**Concept:** ciò che lo **zombi Tossico** lascia morendo: una sacca di gas che resta sull'asfalto e danneggia chi la attraversa. È un **oggetto-minaccia**, non un VFX innocuo — la palette lo dichiara.
+
+**Palette (cerchi stratificati, bassa alpha):** `#003300` → `#006600` → `#00aa33` → `#00cc44` → `#00ff55` → nucleo `#44ff88`. Verde-tossico firma, lo stesso `#6cff3a`/famiglia di `emitZombieFx`.
+
+**Silhouette:** alone verde **morbido e pulsante**, più denso al centro. Leggibile come "zona da evitare".
+
+**Note di gameplay:** è l'unico **oggetto di colore "fuoco del giocatore"-incompatibile** a terra: il verde malato segnala *minaccia*, non *pickup*. Coerenza di fazione (§3.1) rispettata.
+
+---
+
+### 4.8 TANICA DI CARBURANTE — `fuel_can` · **22×26** · *il pickup*
+**Concept:** il carburante è il timer della corsa. La tanica è l'**unico pickup** e deve gridare "prendimi" nel caos: rosso industriale + etichetta di pericolo gialla.
+
+**Palette:**
+corpo `#aa2200` / `#ff4422` / `#cc3300` (rosso jerry-can) · costole `#881a00` · highlight `#ff7755` alpha `0.5` · tappo `#882200` / `#aa3300` · **beccuccio metallo `#888888` / `#bbbbbb`** · maniglia `#777777` / `#999999` · **etichetta di pericolo `#ffee00` alpha `0.8` + fiamma `#ff3300`** · fondo `#661100`.
+
+**Silhouette:** classica **tanica jerry-can** con beccuccio e maniglia in alto = riconoscibile all'istante. L'etichetta gialla è il gancio di lettura a distanza.
+
+**VFX:** alla raccolta → feedback di carburante (HUD) + SFX. Scorre/spawna come oggetto del mondo.
+
+**Note di gameplay:** spawn ogni **7.5 s** (ogni **5 s** col sopravvissuto **Esploratore**). Ripristina carburante alla raccolta. Hitbox indipendente dalla grafica.
+
+---
+
+### 4.9 SOPRAVVISSUTI — *token, non sprite nel mondo*
+**Concept:** i compagni a bordo. **Non** hanno uno sprite nel mondo di gioco: sono rappresentati come **token colorati** nel negozio / HUD e agiscono tramite **effetti** (alcuni dei quali *generano oggetti*).
+
+**Palette token** (verità del codice — `SURVIVORS[].color`):
+
+| Chiave | Nome | Colore token | Effetto (oggetti generati) |
+|---|---|---|---|
+| `mechanic` | Meccanico | `#44aaff` | ripara 8hp al componente peggiore ogni 5 s |
+| `medic` | Medico | `#ff6666` | rigenera 0.3 salute/s |
+| `soldier` | Soldato | `#ffcc44` | **torretta automatica**: spara un `bullet` **ciano `#00ffff`** ogni 3 s |
+| `explorer` | Esploratore | `#44ff88` | **più taniche**: spawn ogni 5 s invece di 7.5 s |
+
+> Il colore-token è un **accento** coerente con la palette firma; resta un'icona UI, non una creatura del mondo. Se in futuro avranno una rappresentazione a bordo del veicolo, dovrà seguire la regola di luce e il kit metallo come tutto il resto.
+
+---
+
+## 5. Pipeline: aggiungere un nuovo oggetto
+
+### 5.1 Nuovo veicolo
+1. **Concept prima del pixel:** una frase ("fortezza su ruote stadio N") + il **gancio di silhouette** + il `color` base.
+2. Aggiungi la riga in **`VEHICLES`** (`src/GameData.ts`): prezzo, colore, bonus.
+3. Aggiungi un ramo `else if (vehicleKey === '<chiave>')` in **`buildVehicleTexture`**, restando entro `100×44`, usando i toni derivati (`light`/`dark`…), il kit metallo e la regola di luce.
+4. Verifica nella **DebugScene** (`drawVehicles`) a scala reale **e** ingrandita.
+5. Assicurati che la **lettura visiva combaci coi numeri** (un mezzo "pesante" deve avere bonus salute alti e velocità bassa).
+6. Aggiorna **questa scheda** (§4.1).
+
+### 5.2 Nuova arma / proiettile
+1. **Concept:** ruolo (rapida? AoE? continua?) + **colore di fazione** (§3.1).
+2. Aggiungi la riga in **`WEAPONS`** con `color` (usato come tinta del `bullet`), `cooldown`, `damage`, `speed`, `range`.
+3. Se serve una forma **dedicata** (come il razzo), disegna una nuova texture in `buildEntityTextures` + gruppo poolato; altrimenti **riusa `bullet` con tinta**.
+4. Gestisci lo spawn in **`fireWeapon()`** (e `spawnBullet`/`spawnRocket`).
+5. Aggancia il feedback: **muzzle-flash** (`Juice.muzzleFlash` col colore dell'arma) e, se esplosiva, `bloomBurst`/`lightFlash` + decal `scorch`.
+6. Aggiorna la **tabella armi** (§4.3) e la scheda del proiettile (§4.4 o §4.5), poi esegui `npm run validate:art`.
+
+### 5.3 Nuovo pickup / oggetto-effetto
+1. **Concept** + **colore di fazione** (pickup = leggibile come "raccogli"; minaccia = colore malato).
+2. Disegna la texture in `buildEntityTextures` (≥3 toni + 1 accento + 1 dettaglio narrativo).
+3. Gruppo poolato + spawn + pulizia in `cleanOffScreen()`.
+4. Verifica la **leggibilità del ruolo** nel caos (DebugScene / gioco a densità alta).
+5. Aggiorna **questa scheda**.
+
+---
+
+## 6. Checklist di qualità (Definition of Done — oggetti)
+
+- [ ] **Ruolo leggibile** in 1 frame: colore di fazione corretto (player / pickup / minaccia).
+- [ ] **Silhouette** riconoscibile a scala reale (proiettile che vola, veicolo di profilo, tanica nel caos).
+- [ ] Palette a **≥3 toni** + **1 accento emissivo** + **1 dettaglio di materia/storia**.
+- [ ] **Luce alto-sinistra** + ombra coerente (e ombra a terra per gli oggetti appoggiati).
+- [ ] **Kit metallo condiviso** su tutte le parti meccaniche.
+- [ ] **VFX di feedback** agganciato (muzzle-flash allo sparo, esplosione+luce+scorch per gli AoE, feedback di raccolta per i pickup).
+- [ ] **Pooling** rispettato (gruppi fisici, niente creazione/distruzione continua); VFX **fire-and-forget**.
+- [ ] **Hitbox/bilanciamento invariati** dagli effetti visivi (cosmetico ≠ gameplay).
+- [ ] La **lettura visiva combacia coi numeri** (massa percepita ↔ statistiche).
+- [ ] 60 fps con molti proiettili + nemici a schermo.
+
+---
+
+## 7. Antipattern da evitare
+
+- ❌ **Primitiva nuda** come oggetto (cerchio giallo = "proiettile", rettangolo grigio = "auto"). Sembra prototipo.
+- ❌ **Colore di fazione sbagliato:** un pickup col verde-tossico, un proiettile del player col rosso-sangue → il giocatore legge male e muore.
+- ❌ **Una texture per ogni arma** quando basta **tinteggiare** `bullet`. Spreco.
+- ❌ **Veicolo "grosso" ma debole** (o viceversa): lettura visiva che mente sui numeri.
+- ❌ **VFX persistenti per-proiettile** / oggetti non poolati → cali di frame e leak.
+- ❌ **Oggetto che sfora** la propria texture → bleed/artefatti.
+- ❌ **Effetti che alterano hitbox** (scia/bagliore che "ingrandisce" il colpo).
+- ❌ **Metallo incoerente** (ogni torretta con un suo grigio) → rompe la coesione "stessa mano".
+- ❌ **Pickup poco leggibile** nel caos → frustrazione (il carburante è il timer della corsa: deve gridare).
+
+---
+
+## 8. Stato implementazione & roadmap
+
+> Onestà sul gap (come i documenti gemelli).
+
+**✅ Implementato** (`GameScene` + `GameData` + `Juice`):
+1. **7 veicoli** procedurali con silhouette distinte, kit metallo, luce alto-sinistra, ombra a terra (`buildVehicleTexture`).
+2. **Sistema componenti** danneggiabili (5) con colori indicatore e punti di aggancio (`ATTACH_SLOTS`).
+3. **5 armi** con `bullet` tinteggiato a runtime + **razzo** dedicato; muzzle-flash, esplosione (bloom/luce), decal `scorch`.
+4. **Pickup tanica** con etichetta di pericolo + spawn temporizzato (gated dall'Esploratore).
+5. **Oggetti-effetto** `particle` (scintilla calda) e `toxic_cloud` (minaccia verde) coerenti coi 3 colori firma.
+6. **Sopravvissuti** come token colorati + effetti (torretta auto ciano, taniche extra).
+
+**Aperto (rifinitura futura):**
+- **Usura/danno visibile sul veicolo** al calare dei componenti (oggi il danno è solo nell'HUD): chiazze, fumo dal motore, ruota sgonfia.
+- **Animazione di ricarica/idle** della torretta del veicolo (oggi statica).
+- **Varietà di razzo/fiamma** per le armi future (oggi 1 razzo dedicato; il resto è `bullet` tinto).
+- **Rappresentazione a bordo dei sopravvissuti** (oggi solo token UI).
+- **Profiling 60 fps** a densità massima di proiettili.
+
+---
+
+## 9. Anti-deriva (validazione)
+
+I numeri e gli hex di questo documento **non devono divergere** dal codice. `npm run validate:art` (vedi `scripts/validate-art-bible.mjs`) confronta automaticamente:
+
+| Sezione | Codice | Campi verificati |
+|---|---|---|
+| **§4.1** Veicoli | `VEHICLES` (`src/GameData.ts`) | nome · prezzo · colore (hex) |
+| **§4.1** Texture veicolo | `generateTexture(key, …)` (`GameScene.ts`) | dimensione `100×44` |
+| **§4.3** Armi | `WEAPONS` (`src/GameData.ts`) | nome · prezzo · cooldown · danno · velocità · colore (hex) · range |
+| **§4.4–§4.8** Texture oggetti | `generateTexture('…', …)` (`GameScene.ts`) | dimensione `NN×NN` di `bullet`/`rocket`/`particle`/`toxic_cloud`/`fuel_can` |
+
+Lo script è agganciato a `npm run build`: **se i valori divergono, la build fallisce.** Quando cambi un veicolo, un'arma o una dimensione texture, aggiorna **entrambi** (codice + scheda) e rilancia la validazione.
+
+**Ancora in sincronia manuale** (non coperti dallo script — aggiorna a mano):
+- Aggancio componenti (`ATTACH_SLOTS`) e colori indicatore dei componenti (`this.components`) → §4.2.
+- **Palette** (hex) degli oggetti e dei veicoli (solo le *dimensioni* texture sono validate, non i colori interni) → §4.1, §4.4–§4.8.
+- `SURVIVORS` (abilità/colore) e intervallo spawn tanica → §4.8/§4.9.
+
+> **Roadmap di validazione:** estendere lo script ai **colori indicatore** dei componenti e, se utile, a un sottoinsieme di **hex di palette** dichiarati come "verità del codice", così da chiudere la sincronia manuale residua.
+
+---
+
+*Fine documento. Mantienilo allineato al codice: se cambi un veicolo, un'arma, un pickup o un colore di fazione, aggiorna la scheda corrispondente — e tieni d'occhio `npm run validate:art`.*

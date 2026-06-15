@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
-import { VEHICLES, Upgrades, WeaponType, WEAPONS } from '../GameData';
+import { VEHICLES, Upgrades, WeaponType, WEAPONS, WEAPON_KEYS } from '../GameData';
 import SoundManager from '../SoundManager';
+import Juice from '../Juice';
+import Environment from '../Environment';
+import Settings from '../Settings';
+import Ui, { UI } from '../Ui';
 
 const W = 800, H = 600;
 const ROAD_TOP = 155, ROAD_BOTTOM = 445, ROAD_CENTER = 300;
@@ -15,6 +19,11 @@ const ATTACH_DAMAGE_AMOUNT = 14;
 const MISSION_DIST = 18000;
 const GIANT_SPAWN_INTERVAL = 22000;
 const BOSS_TRIGGER = 0.82; // % missione a cui appare il boss
+const COMBO_WINDOW = 2500;  // ms: finestra per mantenere la catena di uccisioni
+const DASH_COOLDOWN = 5000; // ms: ricarica dello scatto anti-aggancio
+const DASH_GRACE = 350;     // ms: dopo lo scatto nessun nuovo zombi si aggrappa
+// Colore del moltiplicatore combo per livello (×1..×5) — toni funzionali UI
+const COMBO_COLORS = [UI.muted, UI.gold, UI.amber, UI.redText, UI.red];
 
 export type BossType = 'mega_mutant' | 'giant_worm' | 'armored_colossus' | 'radioactive_beast';
 
@@ -36,16 +45,22 @@ interface EnvConfig {
   name: string;
   bgColor: number; skyColor: number; groundColor: number;
   roadColor: number; lineColor: number; shoulderColor: number;
+  grade: number; gradeAlpha: number; // viraggio cromatico (MULTIPLY) per il mood
+  // ── materia + luce della strada (opzionali; default derivati via mixColor in Environment) ──
+  crackColor?: number;  // crepe asfalto
+  patchColor?: number;  // toppe/rappezzi
+  emissive?: number;    // 1 accento saturo a terra (pozze/bagliori). Default = lineColor
+  hazeColor?: number;   // foschia all'orizzonte (gradiente cielo). Default = mix(sky, grade)
 }
 
 const ENVIRONMENTS: EnvConfig[] = [
-  { name: 'Città Distrutta',        bgColor: 0x12121e, skyColor: 0x16161e, groundColor: 0x1a1610, roadColor: 0x2a2a2a, lineColor: 0xddcc00, shoulderColor: 0x1e1e22 },
-  { name: 'Autostrada Abbandonata', bgColor: 0x14120e, skyColor: 0x1c180e, groundColor: 0x141208, roadColor: 0x323028, lineColor: 0xaaaa44, shoulderColor: 0x201e16 },
-  { name: 'Deserto',                bgColor: 0x1e1006, skyColor: 0x2e1a08, groundColor: 0x1e1408, roadColor: 0x4a3a1a, lineColor: 0xddaa00, shoulderColor: 0x2a2010 },
-  { name: 'Foresta Infestata',      bgColor: 0x040c04, skyColor: 0x040c04, groundColor: 0x020802, roadColor: 0x141c10, lineColor: 0x66cc22, shoulderColor: 0x0a100a },
-  { name: 'Zona Industriale',       bgColor: 0x0e0a08, skyColor: 0x120e0a, groundColor: 0x0c0806, roadColor: 0x1c1a18, lineColor: 0xff6600, shoulderColor: 0x181410 },
-  { name: 'Base Militare',          bgColor: 0x080e06, skyColor: 0x0c1008, groundColor: 0x080e06, roadColor: 0x202818, lineColor: 0x88bb44, shoulderColor: 0x101608 },
-  { name: 'Città Finale',           bgColor: 0x0c0612, skyColor: 0x100618, groundColor: 0x0c0612, roadColor: 0x180c22, lineColor: 0xcc44ff, shoulderColor: 0x140a1a },
+  { name: 'Città Distrutta',        bgColor: 0x12121e, skyColor: 0x16161e, groundColor: 0x1a1610, roadColor: 0x2a2a2a, lineColor: 0xddcc00, shoulderColor: 0x1e1e22, grade: 0x8fa6c8, gradeAlpha: 0.42, emissive: 0xffcc33, hazeColor: 0x2a2a3a },
+  { name: 'Autostrada Abbandonata', bgColor: 0x14120e, skyColor: 0x1c180e, groundColor: 0x141208, roadColor: 0x323028, lineColor: 0xaaaa44, shoulderColor: 0x201e16, grade: 0xc8bc86, gradeAlpha: 0.40, emissive: 0xccbb55, hazeColor: 0x33301f },
+  { name: 'Deserto',                bgColor: 0x1e1006, skyColor: 0x2e1a08, groundColor: 0x1e1408, roadColor: 0x4a3a1a, lineColor: 0xddaa00, shoulderColor: 0x2a2010, grade: 0xffba60, gradeAlpha: 0.48, emissive: 0xffb24a, hazeColor: 0x4a2c12 },
+  { name: 'Foresta Infestata',      bgColor: 0x040c04, skyColor: 0x040c04, groundColor: 0x020802, roadColor: 0x141c10, lineColor: 0x66cc22, shoulderColor: 0x0a100a, grade: 0x74c084, gradeAlpha: 0.46, emissive: 0x6cff3a, hazeColor: 0x0c2410 },
+  { name: 'Zona Industriale',       bgColor: 0x0e0a08, skyColor: 0x120e0a, groundColor: 0x0c0806, roadColor: 0x1c1a18, lineColor: 0xff6600, shoulderColor: 0x181410, grade: 0xc89a5a, gradeAlpha: 0.44, emissive: 0xff7722, hazeColor: 0x2a1810 },
+  { name: 'Base Militare',          bgColor: 0x080e06, skyColor: 0x0c1008, groundColor: 0x080e06, roadColor: 0x202818, lineColor: 0x88bb44, shoulderColor: 0x101608, grade: 0x9ab074, gradeAlpha: 0.42, emissive: 0x99cc55, hazeColor: 0x162012 },
+  { name: 'Città Finale',           bgColor: 0x0c0612, skyColor: 0x100618, groundColor: 0x0c0612, roadColor: 0x180c22, lineColor: 0xcc44ff, shoulderColor: 0x140a1a, grade: 0xb074d8, gradeAlpha: 0.48, emissive: 0xcc44ff, hazeColor: 0x240a36 },
 ];
 
 type ZombieType = 'common' | 'runner' | 'armored' | 'jumper' | 'giant' | 'toxic';
@@ -143,10 +158,17 @@ export default class GameScene extends Phaser.Scene {
   private hudAttached!: Phaser.GameObjects.Text;
 
   private currentWeapon: WeaponType = 'mg';
+  private ownedWeapons: WeaponType[] = ['mg'];
   private rockets!: Phaser.Physics.Arcade.Group;
   private hudWeapon!: Phaser.GameObjects.Text;
+  private hudCombo!: Phaser.GameObjects.Text;
+  private hudDash!: Phaser.GameObjects.Text;
+  private weaponSlots: { key: WeaponType; txt: Phaser.GameObjects.Text }[] = [];
 
   private sfx: SoundManager | null = null;
+  private grain: Phaser.GameObjects.TileSprite | null = null;
+  private environment: Environment | null = null;
+  private frozen = false;
 
   // Boss system
   private bossActive = false;
@@ -164,6 +186,14 @@ export default class GameScene extends Phaser.Scene {
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private spaceKey!: Phaser.Input.Keyboard.Key;
+  private shiftKey!: Phaser.Input.Keyboard.Key;
+  private cycleKey!: Phaser.Input.Keyboard.Key;
+  private numberKeys: Phaser.Input.Keyboard.Key[] = [];
+
+  private combo = 0;
+  private comboTimer = 0;
+  private dashReadyAt = 0;
+  private dashGraceUntil = 0;
 
   private lastFire = 0;
   private spawnTimer = 0;
@@ -200,6 +230,10 @@ export default class GameScene extends Phaser.Scene {
     this.giantTimer = GIANT_SPAWN_INTERVAL;
     this.envIndex = (missionNum - 1) % ENVIRONMENTS.length;
     this.currentWeapon = this.registry.get('currentWeapon') ?? 'mg';
+    this.ownedWeapons  = this.registry.get('ownedWeapons')  ?? ['mg'];
+    if (!this.ownedWeapons.includes(this.currentWeapon)) this.currentWeapon = this.ownedWeapons[0] ?? 'mg';
+    this.combo = 0; this.comboTimer = 0;
+    this.dashReadyAt = 0; this.dashGraceUntil = 0;
     this.bossActive = false;
     this.bossSpawned = false;
     this.bossSprite = null;
@@ -231,19 +265,36 @@ export default class GameScene extends Phaser.Scene {
     const webAudio = this.sound as Phaser.Sound.WebAudioSoundManager;
     if (webAudio?.context) {
       this.sfx = new SoundManager(webAudio.context);
+      this.sfx.setVolume(Settings.volume);
       this.sfx.startEngine();
     }
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.sfx?.stopEngine());
+
+    // Ritorno dalle impostazioni (pausa ESC): riallinea il volume e riavvia il motore.
+    this.events.on(Phaser.Scenes.Events.RESUME, () => {
+      this.sfx?.setVolume(Settings.volume);
+      this.sfx?.startEngine();
+    });
+
+    // Juice: overlay filmico (opzionale) + entrata in dissolvenza
+    this.frozen = false;
+    this.grain = Settings.screenFx ? Juice.addOverlay(this) : null;
+    Juice.fadeIn(this);
   }
 
   update(time: number, delta: number) {
     if (!this.alive || this.missionDone) {
-      if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) this.scene.restart();
+      if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) Juice.fadeAndRun(this, () => this.scene.restart());
       return;
     }
+    Juice.jitterGrain(this.grain);
+    if (this.frozen) return;
     const dt = delta / 1000;
     this.updateVehicle(dt);
     this.updateFiring(time);
+    this.updateWeaponSwitch();
+    this.updateDash(time);
+    this.updateCombo(delta);
     this.updateFuel(dt);
     this.updateDistance(dt);
     this.updateZombieSpawning(delta);
@@ -255,6 +306,7 @@ export default class GameScene extends Phaser.Scene {
     this.updateToxicClouds(delta);
     this.updateSurvivorEffects(delta, time);
     this.updateStripes(dt);
+    this.environment?.update(dt, this.vehicle.x, this.vehicle.y);
     this.cleanOffScreen();
     this.updateHUD();
   }
@@ -1094,27 +1146,40 @@ export default class GameScene extends Phaser.Scene {
     this.add.rectangle(W/2, ROAD_TOP / 2, W, ROAD_TOP, env.skyColor);
     this.add.rectangle(W/2, (ROAD_BOTTOM + H) / 2, W, H - ROAD_BOTTOM, env.groundColor);
 
-    // Decoratori ambiente (sopra e sotto la strada)
-    const dg = this.add.graphics();
-    this.drawDecorators(dg, this.envIndex);
-
-    // Strada
+    // Strada di base (rettangolo piatto + spallette esterne): l'asfalto tileato
+    // dell'Environment la copre, le spallette restano come terza fascia del ciglio.
     this.add.rectangle(W/2, ROAD_CENTER, W, ROAD_BOTTOM - ROAD_TOP, env.roadColor);
-    this.add.rectangle(W/2, ROAD_TOP,    W, 4, env.lineColor);
-    this.add.rectangle(W/2, ROAD_BOTTOM, W, 4, env.lineColor);
     this.add.rectangle(W/2, ROAD_TOP    - 10, W, 16, env.shoulderColor);
     this.add.rectangle(W/2, ROAD_BOTTOM + 10, W, 16, env.shoulderColor);
 
-    // Strisce centrali
+    // Ambiente & Strada (docs/ART_BIBLE_AMBIENTE.md): profondità (parallasse far/near),
+    // superficie (asfalto tileato + ciglio rumble), illuminazione (gradiente cielo,
+    // luce di carreggiata, fari) e memoria (decal dinamici).
+    this.environment = new Environment(
+      this,
+      { W, H, roadTop: ROAD_TOP, roadBottom: ROAD_BOTTOM, roadCenter: ROAD_CENTER, scrollSpeed: SCROLL_SPEED },
+      env, this.envIndex,
+    );
+
+    // Strisce di corsia ambientate: colore della linea d'ambiente, consumate, qualche dash "mancante"
     const count = Math.ceil(W / STRIPE_GAP) + 3;
     for (let i = 0; i < count; i++) {
-      const r = this.add.rectangle(i * STRIPE_GAP, ROAD_CENTER, STRIPE_W, 4, 0xffffff, 0.3).setDepth(1);
+      const worn = (i % 6 === 4);
+      const a = worn ? 0.06 : 0.20 + (i % 3) * 0.08;
+      const r = this.add.rectangle(i * STRIPE_GAP, ROAD_CENTER, STRIPE_W, 4, env.lineColor, a).setDepth(1);
       this.stripes.push(r);
     }
 
+    // Color grading: viraggio cromatico del mood (MULTIPLY su tutto il gameplay, sotto HUD/vignetta)
+    this.add.rectangle(W / 2, H / 2, W, H, env.grade)
+      .setBlendMode(Phaser.BlendModes.MULTIPLY)
+      .setAlpha(env.gradeAlpha)
+      .setScrollFactor(0)
+      .setDepth(16);
+
     // Banner nome ambiente (scompare dopo 2.5s)
-    const envLabel = this.add.text(W / 2, ROAD_TOP - 28, env.name.toUpperCase(), {
-      fontSize: '16px', color: '#ffffff', fontStyle: 'bold',
+    const envLabel = Ui.text(this, W / 2, ROAD_TOP - 28, env.name.toUpperCase(), {
+      fontSize: '16px', color: UI.white, fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(18).setAlpha(0);
     this.tweens.add({
@@ -1126,158 +1191,6 @@ export default class GameScene extends Phaser.Scene {
           this.tweens.add({ targets: envLabel, alpha: 0, duration: 500, onComplete: () => envLabel.destroy() }));
       },
     });
-  }
-
-  private drawDecorators(g: Phaser.GameObjects.Graphics, idx: number) {
-    const SB = ROAD_TOP - 6;   // sky bottom (appoggio decorazioni sopra)
-    const GT = ROAD_BOTTOM + 6; // ground top
-
-    switch (idx) {
-      case 0: { // Città Distrutta
-        g.fillStyle(0x202028);
-        [20,80,150,230,320,430,540,650,730].forEach((x, i) => {
-          const bw = 48 + (i % 3) * 18;
-          const bh = 38 + (i % 4) * 22;
-          g.fillRect(x, SB - bh, bw, bh);
-          // finestre
-          g.fillStyle(0x0e0e22);
-          for (let wy = SB - bh + 6; wy < SB - 6; wy += 12)
-            for (let wx = x + 4; wx < x + bw - 4; wx += 12)
-              g.fillRect(wx, wy, 5, 7);
-          g.fillStyle(0x202028);
-        });
-        // macerie sotto
-        g.fillStyle(0x252520);
-        [20,110,200,330,470,590,700].forEach(x => g.fillRect(x, GT + 4, 35, 14));
-        break;
-      }
-      case 1: { // Autostrada Abbandonata
-        // alberi morti
-        g.fillStyle(0x2a2418);
-        [40,130,260,400,530,660,770].forEach((x, i) => {
-          const th = 48 + (i % 3) * 18;
-          g.fillRect(x, SB - th, 5, th);
-          g.fillRect(x - 14, SB - th + 6, 12, 4);
-          g.fillRect(x + 5,  SB - th + 14, 13, 4);
-        });
-        // guardrail sopra e sotto
-        g.fillStyle(0x3a3830);
-        g.fillRect(0, SB - 10, W, 4);
-        for (let x = 0; x < W; x += 38) g.fillRect(x, SB - 16, 4, 10);
-        g.fillRect(0, GT + 2,  W, 4);
-        g.fillRect(0, GT + 14, W, 3);
-        for (let x = 0; x < W; x += 38) g.fillRect(x, GT, 4, 18);
-        break;
-      }
-      case 2: { // Deserto
-        // dune sopra (approssimazione con rettangoli)
-        g.fillStyle(0x3a2c14);
-        for (let x = 0; x <= W; x += 2) {
-          const ht = Math.round(Math.sin(x / 120 * Math.PI) * 30 + Math.sin(x / 60 * Math.PI) * 12);
-          if (ht > 0) g.fillRect(x, SB - ht, 2, ht + 2);
-        }
-        // cactus
-        g.fillStyle(0x2a441a);
-        [70,220,370,530,680].forEach(x => {
-          g.fillRect(x + 4, SB - 52, 10, 52);
-          g.fillRect(x - 8,  SB - 38, 12, 8);
-          g.fillRect(x - 8,  SB - 50, 8,  14);
-          g.fillRect(x + 14, SB - 33, 12, 8);
-          g.fillRect(x + 20, SB - 45, 8,  14);
-        });
-        // dune sotto
-        g.fillStyle(0x3a2c12);
-        for (let x = 0; x <= W; x += 2) {
-          const ht = Math.round(Math.sin(x / 100 * Math.PI) * 18 + 6);
-          g.fillRect(x, GT, 2, ht);
-        }
-        break;
-      }
-      case 3: { // Foresta Infestata
-        g.fillStyle(0x0a1e08);
-        for (let x = 0; x < W + 10; x += 32) {
-          const th = 55 + (x % 5) * 8;
-          // triangolo albero
-          for (let dy = 0; dy < th; dy++) {
-            const hw = Math.round((dy / th) * 18);
-            g.fillRect(x + 18 - hw, SB - th + dy, hw * 2, 3);
-          }
-          g.fillRect(x + 14, SB - 8, 8, 10); // tronco
-        }
-        // sottobosco
-        g.fillStyle(0x0c1a08);
-        for (let x = 0; x < W; x += 48) g.fillRect(x, GT, 32, 8 + (x % 4) * 3);
-        break;
-      }
-      case 4: { // Zona Industriale
-        // ciminiere
-        g.fillStyle(0x2a2420);
-        [60,180,340,500,660].forEach((x, i) => {
-          const sh = 65 + (i % 3) * 22;
-          g.fillRect(x, SB - sh, 20, sh);
-          g.fillRect(x - 4, SB - sh, 28, 8); // bordo
-        });
-        // fabbrica (sfondo basso)
-        g.fillStyle(0x1e1c18);
-        g.fillRect(0, SB - 35, W, 35);
-        // fumo simulato
-        g.fillStyle(0x181614);
-        [60,180,340,500,660].forEach(x => {
-          g.fillCircle(x + 10, SB - 70, 10);
-          g.fillCircle(x + 16, SB - 80, 7);
-        });
-        // tubi sotto
-        g.fillStyle(0x302820);
-        g.fillRect(0, GT + 4, W, 10);
-        g.fillRect(0, GT + 20, W, 6);
-        for (let x = 0; x < W; x += 75) g.fillRect(x, GT, 14, 28);
-        break;
-      }
-      case 5: { // Base Militare
-        // torrette di guardia
-        g.fillStyle(0x1e2a14);
-        [90,340,590].forEach(x => {
-          g.fillRect(x + 4, SB - 75, 7, 75);
-          g.fillRect(x - 18, SB - 80, 46, 18);
-          g.fillRect(x - 20, SB - 86, 50, 8);
-          g.fillStyle(0x446644);
-          g.fillRect(x - 6, SB - 74, 5, 10);
-          g.fillStyle(0x1e2a14);
-        });
-        // recinzione sopra
-        g.fillStyle(0x2a3820);
-        g.fillRect(0, SB - 18, W, 4);
-        for (let x = 0; x < W; x += 14) g.fillRect(x, SB - 26, 3, 12);
-        // sacchi di sabbia sotto
-        g.fillStyle(0x2a2a1a);
-        for (let x = 0; x < W; x += 44) {
-          g.fillRect(x, GT + 2,  42, 14);
-          g.fillRect(x + 5, GT, 32, 10);
-        }
-        break;
-      }
-      case 6: { // Città Finale
-        // grattacieli drammatici
-        [0,52,115,185,260,340,430,515,595,660,730].forEach((x, i) => {
-          const bw = 44 + (i % 4) * 8;
-          const bh = 58 + (i % 6) * 16;
-          g.fillStyle(0x1a0c22);
-          g.fillRect(x, SB - bh, bw, bh);
-          // finestre illuminate (viola/rosa)
-          for (let wy = SB - bh + 5; wy < SB - 5; wy += 10)
-            for (let wx = x + 4; wx < x + bw - 4; wx += 9) {
-              g.fillStyle(Math.random() > 0.5 ? 0x4a1a6a : 0x0e060e);
-              g.fillRect(wx, wy, 4, 5);
-            }
-        });
-        // pavimento sotto — tinta drammatica
-        g.fillStyle(0x160820);
-        g.fillRect(0, GT, W, H - GT);
-        g.fillStyle(0x220c30);
-        [50,160,300,450,600,720].forEach(x => g.fillRect(x, GT, 50, 40));
-        break;
-      }
-    }
   }
 
   private buildVehicle() {
@@ -1321,67 +1234,95 @@ export default class GameScene extends Phaser.Scene {
   private buildHUD(missionNum: number) {
     const D = 20, BAR_W = 110, COMP_BAR_W = 120;
     const panel = this.add.graphics().setDepth(D);
-    panel.fillStyle(0x000000, 0.62); panel.fillRect(0,0,W,84);
-    panel.lineStyle(1,0x333333,0.7); panel.lineBetween(0,46,W,46);
+    panel.fillStyle(UI.black, 0.62); panel.fillRect(0,0,W,84);
+    panel.lineStyle(1,UI.strokeDim,0.7); panel.lineBetween(0,46,W,46);
 
-    this.add.text(8,8,'SALUTE',{fontSize:'11px',color:'#ff8888'}).setDepth(D+1);
-    this.add.rectangle(8+BAR_W/2,34,BAR_W,10,0x331111).setDepth(D+1);
-    this.hudHealthFill = this.add.rectangle(8,34,BAR_W,10,0xff4444).setOrigin(0,0.5).setDepth(D+2);
+    Ui.text(this, 8,8,'SALUTE',{fontSize:'11px',color:UI.redText}).setDepth(D+1);
+    this.add.rectangle(8+BAR_W/2,34,BAR_W,10,UI.barRed).setDepth(D+1);
+    this.hudHealthFill = this.add.rectangle(8,34,BAR_W,10,UI.hpFill).setOrigin(0,0.5).setDepth(D+2);
 
-    this.add.text(138,8,'CARBURANTE',{fontSize:'11px',color:'#ffaa66'}).setDepth(D+1);
-    this.add.rectangle(138+BAR_W/2,34,BAR_W,10,0x331800).setDepth(D+1);
-    this.hudFuelFill = this.add.rectangle(138,34,BAR_W,10,0xff8800).setOrigin(0,0.5).setDepth(D+2);
-    this.hudFuelNum  = this.add.text(255,28,'',{fontSize:'11px',color:'#ffaa66'}).setDepth(D+2);
+    Ui.text(this, 138,8,'CARBURANTE',{fontSize:'11px',color:UI.amberSoft}).setDepth(D+1);
+    this.add.rectangle(138+BAR_W/2,34,BAR_W,10,UI.barAmber).setDepth(D+1);
+    this.hudFuelFill = this.add.rectangle(138,34,BAR_W,10,UI.fuelBar).setOrigin(0,0.5).setDepth(D+2);
+    this.hudFuelNum  = Ui.text(this, 255,28,'',{fontSize:'11px',color:UI.amberSoft}).setDepth(D+2);
 
-    this.hudScore    = this.add.text(290,6,'PUNTEGGIO: 0',{fontSize:'13px',color:'#ffffff'}).setDepth(D+1);
-    this.add.text(620,6,`MISS.${missionNum}`,{fontSize:'12px',color:'#88ff88'}).setDepth(D+1);
-    this.hudAttached = this.add.text(700,6,'',{fontSize:'11px',color:'#ff8800'}).setDepth(D+1);
-    this.hudWeapon   = this.add.text(620,22,'',{fontSize:'10px',color:'#ffaa44'}).setDepth(D+1);
+    this.hudScore    = Ui.text(this, 290,6,'PUNTEGGIO: 0',{fontSize:'13px',color:UI.white}).setDepth(D+1);
+    Ui.text(this, 620,6,`MISS.${missionNum}`,{fontSize:'12px',color:UI.greenSoft}).setDepth(D+1);
+    this.hudAttached = Ui.text(this, 700,6,'',{fontSize:'11px',color:'#ff8800'}).setDepth(D+1);
+    this.hudWeapon   = Ui.text(this, 620,22,'',{fontSize:'10px',color:'#ffaa44'}).setDepth(D+1);
+    this.hudCombo    = Ui.text(this, 470,6,'',{fontSize:'13px',fontStyle:'bold',color:UI.gold}).setDepth(D+1).setVisible(false);
+    this.hudDash     = Ui.text(this, W-10,22,'↯ SCATTO',{fontSize:'11px',fontStyle:'bold',color:UI.greenOk}).setOrigin(1,0).setDepth(D+1);
+    // Selettore armi: una cifra-hotkey per ogni arma posseduta (la selezionata in oro)
+    this.weaponSlots = [];
+    let wsx = 620;
+    WEAPON_KEYS.forEach((wk, i) => {
+      if (!this.ownedWeapons.includes(wk)) return;
+      const t = Ui.text(this, wsx,34,`${i+1}`,{fontSize:'11px',fontStyle:'bold',color:UI.muted}).setDepth(D+1);
+      this.weaponSlots.push({ key: wk, txt: t });
+      wsx += 16;
+    });
 
     // Barra progresso missione
     const DIST_KM = Math.floor(MISSION_DIST / 100);
     const DIST_BAR_W = 110;
-    this.add.text(290,24,'PERCORSO',{fontSize:'10px',color:'#7777aa'}).setDepth(D+1);
-    this.hudDist = this.add.text(395,24,'',{fontSize:'10px',color:'#aaaaff'}).setDepth(D+2);
-    this.add.rectangle(290+DIST_BAR_W/2,37,DIST_BAR_W,7,0x111122).setDepth(D+1);
-    this.hudDistFill = this.add.rectangle(290,37,DIST_BAR_W,7,0x4466cc).setOrigin(0,0.5).setDepth(D+2);
+    Ui.text(this, 290,24,'PERCORSO',{fontSize:'10px',color:'#7777aa'}).setDepth(D+1);
+    this.hudDist = Ui.text(this, 395,24,'',{fontSize:'10px',color:UI.blueInfo}).setDepth(D+2);
+    this.add.rectangle(290+DIST_BAR_W/2,37,DIST_BAR_W,7,UI.barBlue).setDepth(D+1);
+    this.hudDistFill = this.add.rectangle(290,37,DIST_BAR_W,7,UI.distBar).setOrigin(0,0.5).setDepth(D+2);
     // label meta (static)
-    this.add.text(408,33,`/ ${DIST_KM} km`,{fontSize:'9px',color:'#445577'}).setDepth(D+1);
+    Ui.text(this, 408,33,`/ ${DIST_KM} km`,{fontSize:'9px',color:UI.faint}).setDepth(D+1);
 
     // Survivors icons
     if (this.activeSurvivors.length > 0) {
       const names: Record<string,string> = { mechanic:'[M]', medic:'[+]', soldier:'[S]', explorer:'[E]' };
       const txt = this.activeSurvivors.map(s => names[s]??s).join(' ');
-      this.add.text(W-10,8,txt,{fontSize:'11px',color:'#cccc44'}).setOrigin(1,0).setDepth(D+1);
+      Ui.text(this, W-10,8,txt,{fontSize:'11px',color:'#cccc44'}).setOrigin(1,0).setDepth(D+1);
     }
 
     const compKeys: ComponentKey[] = ['engine','wheels','tank','turret','armor'];
     compKeys.forEach((key,i) => {
       const comp = this.components[key];
       const sx = 10 + i * 158;
-      this.add.text(sx,49,comp.label,{fontSize:'10px',color:'#888888'}).setDepth(D+1);
-      this.add.rectangle(sx+COMP_BAR_W/2,72,COMP_BAR_W,7,0x1a1a1a).setDepth(D+1);
+      Ui.text(this, sx,49,comp.label,{fontSize:'10px',color:UI.muted}).setDepth(D+1);
+      this.add.rectangle(sx+COMP_BAR_W/2,72,COMP_BAR_W,7,UI.barGrey).setDepth(D+1);
       const fill = this.add.rectangle(sx,72,COMP_BAR_W,7,comp.baseColor).setOrigin(0,0.5).setDepth(D+2);
       comp.fill = fill;
     });
 
-    this.add.text(W/2,H-6,'↑↓ Muovi   SPAZIO Spara',{fontSize:'11px',color:'#333333'}).setOrigin(0.5,1).setDepth(D);
-    this.add.text(4,H-6,'0=Debug',{fontSize:'9px',color:'#2a3a2a'}).setOrigin(0,1).setDepth(D);
-    this.hudDebug = this.add.text(W-6,H-6,'',{fontSize:'10px',color:'#00ff88',fontStyle:'bold'}).setOrigin(1,1).setDepth(D+5);
+    Ui.text(this, W/2,H-6,'↑↓ Muovi · SPAZIO Spara · 1-5/Q Arma · SHIFT Scatto',{fontSize:'11px',color:UI.disabled}).setOrigin(0.5,1).setDepth(D);
+    Ui.text(this, 4,H-6,'0=Debug',{fontSize:'9px',color:'#2a3a2a'}).setOrigin(0,1).setDepth(D);
+    this.hudDebug = Ui.text(this, W-6,H-6,'',{fontSize:'10px',color:'#00ff88',fontStyle:'bold'}).setOrigin(1,1).setDepth(D+5);
   }
 
   private buildInput() {
     this.cursors  = this.input.keyboard!.createCursorKeys();
-    this.spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    const KC = Phaser.Input.Keyboard.KeyCodes;
+    this.spaceKey = this.input.keyboard!.addKey(KC.SPACE);
+    this.shiftKey = this.input.keyboard!.addKey(KC.SHIFT);
+    this.cycleKey = this.input.keyboard!.addKey(KC.Q);
+    this.numberKeys = [KC.ONE, KC.TWO, KC.THREE, KC.FOUR, KC.FIVE]
+      .map(k => this.input.keyboard!.addKey(k));
+
+    // ESC: metti in pausa e apri le impostazioni
+    const kb = this.input.keyboard!;
+    kb.on('keydown-ESC', () => this.openPauseSettings());
 
     // Tasti debug
-    const kb = this.input.keyboard!;
     kb.on('keydown-ZERO', () => this.scene.start('DebugScene'));
     kb.on('keydown-G', () => { this.debugGod = !this.debugGod; if (this.debugGod) this.fuel = this.maxFuel; });
     kb.on('keydown-B', () => { if (this.alive && !this.bossSpawned) this.spawnBoss(); });
     kb.on('keydown-N', () => { if (this.alive && !this.missionDone) this.triggerMissionComplete(); });
     kb.on('keydown-H', () => { this.health = this.maxHealth; this.fuel = this.maxFuel;
       (Object.keys(this.components) as ComponentKey[]).forEach(k => this.components[k].health = 100); });
+  }
+
+  /** Pausa la partita e apre le Impostazioni in overlay (ESC le richiude e riprende). */
+  private openPauseSettings() {
+    if (!this.alive || this.missionDone) return; // non in game over / fine missione
+    if (this.scene.isPaused()) return;            // già in pausa
+    this.sfx?.stopEngine();                        // silenzia il motore durante la pausa
+    this.scene.pause();
+    this.scene.launch('SettingsScene', { from: 'GameScene' });
   }
 
   // ─── Update ──────────────────────────────────────────────────────────────────
@@ -1405,6 +1346,81 @@ export default class GameScene extends Phaser.Scene {
     if (this.spaceKey.isDown && time - this.lastFire > this.getEffectiveCooldown()) {
       this.lastFire = time;
       this.fireWeapon();
+    }
+  }
+
+  // ─── Cambio arma a runtime ─────────────────────────────────────────────────
+  private updateWeaponSwitch() {
+    for (let i = 0; i < this.numberKeys.length; i++) {
+      if (Phaser.Input.Keyboard.JustDown(this.numberKeys[i])) this.selectWeapon(WEAPON_KEYS[i]);
+    }
+    if (Phaser.Input.Keyboard.JustDown(this.cycleKey) && this.ownedWeapons.length > 1) {
+      const cur = this.ownedWeapons.indexOf(this.currentWeapon);
+      this.selectWeapon(this.ownedWeapons[(cur + 1) % this.ownedWeapons.length]);
+    }
+  }
+
+  private selectWeapon(key: WeaponType) {
+    if (!this.ownedWeapons.includes(key) || key === this.currentWeapon) return;
+    this.currentWeapon = key;
+    this.registry.set('currentWeapon', key);
+    // Pop visivo del nome arma (cosmetico)
+    this.tweens.killTweensOf(this.hudWeapon);
+    this.hudWeapon.setScale(1.3);
+    this.tweens.add({ targets: this.hudWeapon, scale: 1, duration: 160 });
+  }
+
+  // ─── Scatto / scrollata anti-aggancio ──────────────────────────────────────
+  private updateDash(time: number) {
+    if (Phaser.Input.Keyboard.JustDown(this.shiftKey) && time >= this.dashReadyAt) this.performDash(time);
+  }
+
+  private performDash(time: number) {
+    this.dashReadyAt    = time + DASH_COOLDOWN;
+    this.dashGraceUntil = time + DASH_GRACE;
+
+    // Stacca e sbalza via tutti gli zombi aggrappati (solo visivo: nessun punteggio)
+    const thrown = this.attachedZombies.length;
+    for (const az of this.attachedZombies) {
+      this.spawnHitParticles(az.sprite.x, az.sprite.y);
+      this.tweens.add({
+        targets: az.sprite,
+        x: az.sprite.x - 130, y: az.sprite.y + Phaser.Math.Between(-40, 40),
+        angle: Phaser.Math.Between(-260, 260), alpha: 0,
+        duration: 340, ease: 'Cubic.easeIn',
+        onComplete: () => az.sprite.destroy(),
+      });
+    }
+    this.attachedZombies = [];
+
+    // Juice: lampo + tinta + shake (niente rotazione/scala del corpo fisico → hitbox invariata)
+    this.vehicle.setTint(0xaaddff);
+    this.time.delayedCall(140, () => { if (this.vehicle?.active) this.vehicle.clearTint(); });
+    Juice.muzzleFlash(this, this.vehicle.x, this.vehicle.y, 0x88ccff);
+    this.cameras.main.shake(thrown > 0 ? 160 : 90, 0.008);
+    this.sfx?.playImpact();
+  }
+
+  // ─── Combo / moltiplicatore di punteggio ───────────────────────────────────
+  private updateCombo(delta: number) {
+    if (this.combo <= 0) return;
+    this.comboTimer -= delta;
+    if (this.comboTimer <= 0) { this.combo = 0; this.comboTimer = 0; }
+  }
+
+  private comboMultiplier(): number {
+    return Phaser.Math.Clamp(1 + Math.floor((this.combo - 1) / 5), 1, 5);
+  }
+
+  /** Aggiunge punteggio da un'uccisione applicando il moltiplicatore combo. */
+  private addKillScore(base: number) {
+    this.combo++;
+    this.comboTimer = COMBO_WINDOW;
+    this.score += base * this.comboMultiplier();
+    if (this.combo >= 2 && this.hudCombo) {
+      this.tweens.killTweensOf(this.hudCombo);
+      this.hudCombo.setScale(1.35);
+      this.tweens.add({ targets: this.hudCombo, scale: 1, duration: 180 });
     }
   }
 
@@ -1470,7 +1486,7 @@ export default class GameScene extends Phaser.Scene {
           bullet.destroy();
           az.hp--;
           if (az.hp <= 0) {
-            this.score += 5;
+            this.addKillScore(5);
             this.spawnHitParticles(az.sprite.x, az.sprite.y);
             az.sprite.destroy();
             this.attachedZombies.splice(i,1);
@@ -1531,7 +1547,7 @@ export default class GameScene extends Phaser.Scene {
   private updateHUD() {
     const hpPct = this.health / this.maxHealth;
     this.hudHealthFill.displayWidth = Math.max(0, hpPct * 110);
-    this.hudHealthFill.setFillStyle(hpPct < 0.3 ? 0xff2222 : hpPct < 0.6 ? 0xffaa00 : 0x44cc44);
+    this.hudHealthFill.setFillStyle(hpPct < 0.3 ? UI.hpLow : hpPct < 0.6 ? UI.hpMid : UI.hpHigh);
 
     this.hudFuelFill.displayWidth = Math.max(0, (this.fuel / this.maxFuel) * 110);
     this.hudFuelNum.setText(`${Math.round(this.fuel)}%`);
@@ -1548,6 +1564,26 @@ export default class GameScene extends Phaser.Scene {
     const n = this.attachedZombies.length;
     this.hudAttached.setText(n > 0 ? `[${n} aggrappati]` : '');
     this.hudWeapon.setText(WEAPONS[this.currentWeapon].name.toUpperCase());
+
+    // Combo
+    if (this.combo >= 2) {
+      const m = this.comboMultiplier();
+      this.hudCombo.setText(`COMBO ${this.combo}  ×${m}`);
+      this.hudCombo.setColor(COMBO_COLORS[m - 1] ?? UI.white);
+      this.hudCombo.setVisible(true);
+    } else {
+      this.hudCombo.setVisible(false);
+    }
+
+    // Scatto (cooldown)
+    const dashRemain = this.dashReadyAt - this.time.now;
+    if (dashRemain <= 0) { this.hudDash.setText('↯ SCATTO'); this.hudDash.setColor(UI.greenOk); }
+    else { this.hudDash.setText(`↯ ${Math.ceil(dashRemain / 1000)}s`); this.hudDash.setColor(UI.faint); }
+
+    // Selettore armi: evidenzia quella attiva
+    for (const slot of this.weaponSlots) {
+      slot.txt.setColor(slot.key === this.currentWeapon ? UI.gold : UI.muted);
+    }
 
     for (const key of Object.keys(this.components) as ComponentKey[]) {
       const comp = this.components[key];
@@ -1575,6 +1611,14 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // ─── Spawning ────────────────────────────────────────────────────────────────
+
+  // Hit-stop: congela il gioco per pochi ms sugli impatti forti (vende il "peso")
+  private hitStop(ms: number) {
+    if (this.frozen || !this.alive || this.missionDone) return;
+    this.frozen = true;
+    this.physics.pause();
+    this.time.delayedCall(ms, () => { this.frozen = false; this.physics.resume(); });
+  }
 
   // Personalità di movimento: rollio con forma d'onda, tonfo, respiro, virata + VFX
   private updateZombieMotion(time: number, delta: number) {
@@ -1688,7 +1732,7 @@ export default class GameScene extends Phaser.Scene {
     z.setData('rockPhase', Math.random() * 6.28);
     z.setVelocityX(-(ZOMBIE_STATS.giant.speed + SCROLL_SPEED)).setDepth(9).setBodySize(38,50);
     z.play('walk_giant'); z.anims.setProgress(Math.random());
-    const warn = this.add.text(W - 60, H/2, '⚠ GIGANTE!', {
+    const warn = Ui.text(this, W - 60, H/2, '⚠ GIGANTE!', {
       fontSize: '22px', color: '#ff4400', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(25);
@@ -1720,6 +1764,7 @@ export default class GameScene extends Phaser.Scene {
         this.spawnRocket(vx, vy);
         break;
     }
+    if (this.currentWeapon !== 'flamethrower') Juice.muzzleFlash(this, vx, vy, w.color);
     this.sfx?.playShot();
   }
 
@@ -1761,8 +1806,9 @@ export default class GameScene extends Phaser.Scene {
     if (type === 'armored') this.emitSparks(zombie.x, zombie.y);
     const hp   = (zombie.getData('hp') as number) - dmg;
     if (hp <= 0) {
-      this.score += ZOMBIE_STATS[type].score;
+      this.addKillScore(ZOMBIE_STATS[type].score);
       this.spawnHitParticles(zombie.x, zombie.y);
+      this.environment?.addDecal('blood', zombie.x, zombie.y);
       this.sfx?.playZombieKill();
       if (type === 'toxic') this.spawnToxicCloud(zombie.x, zombie.y);
       if (type === 'giant') {
@@ -1789,6 +1835,8 @@ export default class GameScene extends Phaser.Scene {
         this.dealDamage(ZOMBIE_STATS.runner.damage);
         this.cameras.main.shake(80, 0.005);
         this.sfx?.playImpact();
+        this.environment?.addDecal('skid', zombie.x, zombie.y);
+        this.environment?.addDecal('blood', zombie.x, zombie.y);
         break;
 
       case 'armored':
@@ -1798,6 +1846,9 @@ export default class GameScene extends Phaser.Scene {
         this.dealDamage(ZOMBIE_STATS.armored.damage);
         this.cameras.main.shake(200, 0.014);
         this.sfx?.playImpact();
+        this.environment?.addDecal('skid', zombie.x, zombie.y);
+        this.environment?.addDecal('debris', zombie.x, zombie.y);
+        this.environment?.addDecal('blood', zombie.x, zombie.y);
         break;
 
       case 'giant':
@@ -1807,8 +1858,12 @@ export default class GameScene extends Phaser.Scene {
         this.damageComponent('wheels', 20);
         this.dealDamage(ZOMBIE_STATS.giant.damage);
         this.cameras.main.shake(400, 0.025);
+        this.hitStop(50);
         this.spawnHitParticles(zombie.x, zombie.y);
         this.sfx?.playExplosion();
+        this.environment?.addDecal('skid', zombie.x, zombie.y);
+        this.environment?.addDecal('debris', zombie.x, zombie.y);
+        this.environment?.addDecal('blood', zombie.x, zombie.y);
         break;
 
       case 'jumper':
@@ -1828,6 +1883,7 @@ export default class GameScene extends Phaser.Scene {
         this.dealDamage(ZOMBIE_STATS.toxic.damage);
         this.damageComponent('armor', 8);
         this.sfx?.playImpact();
+        this.environment?.addDecal('blood', zombie.x, zombie.y);
         break;
 
       default: // common
@@ -1839,6 +1895,7 @@ export default class GameScene extends Phaser.Scene {
           this.damageComponent('armor', 5);
           this.cameras.main.shake(60, 0.004);
           this.sfx?.playImpact();
+          this.environment?.addDecal('blood', zombie.x, zombie.y);
         }
         break;
     }
@@ -1856,7 +1913,7 @@ export default class GameScene extends Phaser.Scene {
       if (Phaser.Math.Distance.Between(rx, ry, z.x, z.y) > AOE) continue;
       const hp = (z.getData('hp') as number) - dmg;
       if (hp <= 0) {
-        this.score += ZOMBIE_STATS[z.getData('type') as ZombieType].score;
+        this.addKillScore(ZOMBIE_STATS[z.getData('type') as ZombieType].score);
         this.spawnHitParticles(z.x, z.y);
         if (z.getData('type') === 'toxic') this.spawnToxicCloud(z.x, z.y);
         z.destroy();
@@ -1879,8 +1936,11 @@ export default class GameScene extends Phaser.Scene {
     }
     this.spawnHitParticles(rx, ry);
     this.spawnHitParticles(rx + 8, ry - 8);
+    this.environment?.addDecal('scorch', rx, ry);
+    Juice.lightFlash(this, rx, ry, 0xff8a33, 4);
     this.sfx?.playExplosion();
     this.cameras.main.shake(130, 0.009);
+    this.hitStop(30);
   }
 
   private onCollectFuel(can: Phaser.Physics.Arcade.Sprite) {
@@ -1908,6 +1968,8 @@ export default class GameScene extends Phaser.Scene {
   // ─── Attachment system ───────────────────────────────────────────────────────
 
   private attachZombie(zombie: Phaser.Physics.Arcade.Sprite, prefTurret: boolean) {
+    // Subito dopo lo scatto il veicolo "respinge": nessun nuovo aggancio per un istante.
+    if (this.time.now < this.dashGraceUntil) { this.spawnHitParticles(zombie.x, zombie.y); zombie.destroy(); return; }
     const usedSlots = this.attachedZombies.map(az => az.slotIndex);
     let slotIndex: number;
     if (prefTurret) {
@@ -2001,20 +2063,32 @@ export default class GameScene extends Phaser.Scene {
     this.fuelCans.setVelocityX(0);
 
     const cx = W/2, cy = H/2;
-    this.add.rectangle(cx,cy,500,260,0x000000,0.9).setDepth(30);
-    this.add.text(cx,cy-95,'MISSIONE COMPLETATA!',{
-      fontSize:'32px', color:'#88ff44', fontStyle:'bold',
+    this.add.rectangle(cx,cy,500,260,UI.black,0.9).setDepth(30);
+    Ui.text(this, cx,cy-95,'MISSIONE COMPLETATA!',{
+      fontSize:'32px', color:UI.green, fontStyle:'bold',
       stroke:'#006600', strokeThickness:4,
     }).setOrigin(0.5).setDepth(31);
-    this.add.text(cx,cy-48,`Punteggio: ${this.score}`,{fontSize:'20px',color:'#ffffff'}).setOrigin(0.5).setDepth(31);
-    this.add.text(cx,cy-14,`Distanza: ${Math.floor(this.distance/100)} km`,{fontSize:'16px',color:'#aaaaff'}).setOrigin(0.5).setDepth(31);
-    this.add.text(cx,cy+20,`Monete guadagnate: +${earned}`,{fontSize:'18px',color:'#ffee44'}).setOrigin(0.5).setDepth(31);
-    this.add.text(cx,cy+55,`Totale: ${(this.registry.get('money') ?? 0)}`,{fontSize:'15px',color:'#ffcc00'}).setOrigin(0.5).setDepth(31);
-    this.add.text(cx,cy+88,'[ SPAZIO ] per il negozio',{fontSize:'13px',color:'#555555'}).setOrigin(0.5).setDepth(31);
+    Ui.text(this, cx,cy-48,`Punteggio: ${this.score}`,{fontSize:'20px',color:UI.white}).setOrigin(0.5).setDepth(31);
+    Ui.text(this, cx,cy-14,`Distanza: ${Math.floor(this.distance/100)} km`,{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
+    Ui.text(this, cx,cy+20,`Monete guadagnate: +${earned}`,{fontSize:'18px',color:UI.gold}).setOrigin(0.5).setDepth(31);
+    Ui.text(this, cx,cy+55,`Totale: ${(this.registry.get('money') ?? 0)}`,{fontSize:'15px',color:UI.goldDim}).setOrigin(0.5).setDepth(31);
+    Ui.text(this, cx,cy+82,'[ SPAZIO ] per il negozio',{fontSize:'13px',color:UI.faint}).setOrigin(0.5).setDepth(31);
+    this.addMenuReturn(cx, cy+108);
 
     this.time.delayedCall(600, () => {
-      this.input.keyboard?.once('keydown-SPACE', () => this.scene.start('ShopScene'));
+      this.input.keyboard?.once('keydown-SPACE', () => Juice.go(this, 'ShopScene'));
+      this.input.keyboard?.once('keydown-M', () => Juice.go(this, 'MenuScene'));
     });
+  }
+
+  /** Voce cliccabile "Torna al menu" per le schermate di fine partita. */
+  private addMenuReturn(x: number, y: number) {
+    const t = Ui.text(this, x, y, '[ M ]  Torna al menu', {
+      fontSize: '13px', color: '#7788aa',
+    }).setOrigin(0.5).setDepth(31).setInteractive({ useHandCursor: true });
+    t.on('pointerover', () => t.setColor('#aaccff'));
+    t.on('pointerout',  () => t.setColor('#7788aa'));
+    t.on('pointerdown', () => Juice.go(this, 'MenuScene'));
   }
 
   // ─── Game over ───────────────────────────────────────────────────────────────
@@ -2044,15 +2118,17 @@ export default class GameScene extends Phaser.Scene {
 
     this.time.delayedCall(700, () => {
       const cx = W/2, cy = H/2;
-      this.add.rectangle(cx,cy,440,260,0x000000,0.88).setDepth(30);
-      this.add.text(cx,cy-80,'GAME OVER',{
+      this.add.rectangle(cx,cy,440,260,UI.black,0.88).setDepth(30);
+      Ui.text(this, cx,cy-80,'GAME OVER',{
         fontSize:'50px', color:'#ff3333', fontStyle:'bold',
         stroke:'#880000', strokeThickness:5,
       }).setOrigin(0.5).setDepth(31);
-      this.add.text(cx,cy-28,reason,{fontSize:'16px',color:'#ffaaaa'}).setOrigin(0.5).setDepth(31);
-      this.add.text(cx,cy+10,`Punteggio: ${this.score}`,{fontSize:'22px',color:'#ffffff'}).setOrigin(0.5).setDepth(31);
-      this.add.text(cx,cy+44,`Distanza: ${Math.floor(this.distance/100)} km`,{fontSize:'16px',color:'#aaaaff'}).setOrigin(0.5).setDepth(31);
-      this.add.text(cx,cy+80,'[ SPAZIO ] per ricominciare',{fontSize:'14px',color:'#666666'}).setOrigin(0.5).setDepth(31);
+      Ui.text(this, cx,cy-28,reason,{fontSize:'16px',color:UI.redSoft}).setOrigin(0.5).setDepth(31);
+      Ui.text(this, cx,cy+10,`Punteggio: ${this.score}`,{fontSize:'22px',color:UI.white}).setOrigin(0.5).setDepth(31);
+      Ui.text(this, cx,cy+44,`Distanza: ${Math.floor(this.distance/100)} km`,{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
+      Ui.text(this, cx,cy+78,'[ SPAZIO ] per ricominciare',{fontSize:'14px',color:UI.faint}).setOrigin(0.5).setDepth(31);
+      this.addMenuReturn(cx, cy+104);
+      this.input.keyboard?.once('keydown-M', () => Juice.go(this, 'MenuScene'));
     });
   }
 
@@ -2068,7 +2144,7 @@ export default class GameScene extends Phaser.Scene {
     this.bossMaxHp = cfg.hp;
 
     // Alert
-    const warn = this.add.text(W / 2, H / 2, `⚠  ${cfg.name.toUpperCase()}  ⚠`, {
+    const warn = Ui.text(this, W / 2, H / 2, `⚠  ${cfg.name.toUpperCase()}  ⚠`, {
       fontSize: '28px', color: '#ff4400', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 5,
     }).setOrigin(0.5).setDepth(28).setAlpha(0);
@@ -2206,6 +2282,8 @@ export default class GameScene extends Phaser.Scene {
     this.damageBoss(boss, WEAPONS.rockets.damage * 3);
     this.spawnHitParticles(rx, ry);
     this.spawnHitParticles(rx + 10, ry - 8);
+    this.environment?.addDecal('scorch', rx, ry);
+    Juice.lightFlash(this, rx, ry, 0xff8a33, 4);
     this.sfx?.playExplosion();
     this.cameras.main.shake(120, 0.009);
   }
@@ -2255,13 +2333,16 @@ export default class GameScene extends Phaser.Scene {
     this.bossSprite.destroy();
     this.bossSprite = null;
     this.cameras.main.shake(500, 0.022);
+    this.hitStop(70);
+    Juice.flash(this, 0xffffff, 0.5, 140);
+    Juice.lightFlash(this, bx, by, 0xffbb55, 8, 460);
 
     const earned = cfg.reward;
-    this.score += 500;
+    this.addKillScore(500);
     this.registry.set('money', (this.registry.get('money') ?? 0) + earned);
     this.hideBossHUD();
 
-    const vt = this.add.text(W / 2, H / 2 - 10, `BOSS SCONFITTO!  +${earned} monete`, {
+    const vt = Ui.text(this, W / 2, H / 2 - 10, `BOSS SCONFITTO!  +${earned} monete`, {
       fontSize: '24px', color: '#ffee00', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 5,
     }).setOrigin(0.5).setDepth(28);
@@ -2273,10 +2354,10 @@ export default class GameScene extends Phaser.Scene {
 
   private showBossHUD(name: string) {
     const cx = W / 2, barW = 440, y = 96;
-    const bg    = this.add.rectangle(cx, y, barW + 8, 20, 0x000000, 0.85).setDepth(22).setAlpha(0);
-    const fill  = this.add.rectangle(cx - barW / 2, y, barW, 14, 0xcc0000).setOrigin(0, 0.5).setDepth(23).setAlpha(0);
-    const label = this.add.text(cx, y - 14, name.toUpperCase(), {
-      fontSize: '13px', color: '#ff6666', fontStyle: 'bold',
+    const bg    = this.add.rectangle(cx, y, barW + 8, 20, UI.black, 0.85).setDepth(22).setAlpha(0);
+    const fill  = this.add.rectangle(cx - barW / 2, y, barW, 14, UI.redCrit).setOrigin(0, 0.5).setDepth(23).setAlpha(0);
+    const label = Ui.text(this, cx, y - 14, name.toUpperCase(), {
+      fontSize: '13px', color: UI.red, fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(23).setAlpha(0);
 

@@ -1,4 +1,7 @@
 export default class SoundManager {
+  /** Volume master di riferimento (a volume utente = 1). */
+  private static readonly BASE_VOLUME = 0.35;
+
   private ctx: AudioContext;
   private master: GainNode;
   private engineOsc?: OscillatorNode;
@@ -8,8 +11,14 @@ export default class SoundManager {
   constructor(ctx: AudioContext) {
     this.ctx = ctx;
     this.master = ctx.createGain();
-    this.master.gain.value = 0.35;
+    this.master.gain.value = SoundManager.BASE_VOLUME;
     this.master.connect(ctx.destination);
+  }
+
+  /** Imposta il volume utente (0..1), scalato sul livello master di riferimento. */
+  setVolume(v: number) {
+    const vol = v < 0 ? 0 : v > 1 ? 1 : v;
+    this.master.gain.value = SoundManager.BASE_VOLUME * vol;
   }
 
   // ─── Gameplay sounds ─────────────────────────────────────────────────────────

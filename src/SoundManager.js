@@ -1,9 +1,14 @@
-export default class SoundManager {
+class SoundManager {
     constructor(ctx) {
         this.ctx = ctx;
         this.master = ctx.createGain();
-        this.master.gain.value = 0.35;
+        this.master.gain.value = SoundManager.BASE_VOLUME;
         this.master.connect(ctx.destination);
+    }
+    /** Imposta il volume utente (0..1), scalato sul livello master di riferimento. */
+    setVolume(v) {
+        const vol = v < 0 ? 0 : v > 1 ? 1 : v;
+        this.master.gain.value = SoundManager.BASE_VOLUME * vol;
     }
     // ─── Gameplay sounds ─────────────────────────────────────────────────────────
     playShot() {
@@ -189,4 +194,7 @@ export default class SoundManager {
         return src;
     }
 }
+/** Volume master di riferimento (a volume utente = 1). */
+SoundManager.BASE_VOLUME = 0.35;
+export default SoundManager;
 //# sourceMappingURL=SoundManager.js.map
