@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import { VEHICLES, VEHICLE_KEYS, SURVIVORS, WEAPONS, WEAPON_KEYS } from '../GameData';
+import GameScene from './GameScene';
 import Juice from '../Juice';
 import Settings from '../Settings';
-import Ui, { UI } from '../Ui';
+import Ui, { UI, MENU_VIGNETTE } from '../Ui';
 const W = 800, H = 600;
 const SHOP_ITEMS = [
     { key: 'repair', label: 'Ripara tutto', cost: 80, desc: 'Tutti i componenti tornano al 100%', oneTime: false },
@@ -41,11 +42,13 @@ export default class ShopScene extends Phaser.Scene {
         this.ownedWeapons = this.registry.get('ownedWeapons') ?? ['mg'];
         const available = SURVIVORS.filter(s => !this.survivors.includes(s.key));
         this.offeredSurvivors = Phaser.Utils.Array.Shuffle([...available]).slice(0, 3);
+        this.ensureTextures();
         this.drawUI();
         // Coesione filmica: overlay sempre presente (se attivo), dissolvenza solo al
-        // primo ingresso — non ad ogni ri-disegno dopo un acquisto.
+        // primo ingresso — non ad ogni ri-disegno dopo un acquisto. Vignetta morbida
+        // (menu): i pannelli laterali e la fila veicoli vivono ai bordi.
         if (Settings.screenFx)
-            this.grain = Juice.addOverlay(this);
+            this.grain = Juice.addOverlay(this, 18, MENU_VIGNETTE);
         if (!this.replay)
             Juice.fadeIn(this);
     }
@@ -56,9 +59,19 @@ export default class ShopScene extends Phaser.Scene {
     refresh() {
         this.scene.restart({ replay: true });
     }
+    /** Genera (una volta) le texture procedurali per le anteprime di armi e veicoli. */
+    ensureTextures() {
+        if (this.textures.exists('vehicle_experimental'))
+            return; // già generate da una partita
+        GameScene.buildEntityTextures(this);
+        VEHICLE_KEYS.forEach(k => GameScene.buildVehicleTexture(this, k));
+    }
     drawUI() {
-        // Background
-        this.add.rectangle(W / 2, H / 2, W, H, UI.bg);
+        // Background: gradiente verticale (più chiaro del vecchio piatto quasi-nero) per dare
+        // profondità e tenere leggibili pannelli e card. Scena-locale, non un token di chrome.
+        const bg = this.add.graphics();
+        bg.fillGradientStyle(0x1a1a26, 0x1a1a26, 0x101018, 0x12121c, 1, 1, 1, 1);
+        bg.fillRect(0, 0, W, H);
         this.add.rectangle(W / 2, 32, W, 64, UI.panelAlt);
         Ui.text(this, W / 2, 8, `GARAGE  —  Fine Missione ${this.missionNum - 1}`, {
             fontSize: '20px', color: UI.greenSoft, fontStyle: 'bold',
@@ -89,9 +102,9 @@ export default class ShopScene extends Phaser.Scene {
             const bought = item.oneTime && !!this.upgrades[item.key];
             const canAfford = !bought && this.money >= item.cost;
             const bgColor = bought ? UI.panelBought : UI.panel;
-            const bg = this.add.rectangle(px + 220, iy + 18, 440, 42, bgColor).setOrigin(0.5);
+            const bg = Ui.box(this, px + 220, iy + 18, 440, 42, { fill: bgColor, radius: 6, stroke: UI.stroke, strokeAlpha: 0.5 });
             if (!bought) {
-                bg.setInteractive({ useHandCursor: canAfford });
+                bg.setInteractive(canAfford);
                 bg.on('pointerover', () => { if (canAfford)
                     bg.setFillStyle(0x181830); });
                 bg.on('pointerout', () => bg.setFillStyle(bgColor));
@@ -120,10 +133,12 @@ export default class ShopScene extends Phaser.Scene {
             const selected = this.currentWeapon === key;
             const canBuy = !owned && this.money >= w.price;
             const bgColor = selected ? 0x1a1200 : owned ? 0x0e0e0e : 0x080808;
-            const bg = this.add.rectangle(wx + 40, py + 46, 82, 72, bgColor).setOrigin(0.5)
-                .setInteractive({ useHandCursor: owned || canBuy });
-            // Icona colore arma
-            this.add.rectangle(wx + 40, py + 22, 50, 8, w.color).setOrigin(0.5);
+            const bg = Ui.box(this, wx + 40, py + 46, 82, 72, { fill: bgColor, radius: 7, stroke: UI.stroke, strokeAlpha: 0.5 })
+                .setInteractive(owned || canBuy);
+            // Anteprima reale: il proiettile dell'arma (razzo dedicato; bullet tinto per le altre)
+            const projKey = key === 'rockets' ? 'rocket' : 'bullet';
+            this.add.image(wx + 40, py + 22, projKey)
+                .setTint(w.color).setScale(key === 'rockets' ? 1.7 : 2.4).setAlpha(owned ? 1 : 0.4);
             Ui.text(this, wx + 40, py + 32, w.name, { fontSize: '8px', color: owned ? UI.text : '#444444', wordWrap: { width: 78 }, align: 'center' }).setOrigin(0.5, 0);
             if (owned) {
                 Ui.text(this, wx + 40, py + 68, selected ? '● ATTIVA' : 'Usa', { fontSize: '9px', color: selected ? UI.goldDim : UI.blueUse }).setOrigin(0.5);
@@ -165,9 +180,9 @@ export default class ShopScene extends Phaser.Scene {
         this.offeredSurvivors.forEach((s, i) => {
             const iy = rY + 18 + i * 74;
             const alreadyIn = this.survivors.includes(s.key);
-            const bg = this.add.rectangle(px + 145, iy + 30, 290, 66, UI.panelWarm).setOrigin(0.5);
+            const bg = Ui.box(this, px + 145, iy + 30, 290, 66, { fill: UI.panelWarm, radius: 7, stroke: UI.stroke, strokeAlpha: 0.5 });
             if (!alreadyIn) {
-                bg.setInteractive({ useHandCursor: true });
+                bg.setInteractive(true);
                 bg.on('pointerover', () => bg.setFillStyle(0x1e1e14));
                 bg.on('pointerout', () => bg.setFillStyle(UI.panelWarm));
                 bg.on('pointerdown', () => this.recruitSurvivor(s.key));
@@ -188,12 +203,14 @@ export default class ShopScene extends Phaser.Scene {
             const selected = this.currentVehicle === key;
             const canBuy = !owned && this.money >= v.price;
             const bgColor = selected ? 0x0e1e2e : owned ? 0x0e0e1e : 0x08080e;
-            const bg = this.add.rectangle(vx + 50, py + 66, 106, 96, bgColor).setOrigin(0.5)
-                .setInteractive({ useHandCursor: owned || canBuy });
-            // Vehicle color swatch
-            this.add.rectangle(vx + 50, py + 32, 76, 18, v.color).setOrigin(0.5);
-            Ui.text(this, vx + 50, py + 44, v.name, {
-                fontSize: '8px', color: owned ? UI.text : '#444444', wordWrap: { width: 100 },
+            const bg = Ui.box(this, vx + 50, py + 66, 106, 96, {
+                fill: bgColor, radius: 8,
+                stroke: selected ? UI.greenSig : UI.stroke, strokeAlpha: selected ? 0.9 : 0.5,
+            }).setInteractive(owned || canBuy);
+            // Anteprima reale: lo sprite del veicolo (sbiadito se non posseduto)
+            this.add.image(vx + 50, py + 30, `vehicle_${key}`).setScale(0.7).setAlpha(owned ? 1 : 0.4);
+            Ui.text(this, vx + 50, py + 50, v.name, {
+                fontSize: '8px', color: owned ? UI.text : '#444444', wordWrap: { width: 100 }, align: 'center',
             }).setOrigin(0.5, 0);
             if (owned) {
                 Ui.text(this, vx + 50, py + 82, selected ? '● ATTIVO' : 'Usa', { fontSize: '10px', color: selected ? UI.green : UI.blueUse }).setOrigin(0.5);

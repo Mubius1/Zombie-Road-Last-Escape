@@ -1234,16 +1234,21 @@ export default class GameScene extends Phaser.Scene {
   private buildHUD(missionNum: number) {
     const D = 20, BAR_W = 110, COMP_BAR_W = 120;
     const panel = this.add.graphics().setDepth(D);
-    panel.fillStyle(UI.black, 0.62); panel.fillRect(0,0,W,84);
+    panel.fillStyle(UI.black, 0.62); panel.fillRoundedRect(0,0,W,84,{ tl:0, tr:0, bl:16, br:16 });
     panel.lineStyle(1,UI.strokeDim,0.7); panel.lineBetween(0,46,W,46);
 
     Ui.text(this, 8,8,'SALUTE',{fontSize:'11px',color:UI.redText}).setDepth(D+1);
-    this.add.rectangle(8+BAR_W/2,34,BAR_W,10,UI.barRed).setDepth(D+1);
+    Ui.box(this, 8+BAR_W/2,34,BAR_W,10,{ fill:UI.barRed, radius:3 }).setDepth(D+1);
     this.hudHealthFill = this.add.rectangle(8,34,BAR_W,10,UI.hpFill).setOrigin(0,0.5).setDepth(D+2);
 
     Ui.text(this, 138,8,'CARBURANTE',{fontSize:'11px',color:UI.amberSoft}).setDepth(D+1);
-    this.add.rectangle(138+BAR_W/2,34,BAR_W,10,UI.barAmber).setDepth(D+1);
+    Ui.box(this, 138+BAR_W/2,34,BAR_W,10,{ fill:UI.barAmber, radius:3 }).setDepth(D+1);
     this.hudFuelFill = this.add.rectangle(138,34,BAR_W,10,UI.fuelBar).setOrigin(0,0.5).setDepth(D+2);
+
+    // Tacche di segmentazione sulle due barre principali (gauge "premium")
+    const ticks = this.add.graphics().setDepth(D+3);
+    ticks.fillStyle(UI.black, 0.45);
+    for (let i = 1; i < 5; i++) { ticks.fillRect(8 + i*22, 30, 1, 8); ticks.fillRect(138 + i*22, 30, 1, 8); }
     this.hudFuelNum  = Ui.text(this, 255,28,'',{fontSize:'11px',color:UI.amberSoft}).setDepth(D+2);
 
     this.hudScore    = Ui.text(this, 290,6,'PUNTEGGIO: 0',{fontSize:'13px',color:UI.white}).setDepth(D+1);
@@ -1267,7 +1272,7 @@ export default class GameScene extends Phaser.Scene {
     const DIST_BAR_W = 110;
     Ui.text(this, 290,24,'PERCORSO',{fontSize:'10px',color:'#7777aa'}).setDepth(D+1);
     this.hudDist = Ui.text(this, 395,24,'',{fontSize:'10px',color:UI.blueInfo}).setDepth(D+2);
-    this.add.rectangle(290+DIST_BAR_W/2,37,DIST_BAR_W,7,UI.barBlue).setDepth(D+1);
+    Ui.box(this, 290+DIST_BAR_W/2,37,DIST_BAR_W,7,{ fill:UI.barBlue, radius:2 }).setDepth(D+1);
     this.hudDistFill = this.add.rectangle(290,37,DIST_BAR_W,7,UI.distBar).setOrigin(0,0.5).setDepth(D+2);
     // label meta (static)
     Ui.text(this, 408,33,`/ ${DIST_KM} km`,{fontSize:'9px',color:UI.faint}).setDepth(D+1);
@@ -1284,7 +1289,7 @@ export default class GameScene extends Phaser.Scene {
       const comp = this.components[key];
       const sx = 10 + i * 158;
       Ui.text(this, sx,49,comp.label,{fontSize:'10px',color:UI.muted}).setDepth(D+1);
-      this.add.rectangle(sx+COMP_BAR_W/2,72,COMP_BAR_W,7,UI.barGrey).setDepth(D+1);
+      Ui.box(this, sx+COMP_BAR_W/2,72,COMP_BAR_W,7,{ fill:UI.barGrey, radius:2 }).setDepth(D+1);
       const fill = this.add.rectangle(sx,72,COMP_BAR_W,7,comp.baseColor).setOrigin(0,0.5).setDepth(D+2);
       comp.fill = fill;
     });
@@ -2020,7 +2025,15 @@ export default class GameScene extends Phaser.Scene {
     const base  = armorPct<=0 ? 2.5 : armorPct<0.3 ? 1.8 : armorPct<0.6 ? 1.3 : 1.0;
     const mult  = Math.max(0.5, base - bonus);
     this.health = Math.max(0, this.health - Math.round(amount * mult));
+    this.flashHealthBar();
     if (this.health <= 0) this.endGame('Veicolo distrutto!');
+  }
+
+  /** Feedback al colpo: lampo bianco sulla barra salute + breve "thump" verticale. */
+  private flashHealthBar() {
+    const f = this.add.rectangle(63, 34, 116, 14, 0xffffff, 0.55).setDepth(24);
+    this.tweens.add({ targets: f, alpha: 0, duration: 160, onComplete: () => f.destroy() });
+    if (this.hudHealthFill) this.tweens.add({ targets: this.hudHealthFill, scaleY: 1.9, duration: 80, yoyo: true });
   }
 
   private getEffectiveVerticalSpeed(): number {
@@ -2063,7 +2076,7 @@ export default class GameScene extends Phaser.Scene {
     this.fuelCans.setVelocityX(0);
 
     const cx = W/2, cy = H/2;
-    this.add.rectangle(cx,cy,500,260,UI.black,0.9).setDepth(30);
+    Ui.box(this, cx,cy,500,260,{ fill:UI.black, fillAlpha:0.9, radius:16, stroke:UI.greenSig, strokeAlpha:0.45 }).setDepth(30);
     Ui.text(this, cx,cy-95,'MISSIONE COMPLETATA!',{
       fontSize:'32px', color:UI.green, fontStyle:'bold',
       stroke:'#006600', strokeThickness:4,
@@ -2118,7 +2131,7 @@ export default class GameScene extends Phaser.Scene {
 
     this.time.delayedCall(700, () => {
       const cx = W/2, cy = H/2;
-      this.add.rectangle(cx,cy,440,260,UI.black,0.88).setDepth(30);
+      Ui.box(this, cx,cy,440,260,{ fill:UI.black, fillAlpha:0.88, radius:16, stroke:UI.redCrit, strokeAlpha:0.55 }).setDepth(30);
       Ui.text(this, cx,cy-80,'GAME OVER',{
         fontSize:'50px', color:'#ff3333', fontStyle:'bold',
         stroke:'#880000', strokeThickness:5,

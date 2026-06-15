@@ -37,19 +37,24 @@ export default class Juice {
         s.generateTexture('fx_scanline', 4, 3);
         s.destroy();
     }
-    /** Vignetta ai bordi + grana animata. Ritorna la grana (anima il tilePosition nell'update). */
-    static addOverlay(scene, depth = 18) {
+    /**
+     * Vignetta ai bordi + grana animata. Ritorna la grana (anima il tilePosition nell'update).
+     * `vignette` scala la forza della vignettatura: 1 = pieno (gioco), valori più bassi per i
+     * menu dove i contenuti vivono ai bordi e non devono essere mangiati dall'ombra.
+     */
+    static addOverlay(scene, depth = 18, vignette = 1) {
         const W = scene.scale.width, H = scene.scale.height;
         const ex = Math.round(W * 0.26), ey = Math.round(H * 0.26);
+        const a = 0.5 * vignette, b = 0.55 * vignette;
         const v = scene.add.graphics().setScrollFactor(0).setDepth(depth);
         // 4 sfumature nere verso i bordi (gli angoli si scuriscono due volte → vignetta)
-        v.fillGradientStyle(0, 0, 0, 0, 0.5, 0.5, 0, 0);
+        v.fillGradientStyle(0, 0, 0, 0, a, a, 0, 0);
         v.fillRect(0, 0, W, ey); // alto
-        v.fillGradientStyle(0, 0, 0, 0, 0, 0, 0.55, 0.55);
+        v.fillGradientStyle(0, 0, 0, 0, 0, 0, b, b);
         v.fillRect(0, H - ey, W, ey); // basso
-        v.fillGradientStyle(0, 0, 0, 0, 0.5, 0, 0.5, 0);
+        v.fillGradientStyle(0, 0, 0, 0, a, 0, a, 0);
         v.fillRect(0, 0, ex, H); // sinistra
-        v.fillGradientStyle(0, 0, 0, 0, 0, 0.5, 0, 0.5);
+        v.fillGradientStyle(0, 0, 0, 0, 0, a, 0, a);
         v.fillRect(W - ex, 0, ex, H); // destra
         Juice.buildTextures(scene);
         // Aberrazione cromatica finta: frangia rossa a sinistra, ciano a destra (additiva, ai bordi)

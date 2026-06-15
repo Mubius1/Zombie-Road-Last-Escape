@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import Juice from '../Juice';
 import Settings from '../Settings';
 import SoundManager from '../SoundManager';
-import Ui, { UI } from '../Ui';
+import Ui, { UI, MENU_VIGNETTE } from '../Ui';
 const W = 800, H = 600;
 const VOL_STEPS = 10;
 /**
@@ -46,7 +46,7 @@ export default class SettingsScene extends Phaser.Scene {
         // in pausa quello del gioco è già sotto.
         Juice.fadeIn(this);
         if (!inGame && Settings.screenFx)
-            this.grain = Juice.addOverlay(this);
+            this.grain = Juice.addOverlay(this, 18, MENU_VIGNETTE);
     }
     update() {
         Juice.jitterGrain(this.grain);

@@ -30,6 +30,23 @@ export const BOSS_CONFIG = {
     radioactive_beast: { name: 'Bestia Radioattiva', hp: 95, speed: 50, scaleX: 2.6, scaleY: 2.6, tint: 0x88ff22, bodyW: 50, bodyH: 58, reward: 450 },
 };
 export const BOSS_ORDER = ['mega_mutant', 'giant_worm', 'armored_colossus', 'radioactive_beast'];
+// ── Tuning del COLOSSO CORAZZATO (slice verticale AAA) ──────────────────────
+// Macchina a stati: idle → telegraph → (charge|volley) → recover → idle. Fase 2 al 50% HP.
+const COLOSSUS_TUNE = {
+    targetX: 540, // posizione di stazionamento
+    approachSpeed: 150, // velocità d'ingresso (entrata in scena), separata dalla cadenza d'attacco
+    bob: 70, // ampiezza oscillazione verticale in idle
+    shieldMult: 0.30, // dmg ricevuto frontale a SCUDO ALZATO (fase 1)
+    shieldMultP2: 0.50, // scudo incrinato in fase 2: meno protezione
+    weakMult: 1.5, // dmg al NUCLEO esposto (durante gli attacchi)
+    recover: 600, // durata recupero dopo un attacco
+    chargeSpeed: 520, chargeMinX: 210, returnSpeed: 230,
+    volleySpreadDeg: 12, // ventaglio fra i proietti
+    // fase 1
+    actionGap: 2400, telCharge: 750, telVolley: 650, volleyShots: 3,
+    // fase 2 (enrage)
+    p2: { actionGap: 1400, telCharge: 480, telVolley: 430, volleyShots: 5 },
+};
 const ENVIRONMENTS = [
     { name: 'Città Distrutta', bgColor: 0x12121e, skyColor: 0x16161e, groundColor: 0x1a1610, roadColor: 0x2a2a2a, lineColor: 0xddcc00, shoulderColor: 0x1e1e22, grade: 0x8fa6c8, gradeAlpha: 0.42, emissive: 0xffcc33, hazeColor: 0x2a2a3a },
     { name: 'Autostrada Abbandonata', bgColor: 0x14120e, skyColor: 0x1c180e, groundColor: 0x141208, roadColor: 0x323028, lineColor: 0xaaaa44, shoulderColor: 0x201e16, grade: 0xc8bc86, gradeAlpha: 0.40, emissive: 0xccbb55, hazeColor: 0x33301f },
@@ -106,6 +123,15 @@ export default class GameScene extends Phaser.Scene {
         this.bossSprite = null;
         this.bossMaxHp = 0;
         this.bossHudObjects = [];
+        // Boss "AAA": macchina a stati + fasi (usata dal Colosso; gli altri restano legacy)
+        this.bossPhase = 1;
+        this.bossState = 'idle';
+        this.bossStateTimer = 0;
+        this.bossActionTimer = 0;
+        this.bossAttack = '';
+        this.bossVulnerable = false;
+        this.bossChargeY = ROAD_CENTER;
+        this.bossCore = null;
         // Debug
         this.debugGod = false;
         this.numberKeys = [];
@@ -156,6 +182,11 @@ export default class GameScene extends Phaser.Scene {
         this.bossSprite = null;
         this.bossHudObjects = [];
         this.bossHudFill = undefined;
+        this.bossWeakText = undefined;
+        this.bossCore = null;
+        this.bossVulnerable = false;
+        this.bossPhase = 1;
+        this.bossState = 'idle';
         const def = { engine: 100, wheels: 100, tank: 100, turret: 100, armor: 100 };
         const c = savedComp ?? def;
         this.components = {
@@ -224,8 +255,10 @@ export default class GameScene extends Phaser.Scene {
     }
     // ─── Textures ────────────────────────────────────────────────────────────────
     buildTextures() {
+        Juice.buildTextures(this); // garantisce fx_light (glow) anche con screenFx off
         GameScene.buildVehicleTexture(this, this.vehicleKey);
         GameScene.buildEntityTextures(this);
+        GameScene.buildBossTextures(this);
     }
     static buildEntityTextures(scene) {
         if (scene.textures.exists('zombie_common'))
@@ -1663,6 +1696,137 @@ export default class GameScene extends Phaser.Scene {
         g.generateTexture(key, 100, 44);
         g.destroy();
     }
+    // Texture procedurali dei boss "AAA" (silhouette propria, non il gigante ritintato).
+    // Slice verticale: per ora il COLOSSO CORAZZATO; gli altri restano su zombie_giant.
+    static buildBossTextures(scene) {
+        const mk = () => scene.make.graphics({ add: false });
+        // ── COLOSSO CORAZZATO — "Il Bastione" · 128×104 · fronte (scudo) a SINISTRA ──
+        if (!scene.textures.exists('boss_colossus')) {
+            const g = mk();
+            const steel = 0x5f6b78, steelL = 0x8a97a5, steelD = 0x39424c, cav = 0x20262c;
+            const rust = 0x8a4a26, rustD = 0x3a1d0e, verde = 0x3f6b54, flesh = 0x5a4e63;
+            const sutur = 0x1e140e, stitch = 0x8a7a60, amber = 0xffb24a;
+            g.fillStyle(0x000000, 0.28);
+            g.fillEllipse(66, 96, 120, 28); // ombra a terra
+            // gambe tozze + piastre piede
+            g.fillStyle(steelD);
+            g.fillRoundedRect(52, 76, 20, 26, 4);
+            g.fillRoundedRect(78, 76, 20, 26, 4);
+            g.fillStyle(steel);
+            g.fillRoundedRect(53, 77, 18, 20, 4);
+            g.fillRoundedRect(79, 77, 18, 20, 4);
+            g.fillStyle(0x141414);
+            g.fillRect(50, 96, 24, 6);
+            g.fillRect(76, 96, 24, 6);
+            // torso corazzato top-heavy (luce alto-sinistra, ombra basso-destra)
+            g.fillStyle(steelD);
+            g.fillRoundedRect(40, 24, 72, 60, 10);
+            g.fillStyle(steel);
+            g.fillRoundedRect(42, 26, 68, 56, 9);
+            g.fillStyle(steelL);
+            g.fillRoundedRect(44, 28, 60, 12, { tl: 7, tr: 7, bl: 2, br: 2 });
+            g.fillStyle(steelD);
+            g.fillRoundedRect(46, 72, 60, 10, { tl: 2, tr: 2, bl: 7, br: 7 });
+            // giunzioni piastre + rivetti
+            g.fillStyle(steelD);
+            g.fillRect(40, 50, 72, 3);
+            [58, 80].forEach(x => g.fillRect(x, 26, 3, 56));
+            g.fillStyle(cav);
+            [50, 68, 90, 102].forEach(x => [32, 44, 64, 76].forEach(y => g.fillCircle(x, y, 2)));
+            // ruggine + verderame + suture (cadaveri cuciti)
+            g.fillStyle(rust, 0.6);
+            [54, 86, 100].forEach(x => g.fillRect(x, 30, 2, 40));
+            g.fillStyle(rustD, 0.5);
+            [55, 87].forEach(x => g.fillRect(x, 48, 2, 28));
+            g.fillStyle(verde, 0.5);
+            g.fillRect(42, 80, 68, 2);
+            g.fillRect(108, 30, 2, 50);
+            g.fillStyle(sutur);
+            g.fillRect(64, 28, 2, 52);
+            g.fillStyle(stitch);
+            for (let y = 30; y < 80; y += 8)
+                g.fillRect(61, y, 8, 1);
+            // spalle a cupola
+            g.fillStyle(steelD);
+            g.fillEllipse(48, 26, 30, 22);
+            g.fillEllipse(104, 28, 28, 20);
+            g.fillStyle(steel);
+            g.fillEllipse(48, 25, 26, 18);
+            g.fillEllipse(104, 27, 24, 16);
+            g.fillStyle(steelL, 0.6);
+            g.fillEllipse(44, 21, 12, 6);
+            g.fillEllipse(100, 23, 10, 5);
+            // testa piccola incassata dietro una gabbia
+            g.fillStyle(flesh);
+            g.fillRoundedRect(60, 12, 20, 16, 5);
+            g.fillStyle(0x120c08);
+            g.fillRect(63, 16, 14, 7);
+            g.fillStyle(amber, 0.85);
+            g.fillRect(64, 18, 3, 3);
+            g.fillRect(72, 18, 3, 3);
+            g.fillStyle(steelD);
+            [64, 68, 72, 76].forEach(x => g.fillRect(x, 13, 1, 14));
+            // cavità del NUCLEO (punto debole) al centro petto — il glow è un overlay a runtime
+            g.fillStyle(steelL, 0.4);
+            g.fillCircle(72, 54, 12);
+            g.fillStyle(0x000000);
+            g.fillCircle(72, 54, 11);
+            g.fillStyle(cav);
+            g.fillCircle(72, 54, 9);
+            g.fillStyle(rustD);
+            g.fillCircle(72, 54, 6);
+            // braccio-mazza (destra) — asimmetria
+            g.fillStyle(steelD);
+            g.fillRoundedRect(108, 46, 16, 34, 5);
+            g.fillStyle(steel);
+            g.fillRoundedRect(109, 47, 14, 30, 5);
+            g.fillStyle(cav);
+            [113, 119].forEach(x => [52, 62, 72].forEach(y => g.fillCircle(x, y, 1.6)));
+            g.fillStyle(rust, 0.5);
+            g.fillRect(110, 50, 2, 26);
+            // SCUDO antisommossa (sinistra) — gancio di silhouette
+            g.fillStyle(steelD);
+            g.fillPoints([{ x: 14, y: 18 }, { x: 40, y: 24 }, { x: 40, y: 84 }, { x: 14, y: 90 }], true);
+            g.fillStyle(steel);
+            g.fillPoints([{ x: 16, y: 21 }, { x: 38, y: 26 }, { x: 38, y: 82 }, { x: 16, y: 87 }], true);
+            g.fillStyle(steelL, 0.5);
+            g.fillPoints([{ x: 18, y: 23 }, { x: 30, y: 26 }, { x: 30, y: 34 }, { x: 18, y: 32 }], true);
+            g.fillStyle(0x0e1418);
+            g.fillRect(18, 48, 20, 8); // feritoia
+            g.fillStyle(0x2c5470, 0.4);
+            g.fillRect(20, 50, 12, 3);
+            g.fillStyle(cav);
+            [20, 34].forEach(x => [28, 40, 66, 80].forEach(y => g.fillCircle(x, y, 2)));
+            g.fillStyle(rust, 0.55);
+            [24, 30].forEach(x => g.fillRect(x, 30, 2, 44));
+            g.fillStyle(verde, 0.5);
+            g.fillRect(16, 84, 24, 2);
+            g.fillStyle(amber, 0.85);
+            g.fillRect(18, 60, 20, 4); // striscia hazard
+            g.fillStyle(0x000000, 0.8);
+            [19, 25, 31].forEach(x => g.fillRect(x, 60, 3, 4));
+            g.generateTexture('boss_colossus', 128, 104);
+            g.destroy();
+        }
+        // ── PROIETTILE del Bastione — "Proietto" · 18×12 (energia corazzata) ──
+        if (!scene.textures.exists('boss_shell')) {
+            const g = mk();
+            g.fillStyle(0x2a1c14);
+            g.fillRoundedRect(3, 2, 12, 8, 3);
+            g.fillStyle(0x6b5240);
+            g.fillRoundedRect(3, 2, 7, 8, 3);
+            g.fillStyle(0xff7722, 0.9);
+            g.fillCircle(11, 6, 4);
+            g.fillStyle(0xffd27a);
+            g.fillCircle(11, 6, 2);
+            g.fillStyle(0xffffff, 0.85);
+            g.fillCircle(12, 5, 1);
+            g.fillStyle(0xff5500, 0.7);
+            g.fillTriangle(0, 4, 0, 8, 4, 6);
+            g.generateTexture('boss_shell', 18, 12);
+            g.destroy();
+        }
+    }
     // ─── World & entities ────────────────────────────────────────────────────────
     buildWorld() {
         const env = ENVIRONMENTS[this.envIndex];
@@ -1737,15 +1901,22 @@ export default class GameScene extends Phaser.Scene {
         const D = 20, BAR_W = 110, COMP_BAR_W = 120;
         const panel = this.add.graphics().setDepth(D);
         panel.fillStyle(UI.black, 0.62);
-        panel.fillRect(0, 0, W, 84);
+        panel.fillRoundedRect(0, 0, W, 84, { tl: 0, tr: 0, bl: 16, br: 16 });
         panel.lineStyle(1, UI.strokeDim, 0.7);
         panel.lineBetween(0, 46, W, 46);
         Ui.text(this, 8, 8, 'SALUTE', { fontSize: '11px', color: UI.redText }).setDepth(D + 1);
-        this.add.rectangle(8 + BAR_W / 2, 34, BAR_W, 10, UI.barRed).setDepth(D + 1);
+        Ui.box(this, 8 + BAR_W / 2, 34, BAR_W, 10, { fill: UI.barRed, radius: 3 }).setDepth(D + 1);
         this.hudHealthFill = this.add.rectangle(8, 34, BAR_W, 10, UI.hpFill).setOrigin(0, 0.5).setDepth(D + 2);
         Ui.text(this, 138, 8, 'CARBURANTE', { fontSize: '11px', color: UI.amberSoft }).setDepth(D + 1);
-        this.add.rectangle(138 + BAR_W / 2, 34, BAR_W, 10, UI.barAmber).setDepth(D + 1);
+        Ui.box(this, 138 + BAR_W / 2, 34, BAR_W, 10, { fill: UI.barAmber, radius: 3 }).setDepth(D + 1);
         this.hudFuelFill = this.add.rectangle(138, 34, BAR_W, 10, UI.fuelBar).setOrigin(0, 0.5).setDepth(D + 2);
+        // Tacche di segmentazione sulle due barre principali (gauge "premium")
+        const ticks = this.add.graphics().setDepth(D + 3);
+        ticks.fillStyle(UI.black, 0.45);
+        for (let i = 1; i < 5; i++) {
+            ticks.fillRect(8 + i * 22, 30, 1, 8);
+            ticks.fillRect(138 + i * 22, 30, 1, 8);
+        }
         this.hudFuelNum = Ui.text(this, 255, 28, '', { fontSize: '11px', color: UI.amberSoft }).setDepth(D + 2);
         this.hudScore = Ui.text(this, 290, 6, 'PUNTEGGIO: 0', { fontSize: '13px', color: UI.white }).setDepth(D + 1);
         Ui.text(this, 620, 6, `MISS.${missionNum}`, { fontSize: '12px', color: UI.greenSoft }).setDepth(D + 1);
@@ -1768,7 +1939,7 @@ export default class GameScene extends Phaser.Scene {
         const DIST_BAR_W = 110;
         Ui.text(this, 290, 24, 'PERCORSO', { fontSize: '10px', color: '#7777aa' }).setDepth(D + 1);
         this.hudDist = Ui.text(this, 395, 24, '', { fontSize: '10px', color: UI.blueInfo }).setDepth(D + 2);
-        this.add.rectangle(290 + DIST_BAR_W / 2, 37, DIST_BAR_W, 7, UI.barBlue).setDepth(D + 1);
+        Ui.box(this, 290 + DIST_BAR_W / 2, 37, DIST_BAR_W, 7, { fill: UI.barBlue, radius: 2 }).setDepth(D + 1);
         this.hudDistFill = this.add.rectangle(290, 37, DIST_BAR_W, 7, UI.distBar).setOrigin(0, 0.5).setDepth(D + 2);
         // label meta (static)
         Ui.text(this, 408, 33, `/ ${DIST_KM} km`, { fontSize: '9px', color: UI.faint }).setDepth(D + 1);
@@ -1783,7 +1954,7 @@ export default class GameScene extends Phaser.Scene {
             const comp = this.components[key];
             const sx = 10 + i * 158;
             Ui.text(this, sx, 49, comp.label, { fontSize: '10px', color: UI.muted }).setDepth(D + 1);
-            this.add.rectangle(sx + COMP_BAR_W / 2, 72, COMP_BAR_W, 7, UI.barGrey).setDepth(D + 1);
+            Ui.box(this, sx + COMP_BAR_W / 2, 72, COMP_BAR_W, 7, { fill: UI.barGrey, radius: 2 }).setDepth(D + 1);
             const fill = this.add.rectangle(sx, 72, COMP_BAR_W, 7, comp.baseColor).setOrigin(0, 0.5).setDepth(D + 2);
             comp.fill = fill;
         });
@@ -2536,8 +2707,16 @@ export default class GameScene extends Phaser.Scene {
         const base = armorPct <= 0 ? 2.5 : armorPct < 0.3 ? 1.8 : armorPct < 0.6 ? 1.3 : 1.0;
         const mult = Math.max(0.5, base - bonus);
         this.health = Math.max(0, this.health - Math.round(amount * mult));
+        this.flashHealthBar();
         if (this.health <= 0)
             this.endGame('Veicolo distrutto!');
+    }
+    /** Feedback al colpo: lampo bianco sulla barra salute + breve "thump" verticale. */
+    flashHealthBar() {
+        const f = this.add.rectangle(63, 34, 116, 14, 0xffffff, 0.55).setDepth(24);
+        this.tweens.add({ targets: f, alpha: 0, duration: 160, onComplete: () => f.destroy() });
+        if (this.hudHealthFill)
+            this.tweens.add({ targets: this.hudHealthFill, scaleY: 1.9, duration: 80, yoyo: true });
     }
     getEffectiveVerticalSpeed() {
         const w = 0.15 + 0.85 * (this.components.wheels.health / 100);
@@ -2574,7 +2753,7 @@ export default class GameScene extends Phaser.Scene {
         this.zombies.setVelocityX(0);
         this.fuelCans.setVelocityX(0);
         const cx = W / 2, cy = H / 2;
-        this.add.rectangle(cx, cy, 500, 260, UI.black, 0.9).setDepth(30);
+        Ui.box(this, cx, cy, 500, 260, { fill: UI.black, fillAlpha: 0.9, radius: 16, stroke: UI.greenSig, strokeAlpha: 0.45 }).setDepth(30);
         Ui.text(this, cx, cy - 95, 'MISSIONE COMPLETATA!', {
             fontSize: '32px', color: UI.green, fontStyle: 'bold',
             stroke: '#006600', strokeThickness: 4,
@@ -2623,7 +2802,7 @@ export default class GameScene extends Phaser.Scene {
         this.fuelCans.setVelocityX(0);
         this.time.delayedCall(700, () => {
             const cx = W / 2, cy = H / 2;
-            this.add.rectangle(cx, cy, 440, 260, UI.black, 0.88).setDepth(30);
+            Ui.box(this, cx, cy, 440, 260, { fill: UI.black, fillAlpha: 0.88, radius: 16, stroke: UI.redCrit, strokeAlpha: 0.55 }).setDepth(30);
             Ui.text(this, cx, cy - 80, 'GAME OVER', {
                 fontSize: '50px', color: '#ff3333', fontStyle: 'bold',
                 stroke: '#880000', strokeThickness: 5,
@@ -2657,21 +2836,43 @@ export default class GameScene extends Phaser.Scene {
         });
         this.cameras.main.shake(300, 0.016);
         this.sfx?.playExplosion();
-        // Sprite boss (riusa zombie_giant scalato e tintato)
-        const boss = this.bossGroup.create(W + 90, ROAD_CENTER, 'zombie_giant');
-        boss.setScale(cfg.scaleX, cfg.scaleY).setTint(cfg.tint).setDepth(12);
-        boss.play('walk_giant');
-        boss.setData('bossType', bossType);
-        boss.setData('hp', cfg.hp);
-        const t1init = bossType === 'armored_colossus' ? 3000
-            : bossType === 'giant_worm' ? 4000
-                : bossType === 'radioactive_beast' ? 2500
-                    : 8000;
-        boss.setData('timer1', t1init);
-        boss.setData('lastVehicleHit', 0);
-        boss.body.setSize(cfg.bodyW, cfg.bodyH);
-        this.bossSprite = boss;
+        if (bossType === 'armored_colossus') {
+            this.spawnColossus(cfg); // slice AAA: silhouette + macchina a stati propria
+        }
+        else {
+            // Sprite boss legacy (riusa zombie_giant scalato e tintato)
+            const boss = this.bossGroup.create(W + 90, ROAD_CENTER, 'zombie_giant');
+            boss.setScale(cfg.scaleX, cfg.scaleY).setTint(cfg.tint).setDepth(12);
+            boss.play('walk_giant');
+            boss.setData('bossType', bossType);
+            boss.setData('hp', cfg.hp);
+            const t1init = bossType === 'giant_worm' ? 4000 : bossType === 'radioactive_beast' ? 2500 : 8000;
+            boss.setData('timer1', t1init);
+            boss.setData('lastVehicleHit', 0);
+            boss.body.setSize(cfg.bodyW, cfg.bodyH);
+            this.bossSprite = boss;
+        }
         this.showBossHUD(cfg.name);
+    }
+    spawnColossus(cfg) {
+        const boss = this.bossGroup.create(W + 120, ROAD_CENTER, 'boss_colossus');
+        boss.setDepth(12);
+        boss.setData('bossType', 'armored_colossus');
+        boss.setData('hp', cfg.hp);
+        boss.setData('lastVehicleHit', 0);
+        boss.body.setSize(84, 72);
+        this.bossSprite = boss;
+        // stato iniziale della macchina a stati
+        this.bossPhase = 1;
+        this.bossState = 'idle';
+        this.bossStateTimer = 0;
+        this.bossActionTimer = COLOSSUS_TUNE.actionGap;
+        this.bossAttack = '';
+        this.bossVulnerable = false;
+        this.bossChargeY = ROAD_CENTER;
+        // nucleo emissivo (punto debole): overlay additivo che pulsa e si accende quando vulnerabile
+        this.bossCore = this.add.image(boss.x, boss.y, 'fx_light')
+            .setTint(0xff7722).setBlendMode(Phaser.BlendModes.ADD).setDepth(13).setScale(0.5).setAlpha(0);
     }
     updateBoss(delta) {
         if (!this.bossSprite || !this.bossActive)
@@ -2682,18 +2883,30 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
         const bossType = boss.getData('bossType');
+        if (bossType === 'armored_colossus')
+            this.updateColossus(boss, delta);
+        else
+            this.updateBossLegacy(boss, delta);
+        // Barra HP (comune a tutti i boss)
+        const hp = boss.getData('hp');
+        if (this.bossHudFill) {
+            this.bossHudFill.displayWidth = Math.max(0, (hp / this.bossMaxHp) * 440);
+            const pct = hp / this.bossMaxHp;
+            this.bossHudFill.setFillStyle(pct < 0.25 ? 0xff2200 : pct < 0.55 ? 0xff8800 : 0xcc0000);
+        }
+    }
+    // ── Boss legacy (gigante ritintato): mega_mutant · giant_worm · radioactive_beast ──
+    updateBossLegacy(boss, delta) {
+        const bossType = boss.getData('bossType');
         const cfg = BOSS_CONFIG[bossType];
         const body = boss.body;
         const targetX = 560;
-        // Avanzamento e stop
-        if (boss.x > targetX) {
+        if (boss.x > targetX)
             body.setVelocityX(-cfg.speed);
-        }
         else {
             body.setVelocityX(0);
             boss.x = targetX;
         }
-        // Comportamento per tipo
         let t1 = boss.getData('timer1') - delta;
         boss.setData('timer1', t1);
         switch (bossType) {
@@ -2712,13 +2925,6 @@ export default class GameScene extends Phaser.Scene {
                     this.spawnToxicCloud(boss.x - 24, boss.y);
                 }
                 break;
-            case 'armored_colossus':
-                boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER, 0.03);
-                if (t1 <= 0) {
-                    boss.setData('timer1', 3000);
-                    this.fireBossProjectile(boss.x - 32, boss.y);
-                }
-                break;
             case 'radioactive_beast':
                 boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER + Math.sin(this.time.now / 700) * 75, 0.04);
                 if (t1 <= 0) {
@@ -2730,13 +2936,154 @@ export default class GameScene extends Phaser.Scene {
                 break;
         }
         boss.y = Phaser.Math.Clamp(boss.y, ROAD_TOP + 40, ROAD_BOTTOM - 40);
-        // Aggiorna barra HP
+    }
+    // ── COLOSSO CORAZZATO (slice AAA): macchina a stati + fasi + punto debole ──
+    phaseTune() {
+        const T = COLOSSUS_TUNE;
+        return this.bossPhase === 2
+            ? { actionGap: T.p2.actionGap, telCharge: T.p2.telCharge, telVolley: T.p2.telVolley, volleyShots: T.p2.volleyShots }
+            : { actionGap: T.actionGap, telCharge: T.telCharge, telVolley: T.telVolley, volleyShots: T.volleyShots };
+    }
+    updateColossus(boss, delta) {
+        const T = COLOSSUS_TUNE;
+        const body = boss.body;
         const hp = boss.getData('hp');
-        if (this.bossHudFill) {
-            this.bossHudFill.displayWidth = Math.max(0, (hp / this.bossMaxHp) * 440);
-            const pct = hp / this.bossMaxHp;
-            this.bossHudFill.setFillStyle(pct < 0.25 ? 0xff2200 : pct < 0.55 ? 0xff8800 : 0xcc0000);
+        if (this.bossPhase === 1 && hp <= this.bossMaxHp * 0.5)
+            this.enterBossPhase2();
+        // Nucleo emissivo: segue il petto, fioco a scudo alzato, acceso quando vulnerabile
+        if (this.bossCore) {
+            this.bossCore.x = boss.x + 8;
+            this.bossCore.y = boss.y + 2;
+            const pulse = 0.12 * Math.sin(this.time.now / (this.bossVulnerable ? 110 : 320));
+            this.bossCore.setAlpha((this.bossVulnerable ? 0.85 : 0.16) + pulse);
+            this.bossCore.setScale((this.bossVulnerable ? 0.95 : 0.5) + pulse * 0.3);
         }
+        // Indicatore HUD del punto debole (pulsa quando il nucleo è esposto)
+        if (this.bossWeakText)
+            this.bossWeakText.setAlpha(this.bossVulnerable ? 0.55 + 0.45 * Math.abs(Math.sin(this.time.now / 120)) : 0);
+        switch (this.bossState) {
+            case 'idle':
+                if (boss.x > T.targetX) {
+                    body.setVelocityX(-T.approachSpeed);
+                }
+                else {
+                    body.setVelocityX(0);
+                    boss.x = T.targetX;
+                    boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER + Math.sin(this.time.now / 700) * T.bob, 0.04);
+                    this.bossActionTimer -= delta;
+                    if (this.bossActionTimer <= 0)
+                        this.startBossTelegraph();
+                }
+                break;
+            case 'telegraph':
+                body.setVelocityX(0);
+                boss.x = T.targetX + Math.sin(this.time.now / 38) * 2; // quiver di carica
+                this.bossStateTimer -= delta;
+                if (this.bossStateTimer <= 0)
+                    this.executeBossAttack();
+                break;
+            case 'charge':
+                boss.y = Phaser.Math.Linear(boss.y, this.bossChargeY, 0.2);
+                if (boss.x > T.chargeMinX)
+                    body.setVelocityX(-T.chargeSpeed);
+                else
+                    this.startBossRecover();
+                break;
+            case 'volley':
+                body.setVelocityX(0);
+                this.bossStateTimer -= delta;
+                if (this.bossStateTimer <= 0)
+                    this.startBossRecover();
+                break;
+            case 'recover':
+                if (boss.x < T.targetX)
+                    body.setVelocityX(T.returnSpeed);
+                else {
+                    body.setVelocityX(0);
+                    boss.x = T.targetX;
+                }
+                boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER, 0.06);
+                this.bossStateTimer -= delta;
+                if (this.bossStateTimer <= 0 && boss.x >= T.targetX - 2) {
+                    this.bossVulnerable = false;
+                    this.bossState = 'idle';
+                    this.bossActionTimer = this.phaseTune().actionGap;
+                }
+                break;
+        }
+        boss.y = Phaser.Math.Clamp(boss.y, ROAD_TOP + 50, ROAD_BOTTOM - 50);
+    }
+    startBossTelegraph() {
+        const pt = this.phaseTune();
+        const boss = this.bossSprite;
+        this.bossAttack = Math.random() < 0.5 ? 'charge' : 'volley';
+        this.bossState = 'telegraph';
+        this.bossVulnerable = true; // il nucleo si scopre durante la preparazione (finestra per colpirlo)
+        boss.setTint(0xffcc88);
+        this.time.delayedCall(120, () => { if (boss?.active)
+            boss.clearTint(); });
+        if (this.bossAttack === 'charge') {
+            this.bossStateTimer = pt.telCharge;
+            this.bossChargeY = this.vehicle.y; // mira alla corsia attuale → si schiva
+            const line = this.add.rectangle(boss.x / 2, this.bossChargeY, boss.x, 8, 0xff3300, 0).setOrigin(0.5).setDepth(7);
+            this.tweens.add({ targets: line, alpha: 0.35, duration: 170, yoyo: true, repeat: 1, onComplete: () => line.destroy() });
+            this.cameras.main.shake(120, 0.004);
+        }
+        else {
+            this.bossStateTimer = pt.telVolley;
+            Juice.muzzleFlash(this, boss.x - 30, boss.y, 0xff8822);
+        }
+        this.sfx?.playImpact();
+    }
+    executeBossAttack() {
+        if (this.bossAttack === 'charge') {
+            this.bossState = 'charge';
+            this.cameras.main.shake(150, 0.008);
+            this.sfx?.playExplosion();
+        }
+        else {
+            this.bossState = 'volley';
+            this.bossStateTimer = 460;
+            const shots = this.phaseTune().volleyShots;
+            for (let i = 0; i < shots; i++) {
+                this.time.delayedCall(i * 110, () => {
+                    if (this.bossActive && this.bossSprite?.active) {
+                        const spread = (i - (shots - 1) / 2) * COLOSSUS_TUNE.volleySpreadDeg;
+                        this.fireColossusShell(this.bossSprite.x - 36, this.bossSprite.y, spread);
+                    }
+                });
+            }
+        }
+    }
+    startBossRecover() {
+        this.bossState = 'recover';
+        this.bossStateTimer = COLOSSUS_TUNE.recover;
+    }
+    enterBossPhase2() {
+        this.bossPhase = 2;
+        const boss = this.bossSprite;
+        this.cameras.main.shake(420, 0.02);
+        this.hitStop(60);
+        Juice.flash(this, 0xff3300, 0.32, 200);
+        Juice.lightFlash(this, boss.x, boss.y, 0xff5522, 7, 460);
+        this.sfx?.playExplosion();
+        boss.setTint(0xffaa88);
+        this.time.delayedCall(260, () => { if (boss?.active)
+            boss.clearTint(); });
+        const t = Ui.text(this, W / 2, 130, 'FASE 2 — ENRAGE', {
+            fontSize: '20px', color: '#ff5522', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
+        }).setOrigin(0.5).setDepth(28).setAlpha(0);
+        this.tweens.add({ targets: t, alpha: 1, duration: 200, yoyo: true, hold: 700, onComplete: () => t.destroy() });
+        this.bossActionTimer = Math.min(this.bossActionTimer, 600);
+    }
+    fireColossusShell(x, y, spreadDeg) {
+        const p = this.bossProjectiles.create(x, y, 'boss_shell');
+        const speed = 300;
+        const ang = Math.atan2(this.vehicle.y - y, this.vehicle.x - x) + Phaser.Math.DegToRad(spreadDeg);
+        p.setVelocity(Math.cos(ang) * speed, Math.sin(ang) * speed);
+        p.setDepth(9).setRotation(ang);
+        p.body.setSize(12, 8);
+        Juice.muzzleFlash(this, x, y, 0xff8822);
     }
     spawnZombieAt(type, x, y) {
         const stats = ZOMBIE_STATS[type];
@@ -2748,30 +3095,52 @@ export default class GameScene extends Phaser.Scene {
         z.play(`walk_${type}`);
         z.anims.setProgress(Math.random());
     }
-    fireBossProjectile(x, fromY) {
-        const p = this.bossProjectiles.create(x, fromY, 'bullet');
-        const dy = Phaser.Math.Clamp(this.vehicle.y - fromY, -80, 80);
-        p.setVelocityX(-200).setVelocityY(dy);
-        p.setScale(2.4, 1.6).setTint(0x8844ff).setDepth(9);
-        p.body.setSize(16, 6);
+    /** Danno effettivo del giocatore sul Colosso: ridotto a scudo alzato, bonus al nucleo esposto. */
+    colossusDamageMult() {
+        if (this.bossVulnerable)
+            return COLOSSUS_TUNE.weakMult;
+        return this.bossPhase === 2 ? COLOSSUS_TUNE.shieldMultP2 : COLOSSUS_TUNE.shieldMult;
+    }
+    restoreBossTint(boss) {
+        const bossType = boss.getData('bossType');
+        if (bossType === 'armored_colossus')
+            boss.clearTint();
+        else
+            boss.setTint(BOSS_CONFIG[bossType].tint);
     }
     onBulletHitBoss(bullet, boss) {
         if (!bullet.active || !boss.active)
             return;
-        const dmg = bullet.getData('damage') ?? 1;
+        let dmg = bullet.getData('damage') ?? 1;
+        const bx = bullet.x, by = bullet.y;
         bullet.destroy();
         const bossType = boss.getData('bossType');
+        if (bossType === 'armored_colossus' && !this.bossVulnerable) {
+            // Scudo alzato: deflette (danno ridotto, scintille, nessun flash bianco)
+            this.damageBoss(boss, dmg * this.colossusDamageMult());
+            this.emitSparks(bx, by);
+            this.sfx?.playImpact();
+            return;
+        }
+        if (bossType === 'armored_colossus') {
+            dmg *= COLOSSUS_TUNE.weakMult;
+            this.spawnHitParticles(bx, by);
+        }
         this.damageBoss(boss, dmg);
         boss.setTint(0xffffff);
         this.time.delayedCall(60, () => { if (boss?.active)
-            boss.setTint(BOSS_CONFIG[bossType].tint); });
+            this.restoreBossTint(boss); });
     }
     onRocketHitBoss(rocket, boss) {
         if (!rocket.active || !boss.active)
             return;
         const rx = rocket.x, ry = rocket.y;
         rocket.destroy();
-        this.damageBoss(boss, WEAPONS.rockets.damage * 3);
+        const bossType = boss.getData('bossType');
+        let dmg = WEAPONS.rockets.damage * 3;
+        if (bossType === 'armored_colossus')
+            dmg *= this.colossusDamageMult();
+        this.damageBoss(boss, dmg);
         this.spawnHitParticles(rx, ry);
         this.spawnHitParticles(rx + 10, ry - 8);
         this.environment?.addDecal('scorch', rx, ry);
@@ -2786,9 +3155,12 @@ export default class GameScene extends Phaser.Scene {
         if (this.time.now - lastHit < 800)
             return;
         boss.setData('lastVehicleHit', this.time.now);
-        this.dealDamage(20);
-        this.damageComponent('armor', 25);
-        this.cameras.main.shake(200, 0.016);
+        const charging = boss.getData('bossType') === 'armored_colossus' && this.bossState === 'charge';
+        this.dealDamage(charging ? 30 : 20);
+        this.damageComponent('armor', charging ? 35 : 25);
+        this.cameras.main.shake(charging ? 280 : 200, charging ? 0.02 : 0.016);
+        if (charging)
+            this.hitStop(40);
         this.sfx?.playExplosion();
     }
     onBossProjectileHitVehicle(p) {
@@ -2823,6 +3195,9 @@ export default class GameScene extends Phaser.Scene {
         }
         this.bossSprite.destroy();
         this.bossSprite = null;
+        this.bossCore?.destroy();
+        this.bossCore = null;
+        this.bossVulnerable = false;
         this.cameras.main.shake(500, 0.022);
         this.hitStop(70);
         Juice.flash(this, 0xffffff, 0.5, 140);
@@ -2847,9 +3222,16 @@ export default class GameScene extends Phaser.Scene {
             fontSize: '13px', color: UI.red, fontStyle: 'bold',
             stroke: '#000000', strokeThickness: 3,
         }).setOrigin(0.5).setDepth(23).setAlpha(0);
-        this.bossHudObjects = [bg, fill, label];
+        // Tacca della soglia di FASE 2 (50% HP, al centro della barra)
+        const tick = this.add.rectangle(cx, y, 2, 18, 0x000000, 0.85).setDepth(24).setAlpha(0);
+        // Indicatore PUNTO DEBOLE (mostrato a impulsi quando il nucleo è esposto — guidato da updateColossus)
+        const weak = Ui.text(this, cx, y + 14, '★ PUNTO DEBOLE', {
+            fontSize: '10px', color: '#ffcc44', fontStyle: 'bold',
+        }).setOrigin(0.5).setDepth(24).setAlpha(0);
+        this.bossWeakText = weak;
+        this.bossHudObjects = [bg, fill, label, tick, weak];
         this.bossHudFill = fill;
-        this.tweens.add({ targets: this.bossHudObjects, alpha: 1, duration: 400 });
+        this.tweens.add({ targets: [bg, fill, label, tick], alpha: 1, duration: 400 });
     }
     hideBossHUD() {
         if (!this.bossHudObjects.length)
@@ -2860,6 +3242,7 @@ export default class GameScene extends Phaser.Scene {
                 this.bossHudObjects.forEach(o => o.destroy());
                 this.bossHudObjects = [];
                 this.bossHudFill = undefined;
+                this.bossWeakText = undefined;
             },
         });
     }

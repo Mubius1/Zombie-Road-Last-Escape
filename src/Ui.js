@@ -1,3 +1,4 @@
+import Phaser from 'phaser';
 import Juice from './Juice';
 import Settings from './Settings';
 /**
@@ -13,6 +14,12 @@ import Settings from './Settings';
  */
 /** La voce tipografica del titolo: monospace "consolle", esplicita e con fallback. */
 export const FONT = '"Courier New", Courier, monospace';
+/**
+ * Forza della vignetta per le schermate-menu (vedi `Juice.addOverlay`). Più bassa di
+ * quella di gioco (1.0) perché nei menu i contenuti vivono ai bordi e non devono essere
+ * mangiati dall'ombra. Alzala verso 1 per più "cinema", abbassala se i bordi restano scuri.
+ */
+export const MENU_VIGNETTE = 0.45;
 /**
  * Palette funzionale canonica. Ogni famiglia ha pochi toni (base · chiaro · spento);
  * gli `0x…` sono per fill/stroke (rectangle/graphics), gli `#…` per il testo.
@@ -75,29 +82,87 @@ export const UI = {
     barBlue: 0x111122, // dietro barra percorso
     barGrey: 0x1a1a1a, // dietro barre componenti
 };
+/**
+ * Rettangolo arrotondato (principio AAA "forme arrotondate") con un'API minima
+ * compatibile con `Phaser.GameObjects.Rectangle` per i punti d'uso del chrome:
+ * `setFillStyle`/`setStrokeStyle`/`setInteractive`/`on`/`setDepth`/`setAlpha`.
+ * È disegnato su un `Graphics` centrato in (x, y), così sostituisce un `add.rectangle`
+ * con cambi minimi al call-site. Cosmetico: non tocca hitbox/fisica del gioco.
+ */
+export class RoundRect {
+    constructor(scene, x, y, w, h, opts = {}) {
+        this.hw = w / 2;
+        this.hh = h / 2;
+        this.radius = Math.min(opts.radius ?? 8, this.hw, this.hh);
+        this.fill = opts.fill ?? UI.panel;
+        this.fillAlpha = opts.fillAlpha ?? 1;
+        this.stroke = opts.stroke;
+        this.strokeWidth = opts.strokeWidth ?? 1;
+        this.strokeAlpha = opts.strokeAlpha ?? 1;
+        this.gfx = scene.add.graphics({ x, y });
+        this.redraw();
+    }
+    redraw() {
+        const g = this.gfx, w = this.hw * 2, h = this.hh * 2;
+        g.clear();
+        g.fillStyle(this.fill, this.fillAlpha);
+        g.fillRoundedRect(-this.hw, -this.hh, w, h, this.radius);
+        if (this.stroke !== undefined) {
+            g.lineStyle(this.strokeWidth, this.stroke, this.strokeAlpha);
+            g.strokeRoundedRect(-this.hw, -this.hh, w, h, this.radius);
+        }
+    }
+    setFillStyle(color, alpha) {
+        this.fill = color;
+        if (alpha !== undefined)
+            this.fillAlpha = alpha;
+        this.redraw();
+        return this;
+    }
+    setStrokeStyle(width, color, alpha = 1) {
+        this.strokeWidth = width;
+        this.stroke = color;
+        this.strokeAlpha = alpha;
+        this.redraw();
+        return this;
+    }
+    setInteractive(useHandCursor = true) {
+        this.gfx.setInteractive(new Phaser.Geom.Rectangle(-this.hw, -this.hh, this.hw * 2, this.hh * 2), Phaser.Geom.Rectangle.Contains);
+        if (useHandCursor && this.gfx.input)
+            this.gfx.input.cursor = 'pointer';
+        return this;
+    }
+    on(event, fn) { this.gfx.on(event, fn); return this; }
+    setDepth(d) { this.gfx.setDepth(d); return this; }
+    setAlpha(a) { this.gfx.setAlpha(a); return this; }
+    setOrigin() { return this; } // sempre centrato: no-op per compatibilità con Rectangle
+}
 export default class Ui {
     /** Testo con la voce tipografica condivisa già applicata (chiude il gap font). */
     static text(scene, x, y, content, style = {}) {
         return scene.add.text(x, y, content, { fontFamily: FONT, ...style });
     }
-    /** Pannello/card: riempimento scuro + bordo opzionale (mai un pannello senza bordo). */
+    /** Rettangolo arrotondato generico (card del negozio, box di esito, ecc.). */
+    static box(scene, x, y, w, h, opts = {}) {
+        return new RoundRect(scene, x, y, w, h, opts);
+    }
+    /** Pannello/card: riempimento scuro arrotondato + bordo opzionale (mai un pannello senza bordo). */
     static panel(scene, x, y, w, h, opts = {}) {
-        const r = scene.add.rectangle(x, y, w, h, opts.fill ?? UI.panel, opts.fillAlpha ?? 1);
-        if (opts.stroke !== undefined)
-            r.setStrokeStyle(opts.strokeWidth ?? 1, opts.stroke, opts.strokeAlpha ?? 1);
-        return r;
+        return new RoundRect(scene, x, y, w, h, { radius: 10, ...opts });
     }
     /**
-     * Pulsante con stato di hover gestito (fill + bordo + scala opzionale) e hand cursor.
+     * Pulsante arrotondato con stato di hover gestito (fill + bordo + scala opzionale) e hand cursor.
      * Copre sia i pulsanti con bordo+scala (menu) sia quelli a solo riempimento (negozio).
      */
     static button(scene, x, y, w, h, label, opts = {}) {
         const fill = opts.fill ?? UI.panel;
         const hover = opts.hover ?? fill;
+        const border = opts.border;
         const borderAlpha = opts.borderAlpha ?? 0.5;
-        const bg = scene.add.rectangle(x, y, w, h, fill).setInteractive({ useHandCursor: true });
-        if (opts.border !== undefined)
-            bg.setStrokeStyle(2, opts.border, borderAlpha);
+        const bg = new RoundRect(scene, x, y, w, h, {
+            fill, radius: opts.radius ?? 9,
+            stroke: border, strokeWidth: 2, strokeAlpha: borderAlpha,
+        }).setInteractive(true);
         const txt = Ui.text(scene, x, y, label, {
             fontSize: opts.fontSize ?? '20px',
             fontStyle: opts.fontStyle ?? 'bold',
@@ -105,17 +170,15 @@ export default class Ui {
         }).setOrigin(0.5);
         bg.on('pointerover', () => {
             bg.setFillStyle(hover);
-            if (opts.border !== undefined)
-                bg.setStrokeStyle(2, opts.border, 1);
-            if (opts.scaleOnHover)
-                txt.setScale(opts.scaleOnHover);
+            if (border !== undefined)
+                bg.setStrokeStyle(2, border, 1);
+            txt.setScale(opts.scaleOnHover ?? 1);
         });
         bg.on('pointerout', () => {
             bg.setFillStyle(fill);
-            if (opts.border !== undefined)
-                bg.setStrokeStyle(2, opts.border, borderAlpha);
-            if (opts.scaleOnHover)
-                txt.setScale(1);
+            if (border !== undefined)
+                bg.setStrokeStyle(2, border, borderAlpha);
+            txt.setScale(1);
         });
         if (opts.onClick)
             bg.on('pointerdown', opts.onClick);
@@ -128,7 +191,8 @@ export default class Ui {
      */
     static enter(scene, fadeMs = 300) {
         Juice.fadeIn(scene, fadeMs);
-        return Settings.screenFx ? Juice.addOverlay(scene) : null;
+        // Vignetta morbida (MENU_VIGNETTE): nei menu i contenuti vivono ai bordi.
+        return Settings.screenFx ? Juice.addOverlay(scene, 18, MENU_VIGNETTE) : null;
     }
 }
 //# sourceMappingURL=Ui.js.map
