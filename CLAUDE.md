@@ -10,18 +10,32 @@
 - [`docs/ART_BIBLE_AMBIENTE.md`](docs/ART_BIBLE_AMBIENTE.md) — strada, sfondo a strati, illuminazione del mondo.
 - [`docs/ART_BIBLE_OGGETTI.md`](docs/ART_BIBLE_OGGETTI.md) — veicoli, armi/proiettili, pickup, componenti, sopravvissuti.
 - [`docs/ART_BIBLE_INTERFACCE.md`](docs/ART_BIBLE_INTERFACCE.md) — UI/HUD: titolo, HUD di gioco, negozio, impostazioni/pausa, overlay di esito, debug.
+- [`docs/ART_BIBLE_AUDIO.md`](docs/ART_BIBLE_AUDIO.md) — suoni & loop del motore: forma d'onda, frequenze, inviluppi, gerarchia di mix (`SoundManager.ts`).
 
-Vale per qualsiasi modifica a nemici, veicoli, armi, oggetti, **interfacce/HUD**, grafica procedurale, animazioni o effetti. Le art bible sono la **fonte di verità** estetica e di game-feel: non improvvisare palette, pose o numeri — segui (o aggiorna esplicitamente) le loro schede.
+Vale per qualsiasi modifica a nemici, veicoli, armi, oggetti, **interfacce/HUD**, **suoni**, grafica procedurale, animazioni o effetti. Le art bible sono la **fonte di verità** estetica e di game-feel: non improvvisare palette, pose o numeri — segui (o aggiorna esplicitamente) le loro schede.
 
 ## ⚠️ Regola n.2 (anti-deriva)
 
-Se cambi una costante visiva o di movimento nel codice (`ZOMBIE_STATS`, `ZOMBIE_MOTION`, dimensioni dei frame, scala), **aggiorna la scheda corrispondente nell'art bible** e poi esegui:
+Se cambi un numero nel codice, aggiorna il documento corrispondente e ri-valida:
+
+- **costante visiva/di movimento** (`ZOMBIE_STATS.scale`, `ZOMBIE_MOTION`, dimensioni frame, colori/token UI) → aggiorna l'**art bible** → `npm run validate:art`;
+- **valore di bilanciamento** (`VEHICLES`, `WEAPONS`, `ZOMBIE_STATS` velocità/hp/danno/punteggio, `BOSS_CONFIG`, `SHOP_ITEMS`, costanti di missione di `GameScene.ts`) → aggiorna la tabella 🔒 di [`docs/BALANCE.md`](docs/BALANCE.md) → `npm run validate:balance`.
 
 ```bash
-npm run validate:art
+npm run validate        # art + balance insieme
+npm run build           # esegue entrambi come gate duro, poi tsc + vite build
 ```
 
-Lo script confronta i numeri del codice con quelli scritti nell'art bible e **fallisce se divergono**. È agganciato anche a `npm run build`.
+Gli script confrontano i numeri del codice con quelli scritti nei documenti e **falliscono se divergono**. Sono agganciati a `npm run build` **e** attivi durante `npm run dev` (un plugin Vite ri-valida a ogni salvataggio e segnala la deriva con banner + overlay, senza fermare il server).
+
+## 📐 Regola n.3 (design)
+
+Le art bible coprono *come appare/suona* il gioco. Per *come si gioca* e *quali numeri* la fonte di verità sono i documenti di design — consultali prima di toccare regole, progressione o bilanciamento:
+
+- [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) — core loop, regioni/boss, progressione, condizioni di vittoria/sconfitta.
+- [`docs/BALANCE.md`](docs/BALANCE.md) — economia, curve di difficoltà, formule, costi.
+
+Se cambi una **regola di gioco** (core loop, game over, ruoli) aggiorna `GAME_DESIGN.md`; se cambi un **valore-sorgente** (prezzi, HP, danno, cooldown, ricompense) aggiorna le tabelle di `BALANCE.md`.
 
 ---
 
@@ -31,8 +45,9 @@ Lo script confronta i numeri del codice con quelli scritti nell'art bible e **fa
 - **Genere:** arcade survival top-down (la strada scorre verso sinistra, il veicolo si muove su/giù).
 - **Stack:** Phaser 3.90 + TypeScript + Vite. UI in **italiano**.
 - **Grafica:** **100% procedurale** (Graphics API → `generateTexture`). **Nessun PNG / nessun asset esterno.**
-- **Audio:** procedurale (Web Audio API) in `src/SoundManager.ts`.
+- **Audio:** **100% procedurale** (Web Audio API) in `src/SoundManager.ts`. Direzione sonora in [`docs/ART_BIBLE_AUDIO.md`](docs/ART_BIBLE_AUDIO.md).
 - **Risoluzione & scaling:** il gioco è **simulato in spazio di design 800×600** e la camera di ogni scena va in **zoom** per riempire la risoluzione nativa scelta dal giocatore (menu Impostazioni → `Config.RESOLUTIONS`, preset 4:3 e 16:9, + schermo intero). Vedi **Risoluzione & scaling** sotto.
+- **Architettura tecnica:** per il quadro d'insieme non ovvio dal codice (scaling design+zoom, sovracampionamento `OS_G`/`OVERSAMPLE`, flusso e comunicazione tra le scene via `registry`/`Settings`) vedi [`docs/ARCHITETTURA.md`](docs/ARCHITETTURA.md).
 
 ## Comandi
 

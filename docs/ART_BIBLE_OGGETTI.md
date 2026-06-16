@@ -87,7 +87,7 @@ Il colore dice *di chi è* prima ancora della forma. Tre famiglie, coerenti coi 
 | Fazione | Colori | Dove |
 |---|---|---|
 | **Fuoco del giocatore** | giallo `#ffee00` / `#ffdd44` · verde `#44ff88` · arancio `#ff4400` / `#ff6600` · ciano `#00ffff` (torretta del Soldato) | proiettili, razzi, fiamme, muzzle-flash |
-| **Pickup / utile** | rosso-tanica `#cc3300` + **etichetta gialla** `#ffee00` con simbolo `#ff3300` | tanica di carburante |
+| **Pickup / utile** | rosso-tanica `#cc3300` + **etichetta gialla** `#ffdd00` con simbolo `#ff3300` | tanica di carburante |
 | **Minaccia** | verde-tossico `#00cc44`/`#44ff88` (nube), accenti nemici (vedi `ART_BIBLE_ZOMBIES`) | nube tossica, proiettili boss |
 
 > Il **player** parla coi 3 colori firma "caldi/vivi"; la **minaccia** col verde malato e il rosso-sangue. La **tanica** è l'unico oggetto che usa il **rosso + giallo di pericolo** in chiave "industriale" — è voluto: deve gridare *"benzina, prendimi"*.
@@ -232,14 +232,14 @@ corpo `#cccccc` / `#eeeeee` (acciaio) · **testata `#cc2200` / `#ff4422` / `#ff6
 ### 4.8 TANICA DI CARBURANTE — `fuel_can` · **22×26** · *il pickup*
 **Concept:** il carburante è il timer della corsa. La tanica è l'**unico pickup** e deve gridare "prendimi" nel caos: rosso industriale + etichetta di pericolo gialla.
 
-**Palette:**
-corpo `#aa2200` / `#ff4422` / `#cc3300` (rosso jerry-can) · costole `#881a00` · highlight `#ff7755` alpha `0.5` · tappo `#882200` / `#aa3300` · **beccuccio metallo `#888888` / `#bbbbbb`** · maniglia `#777777` / `#999999` · **etichetta di pericolo `#ffee00` alpha `0.8` + fiamma `#ff3300`** · fondo `#661100`.
+**Palette (jerry-can, sovracampionata `OS_G` 2×):**
+corpo rosso — base `#cc3300`, mezzo-tono `#e23d12`, **luce alto-sinistra `#ff5530`**, rim `#ff8a5c` (alpha `0.55`–`0.7`), ombra `#5e1000` / `#8a1c00` / `#6e1400` · costole pressate — luce `#ff7a52` / `#ff6a44`, ombra `#7a1600` / `#701400` · piede `#4a0c00` / `#8a1c00` · collare/tappo `#7a1800` / `#a8300a` / `#cc4a1e` · **beccuccio e maniglia = kit metallo §3.2 `#4a4a52` / `#70707a` / `#26262c`** + imbocco `#9a9aa4` + specular `#a6a6b0` · **etichetta di pericolo gialla `#ffdd00` / `#ffee66` (bordo `#b89000`) + fiamma `#cc1800` / `#ff3300` / nucleo `#ffcc00`** · **ombra a terra** `#000000` alpha `0.22`.
 
-**Silhouette:** classica **tanica jerry-can** con beccuccio e maniglia in alto = riconoscibile all'istante. L'etichetta gialla è il gancio di lettura a distanza.
+**Silhouette:** classica **tanica jerry-can** con beccuccio e maniglia in alto + costole laterali pressate = riconoscibile all'istante. L'**etichetta gialla** è il gancio di lettura a distanza; l'**ombra di contatto** la stacca dall'asfalto.
 
 **VFX:** alla raccolta → feedback di carburante (HUD) + SFX. Scorre/spawna come oggetto del mondo.
 
-**Note di gameplay:** spawn ogni **7.5 s** (ogni **5 s** col sopravvissuto **Esploratore**). Ripristina carburante alla raccolta. Hitbox indipendente dalla grafica.
+**Note di gameplay:** spawn ogni **7.5 s** (ogni **5 s** col sopravvissuto **Esploratore**). Ripristina carburante alla raccolta. **Sovracampionata** come zombie/veicolo: la texture è generata a `OVERSAMPLE`× e lo sprite torna a scala design con `setScale(1/OVERSAMPLE)` → nitidezza nativa, **hitbox invariata** (frame × scala = 22×26). Hitbox indipendente dalla grafica.
 
 ---
 

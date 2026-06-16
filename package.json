@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "validate:art": "node scripts/validate-art-bible.mjs",
-    "build": "npm run validate:art && tsc && vite build",
+    "validate:balance": "node scripts/validate-balance.mjs",
+    "validate:audio": "node scripts/validate-audio.mjs",
+    "validate": "npm run validate:art && npm run validate:balance && npm run validate:audio",
+    "build": "npm run validate:art && npm run validate:balance && npm run validate:audio && tsc && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

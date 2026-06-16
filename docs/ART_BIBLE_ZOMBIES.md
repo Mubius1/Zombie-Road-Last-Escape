@@ -271,7 +271,94 @@ Costruzioni riutilizzabili (solo primitive). Il *sottile* va **cotto nei 3 frame
 
 **Motion:** peso massimo (`pow 1.6`, `spd 2`), **tonfo marcato** + **respiro** (`wob 0.03`). Va dritto, inarrestabile.
 
-**Riuso boss:** stessa texture con **tinta + scala** (`BOSS_CONFIG`): Mega Mutante (verde) · Verme Gigante (arancio-bruno) · Colosso Corazzato (grigio-blu) · Bestia Radioattiva (verde acceso). I boss riproducono `walk_giant`.
+**Boss:** non riusano più questa texture. Ognuno ha **modello, silhouette e palette dedicati** — vedi **§6.7**. Il Gigante resta il loro *antenato di linguaggio* (massa, suture, innesti, occhi rossi), ma i quattro boss sono creature distinte, non recolor.
+
+---
+
+## 6.7 BOSS — modelli dedicati (fine regione)
+
+> I quattro boss **non** sono più recolor del Gigante: ognuno ha texture `boss_<tipo>` (3 frame, `OS_G`) e animazione `walk_boss_<tipo>`, con la propria **silhouette** — è il primo pilastro (§1) applicato ai momenti più importanti del gioco.
+>
+> **Codice:** texture in `buildEntityTextures()`, animazioni via helper `bwalk(...)`, parametri in `BOSS_CONFIG` (`spawnBoss`/`updateBoss`).
+> **Bilanciamento invariato:** `scaleX/scaleY` adattano la cornice dedicata, ma `bodyW/bodyH` sono ricalcolati così che la **hitbox effettiva** (`bodyW·scaleX/OVERSAMPLE × bodyH·scaleY/OVERSAMPLE`) coincida col vecchio riuso del Gigante.
+> **Tinta → accento:** il campo `tint` non colora più lo sprite (palette **cotta** nella texture); è il **colore-firma emissivo** usato nei VFX (alone della morte).
+> **Nota validatore:** `validate:art` controlla i nemici §6 (frame/scala/motion), **non** i boss — questa scheda è la fonte di verità manuale; tienila allineata a `BOSS_CONFIG`.
+
+---
+
+### 6.7.1 MEGA MUTANTE — *"La Madre"* · frame 56×70 · `scaleX 2.4 / scaleY 2.6` · `boss_mega_mutant`
+**Concept:** un alveare di carne che **partorisce** i comuni: una sacca-utero sotto pressione, piena di feti malformati che spinge fuori dalla bocca-ventre.
+
+**Palette:** membrana `#3f6b3a` · luce `#5fa84a` · ombra `#21401e` · livor `#4a3a52` · sacca traslucida verde `#8fd86a` · **accento emissivo BLOOD-RED `#ff5a3a`** (occhi + pod-embrioni) · vene `#ff3020` · nucleo `#ffe6d0` · embrione `#6e4a3a`/`#9a6a4a` · osso `#d9cba6`. *Corpo verde malato, uova che brillano di rosso-sangue: firma cromatica distinta dalla Bestia (verde) e legata agli occhi rossi dei comuni che genera.*
+
+**Silhouette:** **a goccia asimmetrica** — enorme ventre bulboso in basso (lobo extra sul lato sx), torso piccolo, **tumore-spalla** sproporzionato a destra, **braccio sx grande proteso / dx ridotto a moncone** (mai umanoide simmetrico) e una **testa-embrione che rompe il profilo inferiore** fra le gambe (il "parto" è nella sagoma, non solo nell'interno).
+
+**VFX (cotti):** pod-embrioni luminosi nella membrana, vene emissive, pustola sul tumore, suture sul torso. **(dinamico)** genera zombi `common` ai lati (comportamento `updateBoss`).
+
+**Motion:** mole molle che respira (`walk_boss_mega_mutant` ~2.6 fps); il ventre pulsa col passo. Deriva verticale ampia (seno) verso il giocatore.
+
+---
+
+### 6.7.2 VERME GIGANTE — *"Il Divoratore"* · frame 96×44 · `scaleX 2.0 / scaleY 2.0` · `boss_giant_worm`
+**Concept:** non è un umanoide: un **anellide carnivoro** che affiora dall'asfalto, fauci radiali di zanne e gola incandescente.
+
+**Palette:** carne `#9a5a2e` · luce `#c87a3a` · ombra `#5a2e14` · solco anelli `#3a1d0e` · ventre livido `#5a4e63` · gola `#1a0a06` · **bagliore emissivo `#ff7722`** / caldo `#ffd06a` · denti osso `#d9c8a0` · occhi `#ffcc22` · mucosa `#c89a5a`.
+
+**Silhouette:** **orizzontale e segmentata** — catena di 6 anelli che rastremano in coda a destra, **maw radiale** a sinistra (verso il veicolo). Nessuna gamba: lettura "verme" immediata.
+
+**VFX (cotti):** solchi tra i segmenti, anello di zanne, gola luminosa, bava. **(dinamico)** sputa nubi tossiche (`spawnToxicCloud`).
+
+**Motion:** **ondulazione viaggiante** cotta nei 3 frame (offset seno per segmento) → `walk_boss_giant_worm` ~4.5 fps dà il serpeggiare. Ampie spazzate verticali in `updateBoss`.
+
+---
+
+### 6.7.3 COLOSSO CORAZZATO — *"Il Bastione"* · frame 60×74 · `scaleX 2.5 / scaleY 2.8` · `boss_armored_colossus`
+**Concept:** un'unità antisommossa fusa in **piastre d'assedio** — un bunker che cammina, con **scudo** e **mortaio** sulla spalla.
+
+**Palette:** acciaio `#5f6b78` · luce `#8a97a5` · ombra `#39424c` · cavità `#20262c` · ruggine `#8a4a26`→`#3a1d0e` · verderame `#3f6b54` · sangue ossidato `#2a1410` · carne nelle giunture `#5a4e63` · **visiera/innesco emissivi `#ffcc22`** / caldo `#ffe9a0`.
+
+**Silhouette:** **blocco top-heavy** con due ganci: **scudo antisommossa** alto (trapezio) sul braccio sx + **canna del cannone** che punta in alto a destra. Elmo a cupola con fessura-visiera.
+
+**VFX (cotti):** rivetti, colature di ruggine, bordi di verderame, sangue secco sullo scudo, bagliore visiera/bocca canna. **(dinamico)** spara proiettili (`fireBossProjectile`).
+
+**Motion:** massa implacabile, **tonfo verticale** alternato delle gambe corazzate (`walk_boss_armored_colossus` ~2.2 fps). Resta centrato e martella.
+
+---
+
+### 6.7.4 BESTIA RADIOATTIVA — *"Il Reattore"* · frame 72×56 · `scaleX 2.2 / scaleY 2.3` · `boss_radioactive_beast`
+**Concept:** un orrore **quadrupede** irradiato: la schiena spaccata espone un nucleo-reattore di organi fusi che cola radiazione.
+
+**Palette:** pelle `#3f7a33` · luce `#5fa84a` · ombra `#1e3a18` · pelle vescicata `#9aa83e` · livor `#3a4a2a` · **nucleo emissivo `#7dff4a`** / medio `#b6ff6a` / cuore `#eaffd6` · osso `#d9c8a0` · melma `#6cff3a` · occhi `#b6ff6a`.
+
+**Silhouette:** **bassa e ricurva** — quadrupede con zampe anteriori lunghe e artigliate, dorso arcuato che culmina nella **cresta-spina luminosa**, testa piccola protesa in basso a sinistra.
+
+**VFX (cotti):** vertebre ossee che emergono dal nucleo, vene luminose sui fianchi, fauci e bava radioattiva, alone del core. **(dinamico)** sputa nubi tossiche, anche multiple (il più aggressivo).
+
+**Motion:** **andatura predatoria** — zampe in controfase, nucleo che pulsa (`walk_boss_radioactive_beast` ~5 fps). Insegue con seno verticale nervoso.
+
+---
+
+### 6.7.5 — Tabella di sincronia (controllata da `validate:art`)
+
+I numeri-sorgente dei boss **devono** coincidere con `BOSS_CONFIG` e con le chiamate `generateTexture`/`AF` nel codice. Lo script `npm run validate:art` confronta questa tabella col codice e **fallisce se divergono** (come per i nemici §5/§6). Cambia *qui e nel codice insieme*.
+
+| chiave | frame | scaleX | scaleY | bodyW | bodyH |
+|---|---|---|---|---|---|
+| `boss_mega_mutant` | 56×70 | 2.4 | 2.6 | 56 | 71 |
+| `boss_giant_worm` | 96×44 | 2.0 | 2.0 | 152 | 34 |
+| `boss_armored_colossus` | 60×74 | 2.5 | 2.8 | 62 | 80 |
+| `boss_radioactive_beast` | 72×56 | 2.2 | 2.3 | 59 | 66 |
+
+> **Hitbox effettiva** = `bodyW · scaleX / OVERSAMPLE × bodyH · scaleY / OVERSAMPLE` (con `OVERSAMPLE = 2`). Se ribilanci la **scala**, aggiorna `bodyW/bodyH` di conserva per **non** alterare la hitbox (e quindi il gameplay): es. Mega Mutante `56·2.4/2 × 71·2.6/2 ≈ 67×92`.
+
+### 6.7.6 — VFX di morte dedicati
+
+Ogni boss "muore a modo suo" (`bossDeathFx()` in `GameScene.ts`, chiamato da `killBoss`) — Standard AAA: **VFX + suono + feedback schermo** sincronizzati, tutto *fire-and-forget* (immagini tinte che si auto-distruggono, **nessun** emitter persistente, **nessun** impatto sul gameplay). Base condivisa: lampo bianco + alone/`bloomBurst` nel **colore-firma** (`BOSS_CONFIG.tint`) + scoppi a catena con SFX.
+
+- **Mega Mutante:** la sacca si rompe e **sputa la covata** — sagome di `zombie_common` schizzano via e svaniscono + spruzzi rosso-sangue.
+- **Verme Gigante:** il corpo si **sfalda nei segmenti**, schegge arancio/brune scagliate di lato (bias orizzontale) che ruotano e ricadono.
+- **Colosso Corazzato:** la **corazza esplode in schegge metalliche** (grigio acciaio) + raffiche di **scintille** ambra; shake extra (impatto pesante).
+- **Bestia Radioattiva:** **fusione del nucleo** — vampata verde (`lightFlash`) + detriti verdi + **nubi radioattive** puramente visive che si gonfiano e svaniscono.
 
 ---
 

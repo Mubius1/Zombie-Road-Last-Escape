@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -p \"require\\('vite/package.json'\\).version\")",
+      "Bash(npm list *)",
+      "Bash(cat)",
+      "Bash(node /tmp/test-regex.mjs)",
+      "Bash(xargs grep -l \"case.*error\")",
+      "Bash(awk '{print $NF}')",
+      "Bash(node /tmp/test_crash.mjs)",
+      "Bash(node \"C:\\\\Users\\\\manda\\\\Documents\\\\progetto della domenica\\\\test-path-setup.mjs\")",
+      "Bash(node \"C:\\\\Users\\\\manda\\\\Documents\\\\progetto della domenica\\\\scripts\\\\test-plugin-path.mjs\")",
+      "Bash(node \"C:\\\\Users\\\\manda\\\\Documents\\\\progetto della domenica\\\\scripts\\\\test-watch-match.mjs\")",
+      "Bash(node /tmp/final_error_check.mjs)",
+      "Bash(node -c scripts/vite-plugin-validate.mjs)",
+      "Bash(node -c scripts/validate-audio.mjs)",
+      "PowerShell(npm run validate:art)",
+      "PowerShell(npm run build)"
+    ]
+  }
+}

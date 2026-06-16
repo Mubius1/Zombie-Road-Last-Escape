@@ -16,7 +16,7 @@ const ZOMBIE_INFO = [
 const OBJECT_INFO = [
     { key: 'bullet', label: 'Proiettile', scale: 3 },
     { key: 'rocket', label: 'Razzo', scale: 2.4 },
-    { key: 'fuel_can', label: 'Tanica', scale: 2 },
+    { key: 'fuel_can', label: 'Tanica', scale: 2, over: true }, // texture sovracampionata (OS_G)
     { key: 'particle', label: 'Particella', scale: 3 },
     { key: 'toxic_cloud', label: 'Nube tox.', scale: 1.4 },
 ];
@@ -85,17 +85,18 @@ export default class DebugScene extends Phaser.Scene {
         });
     }
     drawBosses(y) {
-        this.sectionTitle(12, y, 'BOSS  (texture gigante con tinta/scala)', UI.redText);
+        this.sectionTitle(12, y, 'BOSS  (modelli dedicati)', UI.redText);
         const top = y + 18;
         BOSS_ORDER.forEach((bt, i) => {
             const cfg = BOSS_CONFIG[bt];
             const cx = 100 + i * 160;
             this.cell(cx, top + 30, 150, 64);
             // Scala ridotta per stare nella cella, ma mantiene proporzioni reali
-            const shrink = 0.7;
-            this.add.sprite(cx, top + 30, 'zombie_giant')
-                .setOrigin(0.5).setScale(cfg.scaleX * shrink / OVERSAMPLE, cfg.scaleY * shrink / OVERSAMPLE).setTint(cfg.tint)
-                .play('walk_giant');
+            const shrink = 0.6;
+            const texKey = `boss_${bt}`;
+            this.add.sprite(cx, top + 30, texKey)
+                .setOrigin(0.5).setScale(cfg.scaleX * shrink / OVERSAMPLE, cfg.scaleY * shrink / OVERSAMPLE)
+                .play(`walk_${texKey}`);
             Ui.text(this, cx, top + 50, cfg.name, { fontSize: '9px', color: UI.redSoft, fontStyle: 'bold' }).setOrigin(0.5, 0);
             Ui.text(this, cx, top + 62, `HP ${cfg.hp} · ★${cfg.reward}`, { fontSize: '8px', color: '#886666' }).setOrigin(0.5, 0);
         });
@@ -106,7 +107,7 @@ export default class DebugScene extends Phaser.Scene {
         OBJECT_INFO.forEach((o, i) => {
             const cx = 70 + i * 110;
             this.cell(cx, top + 22, 104, 44);
-            this.add.image(cx, top + 22, o.key).setOrigin(0.5).setScale(o.scale);
+            this.add.image(cx, top + 22, o.key).setOrigin(0.5).setScale(o.over ? o.scale / OVERSAMPLE : o.scale);
             Ui.text(this, cx, top + 40, o.label, { fontSize: '9px', color: '#ddcc99' }).setOrigin(0.5, 0);
         });
     }

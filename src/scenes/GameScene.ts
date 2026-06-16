@@ -35,11 +35,16 @@ export interface BossConfig {
   tint: number; bodyW: number; bodyH: number; reward: number;
 }
 
+// Ogni boss ha la propria texture `boss_<tipo>` (vedi buildEntityTextures + Art Bible §6.7).
+// scaleX/scaleY adattano la cornice dedicata; bodyW/bodyH sono ricalcolati così che la
+// HITBOX effettiva nel mondo (bodyW·scaleX/OVERSAMPLE × bodyH·scaleY/OVERSAMPLE) resti
+// IDENTICA al precedente riuso del Gigante → bilanciamento invariato. `tint` non colora più
+// lo sprite (palette cotta nella texture): è l'accento emissivo "firma" usato nei VFX (morte).
 export const BOSS_CONFIG: Record<BossType, BossConfig> = {
-  mega_mutant:       { name: 'Mega Mutante',      hp: 80,  speed: 55, scaleX: 2.8, scaleY: 2.8, tint: 0x22cc22, bodyW: 48, bodyH: 66, reward: 400 },
-  giant_worm:        { name: 'Verme Gigante',      hp: 110, speed: 40, scaleX: 3.8, scaleY: 1.8, tint: 0xcc8822, bodyW: 80, bodyH: 38, reward: 500 },
-  armored_colossus:  { name: 'Colosso Corazzato',  hp: 150, speed: 28, scaleX: 3.0, scaleY: 3.2, tint: 0x7788aa, bodyW: 52, bodyH: 70, reward: 650 },
-  radioactive_beast: { name: 'Bestia Radioattiva', hp: 95,  speed: 50, scaleX: 2.6, scaleY: 2.6, tint: 0x88ff22, bodyW: 50, bodyH: 58, reward: 450 },
+  mega_mutant:       { name: 'Mega Mutante',      hp: 80,  speed: 55, scaleX: 2.4, scaleY: 2.6, tint: 0xff4030, bodyW: 56,  bodyH: 71, reward: 400 },
+  giant_worm:        { name: 'Verme Gigante',      hp: 110, speed: 40, scaleX: 2.0, scaleY: 2.0, tint: 0xff7722, bodyW: 152, bodyH: 34, reward: 500 },
+  armored_colossus:  { name: 'Colosso Corazzato',  hp: 150, speed: 28, scaleX: 2.5, scaleY: 2.8, tint: 0xffcc22, bodyW: 62,  bodyH: 80, reward: 650 },
+  radioactive_beast: { name: 'Bestia Radioattiva', hp: 95,  speed: 50, scaleX: 2.2, scaleY: 2.3, tint: 0x7dff4a, bodyW: 59,  bodyH: 66, reward: 450 },
 };
 
 export const BOSS_ORDER: BossType[] = ['mega_mutant', 'giant_worm', 'armored_colossus', 'radioactive_beast'];
@@ -703,6 +708,269 @@ export default class GameScene extends Phaser.Scene {
       g.generateTexture('zombie_giant',144,66); AF('zombie_giant',48,66,3); g.destroy();
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // BOSS — texture dedicate (silhouette propria per ciascuno). Vedi §6.7 della
+    // Art Bible zombi. Gameplay/hitbox restano in BOSS_CONFIG (bodyW/bodyH).
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── BOSS · MEGA MUTANTE "La Madre" (56×70 × 3) — alveare che partorisce ─────
+    {
+      const g = OS_G(168,70);
+      const mem=0x3f6b3a, memHi=0x5fa84a, memSh=0x21401e, livid=0x4a3a52;
+      // accento emissivo BLOOD-RED (firma distinta dalla Bestia verde; lega ai comuni dagli occhi rossi che genera)
+      const sac=0x8fd86a, glow=0xff5a3a, vein=0xff3020, nucleus=0xffe6d0;
+      const emb=0x6e4a3a, embHi=0x9a6a4a, bone=0xd9cba6, maw=0x140604, eye=0xff3a1e;
+      for (let f = 0; f < 3; f++) {
+        const ox = f * 56, ph = f - 1; const X = (x: number) => ox + x; const p2 = ph * 2;
+        g.fillStyle(0x000000,0.34); g.fillEllipse(X(28),67,50,9);
+        // piedi tozzi affondati
+        g.fillStyle(0x120c08); g.fillEllipse(X(18-ph),64,12,7); g.fillEllipse(X(38+ph),64,12,7);
+        g.fillStyle(memSh); g.fillRoundedRect(X(13-ph),52,12,12,5); g.fillRoundedRect(X(31+ph),52,12,12,5);
+        g.fillStyle(mem);   g.fillRoundedRect(X(14-ph),52,9,10,4); g.fillRoundedRect(X(32+ph),52,9,10,4);
+        // VENTRE-UTERO bulboso e ASIMMETRICO (gancio: sacca che partorisce)
+        const bw = 46 + Math.abs(ph) * 2;
+        g.fillStyle(memSh); g.fillEllipse(X(27),46,bw+3,40);
+        g.fillStyle(memSh); g.fillEllipse(X(17),53,24,22);          // lobo basso-sx → profilo a goccia, non simmetrico
+        g.fillStyle(mem);   g.fillEllipse(X(27),45,bw,37);
+        g.fillStyle(mem);   g.fillEllipse(X(17),52,21,19);
+        g.fillStyle(memHi); g.fillEllipse(X(19),38,18,14);
+        g.fillStyle(livid,0.55); g.fillEllipse(X(38),56,16,12);     // livor mortis nella metà bassa (§3.1)
+        // membrana traslucida + pod-embrioni luminosi
+        g.fillStyle(sac,0.45); g.fillEllipse(X(26),47,bw-8,30);
+        const pods: [number,number,number][] = [[16,46,5],[33,42,4],[24,54,5],[39,50,3],[12,54,3]];
+        pods.forEach(([x,y,r]) => {
+          g.fillStyle(memSh); g.fillCircle(X(x),y,r+1);
+          g.fillStyle(glow,0.85); g.fillCircle(X(x),y,r);
+          g.fillStyle(nucleus,0.9); g.fillCircle(X(x-1),y-1,r*0.45);
+        });
+        // vene emissive che si diramano
+        g.fillStyle(vein,0.6); g.fillRect(X(27),30,1,24); g.fillRect(X(18),40,12,1); g.fillRect(X(27),48,14,1);
+        // BOCCA-UTERO che PARTORISCE: la testa rompe il PROFILO inferiore (gancio in silhouette)
+        g.fillStyle(memSh); g.fillEllipse(X(28),63,24,16);          // labbra del parto che sporgono dal ventre
+        g.fillStyle(maw);   g.fillEllipse(X(28),64,17,11);
+        g.fillStyle(emb);   g.fillCircle(X(28),66,6);               // testa emergente SOTTO la linea del ventre
+        g.fillStyle(embHi); g.fillCircle(X(26),64,2.4);
+        g.fillStyle(eye);   g.fillCircle(X(26),66,1.3); g.fillCircle(X(30),66,1.3);
+        g.fillStyle(bone);  [22,26,30,34].forEach(x => g.fillTriangle(X(x),60,X(x+2),60,X(x+1),63));
+        g.fillStyle(emb);   g.fillEllipse(X(16),67,7,4);            // bracciolo dell'embrione che spunta
+        g.fillStyle(embHi); g.fillCircle(X(13),67,2);
+        // braccia ASIMMETRICHE: sx grande protesa in basso, dx ridotta a moncone (rompe il read "umanoide a 2 braccia")
+        const laY = 33 + p2, raY = 24 - p2;
+        g.fillStyle(memSh); g.fillEllipse(X(5),laY,15,10); g.fillStyle(mem); g.fillEllipse(X(6),laY-1,11,7);
+        g.fillStyle(memSh); g.fillCircle(X(3),laY+6,4); g.fillStyle(mem); g.fillCircle(X(3),laY+6,2.4);
+        g.fillStyle(memSh); g.fillEllipse(X(50),raY,10,7); g.fillStyle(mem); g.fillEllipse(X(50),raY-1,7,4);
+        // torso superiore + TUMORE-spalla (asimmetria)
+        g.fillStyle(memSh); g.fillRoundedRect(X(12),16,32,20,9);
+        g.fillStyle(mem);   g.fillRoundedRect(X(14),17,28,17,8);
+        g.fillStyle(memHi); g.fillEllipse(X(22),22,12,7);
+        g.fillStyle(memSh); g.fillEllipse(X(45),16,20,17);
+        g.fillStyle(mem);   g.fillEllipse(X(45),15,16,13);
+        g.fillStyle(memSh); g.fillEllipse(X(49),20,8,7);            // ombra (no livor in alto, §3.1)
+        g.fillStyle(glow,0.4); g.fillCircle(X(45),14,2.2);          // pustola sottotono: il faro sono gli occhi
+        g.fillStyle(nucleus,0.6); g.fillCircle(X(44),13,1);
+        // suture sul torso
+        g.fillStyle(0x152a12); g.fillRect(X(28),18,1,16);
+        g.fillStyle(0x2a5a24); [20,24,28,32].forEach(y => g.fillRect(X(25),y,7,1));
+        // testa piccola inclinata (bassa, a sx)
+        g.fillStyle(memSh); g.fillEllipse(X(19),12,18,14);
+        g.fillStyle(mem);   g.fillEllipse(X(19),11,15,11);
+        g.fillStyle(memHi); g.fillEllipse(X(14),7,7,5);
+        g.fillStyle(memSh); g.fillEllipse(X(23),16,6,4);            // ombra del mento (lato basso-dx, §3.2)
+        // occhi luminosi + bocca
+        g.fillStyle(0x081404); g.fillEllipse(X(15),11,5,4); g.fillEllipse(X(23),11,5,4);
+        g.fillStyle(eye); g.fillEllipse(X(15),11,2.6,2.2); g.fillEllipse(X(23),11,2.4,2);
+        g.fillStyle(nucleus); g.fillCircle(X(14),10,1); g.fillCircle(X(22),10,1);
+        g.fillStyle(0x0a1a06); g.fillEllipse(X(19),16,7,3);
+        g.fillStyle(bone); [16,19,22].forEach(x => g.fillTriangle(X(x),15,X(x+2),15,X(x+1),17));
+      }
+      g.generateTexture('boss_mega_mutant',168,70); AF('boss_mega_mutant',56,70,3); g.destroy();
+    }
+
+    // ── BOSS · VERME GIGANTE "Il Divoratore" (96×44 × 3) — segmentato con fauci ──
+    {
+      const g = OS_G(288,44);
+      const wf=0x9a5a2e, wfHi=0xc87a3a, wfSh=0x5a2e14, ring=0x3a1d0e, livid=0x5a4e63;
+      const maw=0x1a0a06, glow=0xff7722, hot=0xffd06a, bone=0xd9c8a0, eye=0xff8a3a, slime=0xc89a5a;
+      const seg: [number,number][] = [[34,17],[48,16],[60,14],[71,12],[80,10],[88,7]];
+      for (let f = 0; f < 3; f++) {
+        const ox = f * 96, ph = f - 1; const X = (x: number) => ox + x;
+        const wy = (i: number) => 23 + Math.sin(i * 0.8 + ph * 1.2) * 4; // ondulazione viaggiante
+        g.fillStyle(0x000000,0.28); g.fillEllipse(X(54),40,84,7);
+        // dal fondo (coda) verso la testa: la testa copre i segmenti dietro
+        for (let i = seg.length - 1; i >= 0; i--) {
+          const [sx,r] = seg[i]; const sy = wy(i+1);
+          g.fillStyle(wfSh); g.fillEllipse(X(sx),sy+1,r*2+2,r*2);
+          g.fillStyle(wf);   g.fillEllipse(X(sx),sy,r*2,r*2-2);
+          g.fillStyle(ring); g.fillEllipse(X(sx+r-2),sy+1,3,r*2-3); // solco sul lato trailing/basso (§3.2)
+          g.fillStyle(wfHi); g.fillEllipse(X(sx-2),sy-r*0.5,r*0.8,r*0.5);
+          g.fillStyle(livid,0.4); g.fillEllipse(X(sx),sy+r*0.6,r*0.7,r*0.4);
+        }
+        g.fillStyle(slime,0.3); g.fillEllipse(X(44),wy(2)-6,6,3); g.fillEllipse(X(64),wy(3)-5,5,2);
+        // TESTA + FAUCI radiali (gancio)
+        const hy = wy(0);
+        g.fillStyle(wfSh); g.fillEllipse(X(16),hy+1,36,36);
+        g.fillStyle(wf);   g.fillEllipse(X(16),hy,32,32);
+        g.fillStyle(wfHi); g.fillEllipse(X(9),hy-8,11,8);
+        g.fillStyle(wfSh); g.fillEllipse(X(20),hy+9,16,11);
+        // gola spalancata
+        g.fillStyle(maw); g.fillCircle(X(13),hy,13);
+        g.fillStyle(0x3a1206); g.fillCircle(X(13),hy,9);
+        g.fillStyle(glow,0.8); g.fillCircle(X(13),hy,5);
+        g.fillStyle(hot,0.9); g.fillCircle(X(12),hy-1,2.4);
+        // denti radiali (anello di zanne verso il centro)
+        const teeth = 10;
+        g.fillStyle(bone);
+        for (let k = 0; k < teeth; k++) {
+          const a = (k / teeth) * Math.PI * 2;
+          const cx = 13 + Math.cos(a) * 12, cy = hy + Math.sin(a) * 12;
+          const ixp = 13 + Math.cos(a) * 6, iyp = hy + Math.sin(a) * 6;
+          const px = Math.cos(a + 0.25) * 2, py = Math.sin(a + 0.25) * 2;
+          g.fillTriangle(X(cx-px),cy-py,X(cx+px),cy+py,X(ixp),iyp);
+        }
+        // occhietti semplici sui lati della testa
+        g.fillStyle(0x180800); g.fillCircle(X(24),hy-9,3.4); g.fillCircle(X(26),hy+8,3);
+        g.fillStyle(eye); g.fillCircle(X(24),hy-9,1.8); g.fillCircle(X(26),hy+8,1.6);
+        g.fillStyle(hot); g.fillCircle(X(23),hy-10,0.8);
+        // bava che cola
+        g.fillStyle(slime,0.6); g.fillEllipse(X(11),hy+13,2,4);
+      }
+      g.generateTexture('boss_giant_worm',288,44); AF('boss_giant_worm',96,44,3); g.destroy();
+    }
+
+    // ── BOSS · COLOSSO CORAZZATO "Il Bastione" (60×74 × 3) — scudo + cannone ─────
+    {
+      const g = OS_G(180,74);
+      const st=0x5f6b78, stHi=0x8a97a5, stSh=0x39424c, cav=0x20262c;
+      const rust=0x8a4a26, rustD=0x3a1d0e, verd=0x3f6b54, bx=0x2a1410, fl=0x5a4e63;
+      const eye=0xffcc22, hot=0xffe9a0;
+      for (let f = 0; f < 3; f++) {
+        const ox = f * 60, ph = f - 1; const X = (x: number) => ox + x;
+        g.fillStyle(0x000000,0.36); g.fillEllipse(X(30),71,52,9);
+        // gambe corazzate (tonfo: alternanza verticale)
+        g.fillStyle(cav); g.fillEllipse(X(22-ph),69,15,7); g.fillEllipse(X(40+ph),69,15,7);
+        g.fillStyle(stSh); g.fillRoundedRect(X(16),52+ph*2,14,16,4); g.fillRoundedRect(X(32),52-ph*2,14,16,4);
+        g.fillStyle(st);   g.fillRoundedRect(X(17),52+ph*2,11,14,3); g.fillRoundedRect(X(33),52-ph*2,11,14,3);
+        g.fillStyle(stHi); g.fillRect(X(18),54+ph*2,3,9); g.fillRect(X(34),54-ph*2,3,9);
+        g.fillStyle(rust,0.7); g.fillRect(X(24),58,1,8); g.fillRect(X(40),58,1,8);
+        g.fillStyle(fl,0.6); g.fillEllipse(X(23),52,4,3); g.fillEllipse(X(39),52,4,3);
+        // TORSO corazzato (blocco top-heavy)
+        g.fillStyle(stSh); g.fillRoundedRect(X(10),24,40,30,8);
+        g.fillStyle(st);   g.fillRoundedRect(X(12),25,36,27,7);
+        g.fillStyle(stHi); g.fillRoundedRect(X(14),27,14,10,4);
+        g.fillStyle(stSh); g.fillRect(X(30),26,1,26);
+        g.fillStyle(cav); [[15,30],[45,30],[15,48],[45,48]].forEach(([x,y]) => g.fillCircle(X(x),y,1.6));         // 4 rivetti "eroe" (no griglia fitta, §9)
+        g.fillStyle(stHi,0.6); [[15,30],[45,30],[15,48],[45,48]].forEach(([x,y]) => g.fillCircle(X(x-0.6),y-0.6,0.8));
+        g.fillStyle(rust,0.8); g.fillRect(X(20),34,2,16); g.fillRect(X(38),30,2,20);
+        g.fillStyle(rustD,0.7); g.fillRect(X(20),44,2,6); g.fillRect(X(38),44,2,6);
+        g.fillStyle(verd,0.5); g.fillRect(X(12),48,36,2); g.fillRect(X(13),25,34,1.5);
+        g.fillStyle(bx,0.6); g.fillEllipse(X(34),40,7,5);
+        // spallaccio a cupola sx (sopra lo scudo)
+        g.fillStyle(stSh); g.fillEllipse(X(13),24,18,14);
+        g.fillStyle(st);   g.fillEllipse(X(13),23,14,11);
+        g.fillStyle(stHi); g.fillEllipse(X(9),19,6,4);
+        g.fillStyle(rust,0.6); g.fillRect(X(10),24,1,6);
+        // spallaccio dx
+        g.fillStyle(stSh); g.fillEllipse(X(46),22,16,13);
+        g.fillStyle(st);   g.fillEllipse(X(46),21,12,10);
+        g.fillStyle(stHi); g.fillEllipse(X(43),18,5,4);
+        // CANNONE su spalla destra (gancio 2) — disegnato SOPRA lo spallaccio così la canna emerge
+        g.lineStyle(9, stSh); g.lineBetween(X(42),21,X(53),9);
+        g.lineStyle(6, st);   g.lineBetween(X(42),21,X(52),10);
+        g.lineStyle(2, stHi); g.lineBetween(X(43),19,X(50),11);
+        g.fillStyle(cav);     g.fillCircle(X(53),9,4);
+        g.fillStyle(eye,0.4); g.fillCircle(X(53),9,2);             // brace sottotono: il faro è la visiera
+        g.fillStyle(hot,0.7); g.fillCircle(X(52.5),8.5,0.8);
+        // ELMO a cupola + visiera luminosa
+        g.fillStyle(stSh); g.fillRoundedRect(X(20),8,20,18,7);
+        g.fillStyle(st);   g.fillRoundedRect(X(21),9,18,15,6);
+        g.fillStyle(stHi); g.fillEllipse(X(26),13,7,5);
+        g.fillStyle(cav);  g.fillRoundedRect(X(22),16,16,5,2);
+        g.fillStyle(eye,0.25); g.fillEllipse(X(30),18,20,7);       // alone della visiera = faro emissivo dominante
+        g.fillStyle(eye);  g.fillRect(X(24),17,12,2.6);
+        g.fillStyle(hot);  g.fillRect(X(25),17,5,2);
+        g.fillStyle(stSh); g.fillRect(X(30),16,1,5);
+        g.fillStyle(cav); g.fillEllipse(X(30),24,6,3);
+        g.fillStyle(verd,0.5); g.fillRect(X(22),9,16,1);
+        // SCUDO antisommossa enorme (gancio 1) sul braccio sx
+        g.fillStyle(stSh); g.fillRoundedRect(X(8),34,8,16,3);
+        g.fillStyle(stSh); g.fillTriangle(X(5),11,X(21),14,X(1),57); g.fillTriangle(X(21),14,X(21),55,X(1),57);
+        g.fillStyle(st);   g.fillTriangle(X(7),14,X(19),16,X(4),54); g.fillTriangle(X(19),16,X(19),53,X(4),54);
+        g.fillStyle(stHi); g.fillTriangle(X(8),16,X(12),17,X(6),40);
+        g.fillStyle(cav);  g.fillRect(X(9),22,8,3);
+        g.fillStyle(rust,0.7); g.fillRect(X(6),30,2,18); g.fillRect(X(14),20,1,28);
+        g.fillStyle(stHi,0.5); g.fillRect(X(10),34,7,1);
+        g.fillStyle(bx,0.5); g.fillEllipse(X(12),46,5,7);
+        g.fillStyle(stSh); g.fillCircle(X(11),34,4); g.fillStyle(st); g.fillCircle(X(11),34,3); g.fillStyle(stHi); g.fillCircle(X(10),33,1.2);
+      }
+      g.generateTexture('boss_armored_colossus',180,74); AF('boss_armored_colossus',60,74,3); g.destroy();
+    }
+
+    // ── BOSS · BESTIA RADIOATTIVA "Il Reattore" (72×56 × 3) — bruto bioluminescente ──
+    {
+      const g = OS_G(216,56);
+      const hd=0x3f7a33, hdHi=0x5fa84a, hdSh=0x1e3a18, bl=0x9aa83e, livid=0x3a4a2a;
+      const core=0x7dff4a, nucleus=0xeaffd6, mid=0xb6ff6a, bone=0xd9c8a0, ooze=0x6cff3a, eye=0xb6ff6a;
+      for (let f = 0; f < 3; f++) {
+        const ox = f * 72, ph = f - 1; const X = (x: number) => ox + x;
+        const fl = ph * 3;
+        g.fillStyle(0x000000,0.30); g.fillEllipse(X(38),52,64,8);
+        // zampe posteriori (dx): DUE punti d'appoggio distinti → lettura quadrupede netta
+        g.fillStyle(hdSh); g.fillRoundedRect(X(49+ph),36,8,16,4); g.fillStyle(hd); g.fillRoundedRect(X(50+ph),36,5,14,3);
+        g.fillStyle(0x101808); g.fillEllipse(X(52+ph),52,8,3);
+        g.fillStyle(hdSh); g.fillRoundedRect(X(60-ph),35,9,17,4); g.fillStyle(hd); g.fillRoundedRect(X(61-ph),35,6,15,3);
+        g.fillStyle(0x101808); g.fillEllipse(X(63-ph),52,8,3);
+        g.fillStyle(bone); [60,63,66].forEach(x => g.fillTriangle(X(x-ph),50,X(x+1.5-ph),50,X(x+0.7-ph),53));
+        // zampe anteriori (sx, lunghe e protese) controfase
+        g.fillStyle(hdSh); g.fillRoundedRect(X(14-fl),30,8,20,3); g.fillStyle(hd); g.fillRoundedRect(X(15-fl),30,5,18,3);
+        g.fillStyle(hdHi); g.fillRect(X(16-fl),32,2,10);
+        g.fillStyle(0x101808); g.fillEllipse(X(16-fl),50,9,4);
+        g.fillStyle(bone); [12,15,18].forEach(x => g.fillTriangle(X(x-fl),49,X(x+1.5-fl),49,X(x+0.7-fl),54));
+        // seconda zampa anteriore (più dietro, in ombra)
+        g.fillStyle(hdSh); g.fillRoundedRect(X(24+fl),32,7,18,3);
+        g.fillStyle(0x0c1406); g.fillEllipse(X(26+fl),50,8,3);
+        // TORSO arcuato (massa bassa)
+        g.fillStyle(hdSh); g.fillEllipse(X(38),31,52,30);
+        g.fillStyle(hd);   g.fillEllipse(X(38),30,48,27);
+        g.fillStyle(hdHi); g.fillEllipse(X(28),22,16,9);
+        g.fillStyle(livid,0.5); g.fillEllipse(X(48),38,14,9);
+        g.fillStyle(bl,0.6); g.fillEllipse(X(44),24,8,5); g.fillEllipse(X(30),34,6,4);
+        // SPINA-REATTORE esposta (gancio: nucleo luminoso)
+        g.fillStyle(0x0a1606); g.fillEllipse(X(36),18,40,10);
+        g.fillStyle(core,0.25); g.fillEllipse(X(36),18,44,16);
+        g.fillStyle(bone); [20,27,34,41,48].forEach(x => g.fillTriangle(X(x),20,X(x+4),20,X(x+2),12));
+        const pulse = 2 + Math.abs(ph);
+        [23,30,37,44].forEach((x,i) => {
+          g.fillStyle(core,0.9); g.fillCircle(X(x),17,3.4 + (i === 1 ? pulse * 0.4 : 0));
+          g.fillStyle(mid); g.fillCircle(X(x),17,2);
+          g.fillStyle(nucleus); g.fillCircle(X(x-0.6),16,0.9);
+        });
+        g.fillStyle(core,0.5); g.fillRect(X(30),20,1,14); g.fillRect(X(44),20,1,12);
+        // TESTA bassa protesa (sx)
+        const hy = 34;
+        g.fillStyle(hdSh); g.fillEllipse(X(12),hy,20,16);
+        g.fillStyle(hd);   g.fillEllipse(X(12),hy-1,17,13);
+        g.fillStyle(hdHi); g.fillEllipse(X(8),hy-5,7,5);
+        g.fillStyle(hdSh); g.fillTriangle(X(2),hy-2,X(2),hy+5,X(10),hy+2);
+        g.fillStyle(hd);   g.fillTriangle(X(3),hy-1,X(3),hy+4,X(10),hy+1);
+        // fauci + zanne
+        g.fillStyle(0x0a1404); g.fillEllipse(X(8),hy+4,12,5);
+        g.fillStyle(bone); [4,7,10,13].forEach(x => g.fillTriangle(X(x),hy+2,X(x+2),hy+2,X(x+1),hy+6));
+        g.fillStyle(ooze,0.6); g.fillEllipse(X(7),hy+8,2,4);
+        // occhi luminosi
+        g.fillStyle(0x0c1a04); g.fillEllipse(X(10),hy-3,5,4); g.fillEllipse(X(16),hy-2,4,3);
+        g.fillStyle(eye); g.fillEllipse(X(10),hy-3,2.4,2); g.fillEllipse(X(16),hy-2,2,1.7);
+        g.fillStyle(nucleus); g.fillCircle(X(9),hy-4,0.9); g.fillCircle(X(15),hy-3,0.8);
+        // corna/spine corte sopra la testa
+        g.fillStyle(hdSh); g.fillTriangle(X(14),hy-9,X(18),hy-9,X(15),hy-16);
+        g.fillStyle(bone); g.fillTriangle(X(15),hy-10,X(17),hy-10,X(15.6),hy-15);
+        // coda corta (dx)
+        g.fillStyle(hdSh); g.fillTriangle(X(60),28,X(70+ph),24,X(62),34);
+        g.fillStyle(hd);   g.fillTriangle(X(61),28,X(68+ph),26,X(62),32);
+        g.fillStyle(core,0.4); g.fillCircle(X(68+ph),25,2);
+      }
+      g.generateTexture('boss_radioactive_beast',216,56); AF('boss_radioactive_beast',72,56,3); g.destroy();
+    }
+
     // ── BULLET (18×5) ─────────────────────────────────────────────────────────
     {
       const g = G(18,5);
@@ -715,27 +983,54 @@ export default class GameScene extends Phaser.Scene {
       g.destroy();
     }
 
-    // ── FUEL CAN (22×26) ──────────────────────────────────────────────────────
+    // ── FUEL CAN (22×26) — jerry-can AAA · sovracampionata (OS_G) ──────────────
+    // Pickup = "il timer della corsa": deve gridare "benzina, prendimi" nel caos.
+    // Luce da alto-sinistra, costole pressate, kit metallo condiviso (§3.2) su
+    // maniglia/beccuccio, etichetta di pericolo gialla come gancio di lettura.
     {
-      const g = G(22,26);
-      g.fillStyle(0xaa2200); g.fillRect(2,6,18,18);
-      g.fillStyle(0xff4422); g.fillRect(2,6,5,18);
-      g.fillStyle(0xcc3300); g.fillRect(7,6,13,18);
-      // Ribs
-      g.fillStyle(0x881a00); g.fillRect(5,7,2,16); g.fillRect(15,7,2,16);
-      // Highlight stripe
-      g.fillStyle(0xff7755,0.5); g.fillRect(3,7,3,16);
-      // Top cap
-      g.fillStyle(0x882200); g.fillRect(3,4,16,4); g.fillStyle(0xaa3300); g.fillRect(4,5,14,2);
-      // Spout
-      g.fillStyle(0x888888); g.fillRect(13,1,7,4); g.fillStyle(0xbbbbbb); g.fillRect(14,0,5,2);
-      // Handle
-      g.fillStyle(0x777777); g.fillRect(3,4,8,3); g.fillStyle(0x999999); g.fillRect(4,5,6,1);
-      // Warning label
-      g.fillStyle(0xffee00,0.8); g.fillRect(5,11,12,8);
-      g.fillStyle(0xff3300); g.fillRect(10,12,2,6); g.fillRect(7,14,8,2);
-      // Bottom
-      g.fillStyle(0x661100); g.fillRect(3,22,16,4);
+      const g = OS_G(22,26);
+      // Ombra di contatto a terra (la stacca dall'asfalto, come il veicolo)
+      g.fillStyle(0x000000,0.22); g.fillEllipse(11,25,18,4);
+      // Corpo: ombra profonda → base rossa → mezzo-tono e luce da alto-sinistra
+      g.fillStyle(0x5e1000); g.fillRoundedRect(2,5,18,19,{tl:4,tr:4,bl:2,br:2});
+      g.fillStyle(0xcc3300); g.fillRoundedRect(2,5,17,18,{tl:4,tr:4,bl:2,br:1});
+      g.fillStyle(0xe23d12); g.fillRoundedRect(2,5,9,18,{tl:4,tr:0,bl:2,br:0});
+      g.fillStyle(0xff5530); g.fillRect(3,7,4,15); g.fillRect(4,6,12,2);
+      g.fillStyle(0xff8a5c,0.7);  g.fillRect(3,6,1,15);
+      g.fillStyle(0xff8a5c,0.55); g.fillRect(4,6,11,1);
+      // Ombra sul lato destro / fondo (basso-destra)
+      g.fillStyle(0x8a1c00); g.fillRect(17,7,2,15);
+      g.fillStyle(0x6e1400); g.fillRect(4,21,13,2);
+      // Costole laterali pressate (convesse: luce a sinistra, ombra a destra)
+      g.fillStyle(0xff7a52); g.fillRect(4,9,1,11); g.fillStyle(0x7a1600); g.fillRect(5,9,1,11);
+      g.fillStyle(0xff6a44); g.fillRect(15,9,1,11); g.fillStyle(0x701400); g.fillRect(16,9,1,11);
+      // Piede inferiore
+      g.fillStyle(0x4a0c00); g.fillRoundedRect(2,22,17,3,{tl:0,tr:0,bl:2,br:1});
+      g.fillStyle(0x8a1c00); g.fillRect(4,22,12,1);
+      // Collare / tappo
+      g.fillStyle(0x7a1800); g.fillRoundedRect(3,3,15,4,1);
+      g.fillStyle(0xa8300a); g.fillRoundedRect(3,3,14,3,1);
+      g.fillStyle(0xcc4a1e); g.fillRect(4,4,12,1);
+      // Maniglia — kit metallo condiviso (§3.2) + specular
+      g.fillStyle(0x26262c); g.fillRoundedRect(3,1,9,3,1);
+      g.fillStyle(0x4a4a52); g.fillRoundedRect(3,1,9,2,1);
+      g.fillStyle(0x70707a); g.fillRect(4,1,7,1);
+      g.fillStyle(0xa6a6b0,0.8); g.fillRect(4,1,3,1);
+      // Beccuccio — kit metallo, con imbocco chiaro + riflesso speculare
+      g.fillStyle(0x26262c); g.fillRect(13,1,7,4);
+      g.fillStyle(0x4a4a52); g.fillRect(13,1,6,3);
+      g.fillStyle(0x70707a); g.fillRect(14,2,4,1);
+      g.fillStyle(0x9a9aa4); g.fillRect(17,0,3,2);
+      g.fillStyle(0xa6a6b0,0.9); g.fillCircle(18,1,1);
+      // Etichetta di pericolo gialla (il gancio di lettura a distanza)
+      g.fillStyle(0xb89000); g.fillRoundedRect(6,10,8,8,1);
+      g.fillStyle(0xffdd00); g.fillRoundedRect(6,10,8,7,1);
+      g.fillStyle(0xffee66); g.fillRect(7,10,6,1);
+      // Simbolo fiamma (rosso → arancio → nucleo caldo)
+      g.fillStyle(0xcc1800); g.fillTriangle(10,11, 7.5,16.2, 12.5,16.2);
+      g.fillStyle(0xff3300); g.fillTriangle(10,12, 8.3,16, 11.7,16);
+      g.fillStyle(0xffcc00); g.fillTriangle(10,13.6, 9,15.8, 11,15.8);
+      g.fillStyle(0xcc1800); g.fillRect(8,16,4,1);
       g.generateTexture('fuel_can', 22, 26);
       g.destroy();
     }
@@ -814,6 +1109,21 @@ export default class GameScene extends Phaser.Scene {
     walk('jumper', 9);
     walk('toxic', 4);
     walk('giant', 3.5);
+
+    // Animazioni boss: stesso ciclo a 3 frame ma su texture dedicate (boss_<tipo>).
+    const bwalk = (texKey: string, rate: number) => {
+      const key = `walk_${texKey}`;
+      if (scene.anims.exists(key)) return;
+      scene.anims.create({
+        key,
+        frames: [0, 1, 2, 1].map(fr => ({ key: texKey, frame: fr })),
+        frameRate: rate, repeat: -1,
+      });
+    };
+    bwalk('boss_mega_mutant', 2.6);      // alveare che respira lento
+    bwalk('boss_giant_worm', 4.5);       // ondulazione serpeggiante
+    bwalk('boss_armored_colossus', 2.2); // tonfo pesante implacabile
+    bwalk('boss_radioactive_beast', 5);  // andatura predatoria nervosa
   }
 
   // Interpola un colore verso un target (0xffffff per schiarire, 0x000000 per scurire)
@@ -1777,7 +2087,8 @@ export default class GameScene extends Phaser.Scene {
   private spawnFuelCan() {
     if (!this.alive || this.missionDone) return;
     const f = this.fuelCans.create(this.designW+20, Phaser.Math.Between(ROAD_TOP+22, ROAD_BOTTOM-22), 'fuel_can') as Phaser.Physics.Arcade.Sprite;
-    f.setVelocityX(-SCROLL_SPEED).setDepth(6);
+    // Texture sovracampionata (OS_G) → torna a scala design; hitbox invariata (frame×scala = 22×26).
+    f.setVelocityX(-SCROLL_SPEED).setDepth(6).setScale(1 / OVERSAMPLE);
   }
 
   private fireWeapon() {
@@ -2200,10 +2511,11 @@ export default class GameScene extends Phaser.Scene {
     this.cameras.main.shake(300, 0.016);
     this.sfx?.playExplosion();
 
-    // Sprite boss (riusa zombie_giant scalato e tintato)
-    const boss = this.bossGroup.create(this.designW + 90, ROAD_CENTER, 'zombie_giant') as Phaser.Physics.Arcade.Sprite;
-    boss.setScale(cfg.scaleX / OVERSAMPLE, cfg.scaleY / OVERSAMPLE).setTint(cfg.tint).setDepth(12);
-    boss.play('walk_giant');
+    // Sprite boss (texture + animazione dedicate per ciascun tipo)
+    const texKey = `boss_${bossType}`;
+    const boss = this.bossGroup.create(this.designW + 90, ROAD_CENTER, texKey) as Phaser.Physics.Arcade.Sprite;
+    boss.setScale(cfg.scaleX / OVERSAMPLE, cfg.scaleY / OVERSAMPLE).setDepth(12);
+    boss.play(`walk_${texKey}`);
     boss.setData('bossType', bossType);
     boss.setData('hp', cfg.hp);
     const t1init = bossType === 'armored_colossus' ? 3000
@@ -2312,10 +2624,10 @@ export default class GameScene extends Phaser.Scene {
     if (!bullet.active || !boss.active) return;
     const dmg = (bullet.getData('damage') as number) ?? 1;
     bullet.destroy();
-    const bossType = boss.getData('bossType') as BossType;
     this.damageBoss(boss, dmg);
-    boss.setTint(0xffffff);
-    this.time.delayedCall(60, () => { if (boss?.active) boss.setTint(BOSS_CONFIG[bossType].tint); });
+    // Flash bianco pieno sull'impatto (la texture ha la palette cotta, niente tinta da ripristinare).
+    boss.setTintFill(0xffffff);
+    this.time.delayedCall(60, () => { if (boss?.active) boss.clearTint(); });
   }
 
   private onRocketHitBoss(rocket: Phaser.Physics.Arcade.Sprite, boss: Phaser.Physics.Arcade.Sprite) {
@@ -2364,21 +2676,11 @@ export default class GameScene extends Phaser.Scene {
     const cfg = BOSS_CONFIG[bossType];
     const bx = this.bossSprite.x, by = this.bossSprite.y;
 
-    // Esplosioni a catena
-    for (let i = 0; i < 7; i++) {
-      this.time.delayedCall(i * 130, () => {
-        this.spawnHitParticles(bx + Phaser.Math.Between(-40, 40), by + Phaser.Math.Between(-30, 30));
-        this.spawnHitParticles(bx + Phaser.Math.Between(-40, 40), by + Phaser.Math.Between(-30, 30));
-        this.sfx?.playExplosion();
-      });
-    }
-
     this.bossSprite.destroy();
     this.bossSprite = null;
     this.cameras.main.shake(500, 0.022);
     this.hitStop(70);
-    Juice.flash(this, 0xffffff, 0.5, 140);
-    Juice.lightFlash(this, bx, by, 0xffbb55, 8, 460);
+    this.bossDeathFx(bossType, bx, by); // sequenza di morte dedicata per tipo
 
     const earned = cfg.reward;
     this.addKillScore(500);
@@ -2393,6 +2695,103 @@ export default class GameScene extends Phaser.Scene {
     this.sfx?.playMissionComplete();
 
     this.time.delayedCall(2200, () => this.triggerMissionComplete());
+  }
+
+  /**
+   * Sequenza di morte DEDICATA per ogni boss (Standard AAA: VFX + suono + schermo
+   * sincronizzati). Tutto fire-and-forget (immagini tinte che si auto-distruggono):
+   * nessun emitter persistente, nessun impatto sul gameplay.
+   */
+  private bossDeathFx(bossType: BossType, x: number, y: number) {
+    const cfg = BOSS_CONFIG[bossType];
+    // Base condivisa: lampo bianco + alone nel colore-firma + boato-firma + scoppi a catena.
+    Juice.flash(this, 0xffffff, 0.5, 140);
+    Juice.lightFlash(this, x, y, cfg.tint, 8, 480);
+    Juice.bloomBurst(this, x, y, cfg.tint, 3, 320);
+    this.sfx?.playBossDeath(bossType);               // timbro di morte dedicato al tipo
+    for (let i = 0; i < 6; i++) {
+      this.time.delayedCall(i * 120, () => {
+        this.spawnHitParticles(x + Phaser.Math.Between(-44, 44), y + Phaser.Math.Between(-34, 34));
+        if (i % 2 === 0) this.sfx?.playExplosion();   // ~3 boati: lasciano respiro al timbro-firma
+      });
+    }
+
+    switch (bossType) {
+      case 'mega_mutant': {
+        // La Madre: la sacca si rompe e SPUTA LA COVATA (zombi-immagine che schizzano via).
+        Juice.bloomBurst(this, x, y, 0xff3020, 3.6, 420);
+        for (let i = 0; i < 5; i++) {
+          this.time.delayedCall(50 + i * 70, () => {
+            const a = -Math.PI / 2 + Phaser.Math.FloatBetween(-1.1, 1.1);
+            const sp = Phaser.Math.Between(70, 150);
+            const z = this.add.image(x, y, 'zombie_common', 0).setDepth(14)
+              .setScale(0.42).setFlipX(Math.random() < 0.5);
+            this.tweens.add({
+              targets: z, x: x + Math.cos(a) * sp, y: y - Math.abs(Math.sin(a)) * sp * 0.5 + 120,
+              angle: Phaser.Math.Between(-360, 360), alpha: 0, scale: 0.12,
+              duration: 760, ease: 'Quad.easeOut', onComplete: () => z.destroy(),
+            });
+            this.spawnDebris(x, y, 'particle', { tint: 0xff3020, n: 4, scale: 0.5, spread: 130 });
+          });
+        }
+        break;
+      }
+      case 'giant_worm': {
+        // Il Divoratore: il corpo si SFALDA NEI SEGMENTI, schizzati di lato.
+        this.spawnDebris(x, y, 'particle', { tint: 0x9a5a2e, n: 9, scale: 1.2, spread: 175, dir: 0.5, gravity: 80,  dur: 780, spin: 200 });
+        this.spawnDebris(x, y, 'particle', { tint: 0xff7722, n: 5, scale: 0.6, spread: 150, dir: 0.6, gravity: 60 });
+        this.spawnDebris(x, y, 'particle', { tint: 0x5a2e14, n: 5, scale: 0.85, spread: 125, dir: 0.5, gravity: 115 });
+        break;
+      }
+      case 'armored_colossus': {
+        // Il Bastione: la corazza ESPLODE IN SCHEGGE METALLICHE + scintille (impatto più pesante).
+        this.cameras.main.shake(220, 0.02);
+        for (let i = 0; i < 4; i++)
+          this.time.delayedCall(i * 90, () => this.emitSparks(x + Phaser.Math.Between(-30, 30), y + Phaser.Math.Between(-30, 30)));
+        this.spawnDebris(x, y, 'particle', { tint: 0x5f6b78, n: 8, scale: 0.95, spread: 160, gravity: 130, dur: 820, spin: 260 });
+        this.spawnDebris(x, y, 'particle', { tint: 0x8a97a5, n: 5, scale: 0.6,  spread: 140, gravity: 120 });
+        this.spawnDebris(x, y, 'particle', { tint: 0xffe9a0, n: 6, scale: 0.4,  spread: 185, gravity: 40, dur: 380 });
+        break;
+      }
+      case 'radioactive_beast': {
+        // Il Reattore: FUSIONE DEL NUCLEO — vampata verde + nubi radioattive (solo visive).
+        Juice.lightFlash(this, x, y, 0x7dff4a, 11, 560);
+        Juice.bloomBurst(this, x, y, 0xb6ff6a, 4, 480);
+        this.spawnDebris(x, y, 'particle', { tint: 0x6cff3a, n: 10, scale: 0.6, spread: 190, gravity: 30, dur: 520 });
+        ([[0,0,1.8],[-30,-12,1.2],[34,8,1.3],[4,24,1.1]] as [number,number,number][]).forEach(([dx,dy,s], i) =>
+          this.time.delayedCall(i * 80, () => {
+            const c = this.add.image(x + dx, y + dy, 'toxic_cloud').setDepth(13).setScale(s * 0.5).setAlpha(0.9);
+            this.tweens.add({ targets: c, scale: s * 1.8, alpha: 0, duration: 900, ease: 'Quad.easeOut', onComplete: () => c.destroy() });
+          }));
+        break;
+      }
+    }
+  }
+
+  /** Detriti fire-and-forget: immagini tinte che schizzano e svaniscono (no fisica, no danno). */
+  private spawnDebris(
+    x: number, y: number, texKey: string,
+    opts: { tint?: number; n?: number; scale?: number; spread?: number; gravity?: number; dir?: number; dur?: number; depth?: number; spin?: number } = {},
+  ) {
+    const { tint, n = 6, scale = 0.5, spread = 120, gravity = 90, dir = 0, dur = 700, depth = 14, spin = 0 } = opts;
+    for (let i = 0; i < n; i++) {
+      // dir 0 = scoppio radiale · dir>0 = bias orizzontale (es. verme che si sfalda di lato)
+      const a = dir > 0
+        ? (Math.random() < 0.5 ? 0 : Math.PI) + Phaser.Math.FloatBetween(-dir, dir)
+        : Math.random() * Math.PI * 2;
+      const sp = Phaser.Math.Between(spread * 0.4, spread);
+      const p = this.add.image(x, y, texKey).setDepth(depth).setScale(scale * Phaser.Math.FloatBetween(0.7, 1.3));
+      if (tint !== undefined) p.setTint(tint);
+      this.tweens.add({
+        targets: p,
+        x: x + Math.cos(a) * sp,
+        y: y + Math.sin(a) * sp * 0.6 + gravity,
+        alpha: 0, scale: 0.06,
+        angle: spin ? Phaser.Math.Between(-spin, spin) : 0,
+        duration: dur + Phaser.Math.Between(-120, 120),
+        ease: 'Quad.easeOut', onComplete: () => p.destroy(),
+      });
+    }
   }
 
   private showBossHUD(name: string) {

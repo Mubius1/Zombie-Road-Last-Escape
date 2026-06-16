@@ -152,6 +152,58 @@ for (const t of TYPES) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// 1b. BOSS (ART_BIBLE_ZOMBIES.md §6.7.5 ↔ BOSS_CONFIG + generateTexture/AF)
+//   - dimensioni frame   (AF('boss_<t>', fw, fh, 3) ↔ "FW×FH" in tabella §6.7.5)
+//   - scaleX / scaleY    (BOSS_CONFIG[t]            ↔ colonne scaleX/scaleY)
+//   - bodyW / bodyH      (BOSS_CONFIG[t]            ↔ colonne bodyW/bodyH → hitbox)
+// ════════════════════════════════════════════════════════════════════════════
+const BOSS_TYPES = ['mega_mutant', 'giant_worm', 'armored_colossus', 'radioactive_beast'];
+const floatField = (body, key, field) => {
+  const m = new RegExp(`\\b${field}\\s*:\\s*(-?[\\d.]+)`).exec(body);
+  if (!m) throw new Error(`Campo numerico "${field}" non trovato per "${key}"`);
+  return parseFloat(m[1]);
+};
+const bossSrc = sliceObject(code, 'const BOSS_CONFIG');
+
+for (const t of BOSS_TYPES) {
+  const key = `boss_${t}`;
+
+  // Codice: BOSS_CONFIG[t] → scaleX/scaleY/bodyW/bodyH
+  let c;
+  try {
+    const body = entryBody(bossSrc, t);
+    c = {
+      scaleX: floatField(body, t, 'scaleX'), scaleY: floatField(body, t, 'scaleY'),
+      bodyW:  floatField(body, t, 'bodyW'),  bodyH:  floatField(body, t, 'bodyH'),
+    };
+  } catch (e) { errors.push(`[boss:${t}] BOSS_CONFIG: ${e.message}`); continue; }
+
+  // Codice: AF('boss_t', fw, fh, 3) + generateTexture('boss_t', W, H)
+  const af = new RegExp(`AF\\('${key}',\\s*(\\d+),\\s*(\\d+),\\s*3\\)`).exec(code);
+  const gt = new RegExp(`generateTexture\\('${key}',\\s*(\\d+),\\s*(\\d+)\\)`).exec(code);
+  if (!af) { errors.push(`[boss:${t}] AF('${key}', ...) non trovato nel codice`); continue; }
+  if (!gt) { errors.push(`[boss:${t}] generateTexture('${key}', ...) non trovato nel codice`); continue; }
+  const codeFw = +af[1], codeFh = +af[2], codeW = +gt[1], codeH = +gt[2];
+
+  // Coerenza interna al codice: lo spritesheet è fw*3 × fh
+  if (codeW !== codeFw * 3 || codeH !== codeFh)
+    errors.push(`[boss:${t}] codice incoerente: generateTexture ${codeW}×${codeH} ≠ ${codeFw * 3}×${codeFh} (fw*3 × fh da AF)`);
+
+  // Bible §6.7.5: riga "| `boss_t` | FW×FH | sX | sY | bW | bH |"
+  const cells = bibleRow(bibleZ, key);
+  if (!cells || cells.length < 5) { errors.push(`Art Bible §6.7.5: riga boss "${key}" non trovata o malformata.`); continue; }
+  const fm = /(\d+)×(\d+)/.exec(cells[0]);
+  if (!fm) { errors.push(`Art Bible §6.7.5: dimensione frame "NN×NN" mancante per "${key}".`); continue; }
+  const b = { fw: +fm[1], fh: +fm[2], scaleX: parseFloat(cells[1]), scaleY: parseFloat(cells[2]), bodyW: parseFloat(cells[3]), bodyH: parseFloat(cells[4]) };
+
+  if (codeFw !== b.fw || codeFh !== b.fh) errors.push(`[boss:${t}] frame: codice ${codeFw}×${codeFh} ≠ bible ${b.fw}×${b.fh}`);
+  if (!near(c.scaleX, b.scaleX)) errors.push(`[boss:${t}] scaleX: codice ${c.scaleX} ≠ bible ${b.scaleX}`);
+  if (!near(c.scaleY, b.scaleY)) errors.push(`[boss:${t}] scaleY: codice ${c.scaleY} ≠ bible ${b.scaleY}`);
+  if (!near(c.bodyW, b.bodyW))   errors.push(`[boss:${t}] bodyW: codice ${c.bodyW} ≠ bible ${b.bodyW}`);
+  if (!near(c.bodyH, b.bodyH))   errors.push(`[boss:${t}] bodyH: codice ${c.bodyH} ≠ bible ${b.bodyH}`);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // 2. VEICOLI (ART_BIBLE_OGGETTI.md §4.1 ↔ GameData.ts VEHICLES)
 // ════════════════════════════════════════════════════════════════════════════
 const VEHICLE_KEYS = [
@@ -306,6 +358,6 @@ if (errors.length) {
   process.exit(1);
 }
 console.log(
-  `✅ Art Bible allineata: ${TYPES.length} nemici · ${VEHICLE_KEYS.length} veicoli · ` +
+  `✅ Art Bible allineata: ${TYPES.length} nemici · ${BOSS_TYPES.length} boss · ${VEHICLE_KEYS.length} veicoli · ` +
   `${WEAPON_KEYS.length} armi · ${OBJECT_TEX.length} texture (dimensioni) · ${uiCount} token UI verificati.`
 );
