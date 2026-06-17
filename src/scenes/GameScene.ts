@@ -319,7 +319,11 @@ export default class GameScene extends Phaser.Scene {
 
   update(time: number, delta: number) {
     if (!this.alive || this.missionDone) {
-      if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) Juice.fadeAndRun(this, () => this.scene.restart());
+      // SPACE = "ricomincia" SOLO al game over. A fine missione lo SPACE è già gestito
+      // dal listener dedicato (→ ShopScene) in triggerMissionComplete(): senza questo
+      // guard lo stesso tasto farebbe partire ANCHE scene.restart(), che riesegue create()
+      // (nuovo SoundManager + startEngine) e rianima la GameScene dietro al negozio.
+      if (!this.alive && Phaser.Input.Keyboard.JustDown(this.spaceKey)) Juice.fadeAndRun(this, () => this.scene.restart());
       return;
     }
     Juice.jitterGrain(this.grain);
