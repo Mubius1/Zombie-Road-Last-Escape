@@ -170,8 +170,9 @@ export default class ShopScene extends Phaser.Scene {
 
       // Anteprima reale: il proiettile dell'arma (razzo dedicato; bullet tinto per le altre)
       const projKey = key === 'rockets' ? 'rocket' : 'bullet';
+      // bullet/rocket sono texture sovracampionate (OS_G) → scala ÷OVERSAMPLE.
       this.add.image(wx + 40, py + 22, projKey)
-        .setTint(w.color).setScale(key === 'rockets' ? 1.7 : 2.4).setAlpha(owned ? 1 : 0.4);
+        .setTint(w.color).setScale((key === 'rockets' ? 1.7 : 2.4) / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
       Ui.text(this, wx + 40, py + 32, w.name, { fontSize: '8px', color: owned ? UI.text : '#444444', wordWrap: { width: 78 }, align: 'center' }).setOrigin(0.5, 0);
 
       if (owned) {

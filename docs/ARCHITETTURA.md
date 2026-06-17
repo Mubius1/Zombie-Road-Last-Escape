@@ -16,11 +16,13 @@
 | Comando | Cosa fa |
 |---|---|
 | `npm run dev` | Vite in sviluppo |
-| `npm run build` | **`validate:art`** → `tsc` → build di produzione |
+| `npm run build` | **`validate:art`** → `tsc` (solo type-check) → build di produzione |
 | `npm run validate:art` | confronta le costanti del codice con i numeri nelle art bible; **fallisce se divergono** |
 | `npm run preview` | anteprima della build |
 
-> **Anti-deriva (CLAUDE.md Regola n.2):** cambiare una costante visiva/di movimento nel codice **senza** aggiornare l'art bible corrispondente rompe `validate:art`, che è agganciato a `build`. Le `.js` accanto ai `.ts` in `src/` sono output compilato: **non** si modificano a mano.
+> **Anti-deriva (CLAUDE.md Regola n.2):** cambiare una costante visiva/di movimento nel codice **senza** aggiornare l'art bible corrispondente rompe `validate:art`, che è agganciato a `build`.
+
+> **⚠️ I sorgenti sono SOLO `.ts` — nessun `.js` in `src/` (regola, non opinione).** A transpilare i `.ts` ci pensa **Vite**; `tsc` gira in **`noEmit`** ([`tsconfig.json`](../tsconfig.json)) e fa **solo type-check** durante `build`. Perché è vincolante: la risoluzione di default di Vite prova le estensioni nell'ordine `.mjs → .js → .ts`, quindi un `SoundManager.js` accanto a `SoundManager.ts` **verrebbe caricato al posto del `.ts`** (gli import sono senza estensione) → in `npm run dev` si eseguirebbe codice stantio senza alcun errore. Per questo `src/**/*.js` e `src/**/*.js.map` sono in `.gitignore` e in `src/` non deve **mai** comparire un `.js`. **Non rimuovere questi guard** (`noEmit` + righe `.gitignore`): se ne riemergono dei `.js`, cancellali. *(Storico: una run di `tsc` senza `noEmit` aveva committato un set di `.js` ombra accanto a ogni `.ts` — bonificato il 2026-06-17.)*
 
 ---
 

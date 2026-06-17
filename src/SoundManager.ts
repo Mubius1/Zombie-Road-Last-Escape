@@ -4,15 +4,30 @@ export default class SoundManager {
 
   private ctx: AudioContext;
   private master: GainNode;
+  private limiter: DynamicsCompressorNode;
   private engineOsc?: OscillatorNode;
+  private engineOsc2?: OscillatorNode;
   private engineGain?: GainNode;
   private engineLfo?: OscillatorNode;
+  private engineNoise?: AudioBufferSourceNode;
+  private engineLowpass?: BiquadFilterNode;
 
   constructor(ctx: AudioContext) {
     this.ctx = ctx;
     this.master = ctx.createGain();
     this.master.gain.value = SoundManager.BASE_VOLUME;
-    this.master.connect(ctx.destination);
+
+    // Limiter brick-wall sul bus master (vedi ART_BIBLE_AUDIO §4): protegge da clipping/distorsione
+    // quando molte voci si sovrappongono nel picco — es. morte boss = timbro-firma + ~3 esplosioni
+    // (0.8 ciascuna) + motore. Tutte le voci → master → limiter → destination.
+    this.limiter = ctx.createDynamicsCompressor();
+    this.limiter.threshold.value = -3;    // dB: interviene appena sotto il fondo scala
+    this.limiter.knee.value = 0;          // ginocchio netto → comportamento da limiter, non compressore morbido
+    this.limiter.ratio.value = 20;        // 20:1 = muro
+    this.limiter.attack.value = 0.003;    // s: cattura i transienti
+    this.limiter.release.value = 0.1;     // s
+    this.master.connect(this.limiter);
+    this.limiter.connect(ctx.destination);
   }
 
   /** Imposta il volume utente (0..1), scalato sul livello master di riferimento. */
@@ -253,42 +268,95 @@ export default class SoundManager {
 
   startEngine() {
     if (this.engineOsc) return;
+    const t = this.ctx.currentTime;
 
+    // ── Bus TONALE: due sawtooth gravi leggermente detunati = "blocco motore" che ringhia.
+    //    Il battimento tra i due (≈1 Hz) dà la lopezza organica di un motore reale, al posto
+    //    del vecchio vibrato di frequenza che suonava come un drone/UFO.
     this.engineOsc = this.ctx.createOscillator();
     this.engineOsc.type = 'sawtooth';
-    this.engineOsc.frequency.value = 52;
+    this.engineOsc.frequency.value = 46;           // fondamentale (idle); sale col carico
+    this.engineOsc2 = this.ctx.createOscillator();
+    this.engineOsc2.type = 'sawtooth';
+    this.engineOsc2.frequency.value = 46 * 1.012;  // gemello detunato → battimento = crescita viva
+    const oscMix = this.ctx.createGain();
+    oscMix.gain.value = 0.5;
+    this.engineOsc.connect(oscMix);
+    this.engineOsc2.connect(oscMix);
 
+    // Lowpass risonante che APRE col carico: idle = cupo/ovattato, pieno regime = ringhio brillante.
+    this.engineLowpass = this.ctx.createBiquadFilter();
+    this.engineLowpass.type = 'lowpass';
+    this.engineLowpass.frequency.value = 240;
+    this.engineLowpass.Q.value = 1.2;
+    oscMix.connect(this.engineLowpass);
+
+    // ── Bus RUMORE: grana meccanica (aria/valvole) via bandpass medio-grave, debolissima.
+    this.engineNoise = this.noise(2);
+    this.engineNoise.loop = true;
+    const noiseBp = this.ctx.createBiquadFilter();
+    noiseBp.type = 'bandpass';
+    noiseBp.frequency.value = 320;
+    noiseBp.Q.value = 0.7;
+    const noiseMix = this.ctx.createGain();
+    noiseMix.gain.value = 0.12;
+    this.engineNoise.connect(noiseBp);
+    noiseBp.connect(noiseMix);
+
+    // ── CHUG: tremolo d'AMPIEZZA alla cadenza di scoppio. È questo (non un vibrato di
+    //    frequenza) che fa il "putt-putt" di un motore a scoppio invece di un ronzio piatto.
+    const trem = this.ctx.createGain();
+    trem.gain.value = 0.8;                          // livello a riposo del tremolo
     this.engineLfo = this.ctx.createOscillator();
-    this.engineLfo.frequency.value = 7;
+    this.engineLfo.type = 'sine';
+    this.engineLfo.frequency.value = 9;            // cadenza di scoppio (idle); accelera col carico
     const lfoGain = this.ctx.createGain();
-    lfoGain.gain.value = 3;
+    lfoGain.gain.value = 0.2;                       // profondità del chug (gain oscilla 0.6..1.0)
     this.engineLfo.connect(lfoGain);
-    lfoGain.connect(this.engineOsc.frequency);
+    lfoGain.connect(trem.gain);
+    this.engineLowpass.connect(trem);
+    noiseMix.connect(trem);
 
+    // ── Livello motore (bordone, volutamente bassissimo: battito del mondo, non protagonista).
     this.engineGain = this.ctx.createGain();
     this.engineGain.gain.value = 0.055;
-
-    this.engineOsc.connect(this.engineGain);
+    trem.connect(this.engineGain);
     this.engineGain.connect(this.master);
-    this.engineOsc.start();
-    this.engineLfo.start();
+
+    this.engineOsc.start(t);
+    this.engineOsc2.start(t);
+    this.engineLfo.start(t);
+    this.engineNoise.start(t);
   }
 
   // factor 0..1: 0 = spento/danneggiato, 1 = pieno regime
   setEngineLoad(factor: number) {
     if (!this.engineOsc) return;
-    const target = 42 + factor * 36;
-    this.engineOsc.frequency.setTargetAtTime(target, this.ctx.currentTime, 0.08);
+    const t = this.ctx.currentTime;
+    const target = 46 + factor * 40;               // fondamentale 46..86 Hz
+    this.engineOsc.frequency.setTargetAtTime(target, t, 0.08);
+    this.engineOsc2?.frequency.setTargetAtTime(target * 1.012, t, 0.08);
+    // il chug accelera col regime: putt-putt lento e faticoso quando è carico/danneggiato,
+    // rombo serrato a pieno regime.
+    this.engineLfo?.frequency.setTargetAtTime(9 + factor * 16, t, 0.12);
+    // il filtro apre col carico → più armoniche, ringhio più aggressivo a pieno regime.
+    this.engineLowpass?.frequency.setTargetAtTime(240 + factor * 760, t, 0.1);
   }
 
   stopEngine() {
     if (!this.engineGain || !this.engineOsc) return;
+    const stopAt = this.ctx.currentTime + 1.2;
     this.engineGain.gain.setTargetAtTime(0.001, this.ctx.currentTime, 0.3);
-    this.engineOsc.stop(this.ctx.currentTime + 1.2);
-    this.engineLfo?.stop(this.ctx.currentTime + 1.2);
-    this.engineOsc  = undefined;
-    this.engineGain = undefined;
-    this.engineLfo  = undefined;
+    this.engineOsc.stop(stopAt);
+    this.engineOsc2?.stop(stopAt);
+    this.engineLfo?.stop(stopAt);
+    this.engineNoise?.stop(stopAt);
+    this.engineOsc     = undefined;
+    this.engineOsc2    = undefined;
+    this.engineGain    = undefined;
+    this.engineLfo     = undefined;
+    this.engineNoise   = undefined;
+    this.engineLowpass = undefined;
   }
 
   // ─── Utility ─────────────────────────────────────────────────────────────────

@@ -25,7 +25,7 @@ I tre pilastri del titolo (coesione · game feel · rifinitura) tradotti sul suo
 
 - **Game feel.** Ogni suono **pesa e reagisce**. Gli effetti d'azione sono **percussivi** (attacco istantaneo, decadimento esponenziale rapido) → l'azione "morde". Il motore **non è statico**: la sua frequenza segue il carico (`setEngineLoad`) — sale a pieno regime, **scende** se il motore è danneggiato o coperto di zombi. Le code di esito (game over, missione completata) sono **sequenze temporizzate**, non un colpo unico: danno respiro al momento.
 
-- **Rifinitura.** Niente suono "secco" senza inviluppo: **ogni** voce ha attacco e decadimento espliciti (mai un on/off a gradino, che fa "click"). Il master è a un **livello di riferimento basso** (`BASE_VOLUME = 0.35`) per lasciare headroom quando 10 suoni si sovrappongono. Il loop del motore si **spegne in dissolvenza** (0.3 s), mai con un taglio netto.
+- **Rifinitura.** Niente suono "secco" senza inviluppo: **ogni** voce ha attacco e decadimento espliciti (mai un on/off a gradino, che fa "click"). Il master è a un **livello di riferimento basso** (`BASE_VOLUME = 0.35`) per lasciare headroom quando 10 suoni si sovrappongono, e un **limiter brick-wall** sul master (§4) fa da rete di sicurezza contro il clipping nei picchi (morte boss). Il loop del motore si **spegne in dissolvenza** (0.3 s), mai con un taglio netto.
 
 > **Regola d'oro dell'audio:** *Leggibilità prima di tutto. In 1 colpo d'orecchio il giocatore deve distinguere — senza guardare — un colpo andato a segno (uccisione, grave che precipita) da un danno subìto (impatto/aggancio), e una ricompensa (arpeggio salente) da una sconfitta (arpeggio discendente). Se "ricco" e "leggibile" sono in conflitto, vince **leggibile**. Nessun suono copre il feedback di un altro più importante.*
 
@@ -37,6 +37,7 @@ I tre pilastri del titolo (coesione · game feel · rifinitura) tradotti sul suo
 |---|---|
 | **Tutti i suoni** (sintesi, filtri, inviluppi) | [`src/SoundManager.ts`](../src/SoundManager.ts) |
 | **Master gain / volume** | `SoundManager.master`, `BASE_VOLUME`, `setVolume()` |
+| **Limiter brick-wall** | `SoundManager.limiter` (`DynamicsCompressorNode`; `master → limiter → ctx.destination`) |
 | **Generatore di rumore bianco** | `SoundManager.noise(duration)` |
 | **Loop del motore** | `startEngine()` / `setEngineLoad(factor)` / `stopEngine()` |
 | **Istanza in partita** + start/stop + gating volume | [`GameScene.create()`](../src/scenes/GameScene.ts) (`this.sfx = new SoundManager(...)`) |
@@ -45,7 +46,7 @@ I tre pilastri del titolo (coesione · game feel · rifinitura) tradotti sul suo
 | **Anteprima sonora UI** | [`SettingsScene.playPreview()`](../src/scenes/SettingsScene.ts) → `playZombieKill()` |
 | **Preferenza volume persistente** | [`src/Settings.ts`](../src/Settings.ts) → `Settings.volume` (localStorage) |
 
-**Catena di segnale (sempre):** sorgente (`OscillatorNode` o `AudioBufferSourceNode`) → [`BiquadFilterNode` opzionale] → `GainNode` (inviluppo) → **`master`** (`GainNode`, `BASE_VOLUME · volumeUtente`) → `ctx.destination`. **Nessuna voce** salta il master: è l'unico punto di controllo del volume.
+**Catena di segnale (sempre):** sorgente (`OscillatorNode` o `AudioBufferSourceNode`) → [`BiquadFilterNode` opzionale] → `GainNode` (inviluppo) → **`master`** (`GainNode`, `BASE_VOLUME · volumeUtente`) → **`limiter`** (`DynamicsCompressorNode` brick-wall, §4) → `ctx.destination`. **Nessuna voce** salta il master: è l'unico punto di controllo del volume; il limiter è una rete di sicurezza dopo il master, non un secondo controllo di volume.
 
 ---
 
@@ -83,7 +84,7 @@ Come per i nemici (silhouette → movimento → texture), un suono si legge in t
 | **Rumore filtrato — grave** | `noise` + `lowpass` | deflagrazione, massa | esplosione (600 Hz) |
 | **Tono che precipita** | `sine`/`sawtooth` con ramp di frequenza ↓ | morte, danno, fallimento | uccisione (sine 160→40), aggancio (saw 90→25), game over (saw discendente) |
 | **Arpeggio consonante salente** | più `sine` a frequenze di scala maggiore | ricompensa, successo | carburante (C-E-G), missione completata (C-E-G-C-E) |
-| **Bordone grave con vibrato** | `sawtooth` 42–78 Hz + LFO 7 Hz | il mondo è vivo / il veicolo c'è | loop motore |
+| **Bordone grave che pulsa (chug)** | 2 × `sawtooth` 46–86 Hz detunati → `lowpass` + tremolo d'ampiezza 9–25 Hz + grana di `noise` | il mondo è vivo / motore a scoppio | loop motore |
 
 ### 3.2 Gesto melodico (la regola del su/giù)
 
@@ -114,6 +115,7 @@ Le ricompense e gli esiti usano invece un **attacco lineare morbido** (~0.02–0
 | `setVolume(v)` | `master.gain = 0.35 · clamp01(v)` | unico punto di controllo. `v` viene da `Settings.volume`. |
 | Voce più forte | esplosione (gain di voce **0.8**) | la deflagrazione domina, come dev'essere. |
 | Voce più debole | sfrigolio tossico (**0.18**), motore (**0.055**) | ambientali, non devono coprire l'azione. |
+| **Limiter master** | `DynamicsCompressor`: soglia **−3 dB**, ratio **20:1**, knee **0**, attacco **3 ms**, rilascio **100 ms** | brick-wall tra `master` e `ctx.destination`. Trasparente ai livelli normali; interviene solo quando le voci sommate superano il fondo scala (morte boss: timbro-firma + ~3 esplosioni + motore). Evita il clipping senza dover riequilibrare ogni picco. È una *protezione*, non un'identità tonale → descritto qui, **non** validato a numero (come gli inviluppi di dettaglio, vedi §4.1). |
 
 **Gerarchia di volume di voce (gain di picco, prima del master):** esplosione 0.8 › impatto 0.55 › **morte boss (timbro-firma 0.3–0.5, layer SOTTO l'esplosione che la accompagna)** › sparo 0.45 › uccisione 0.32 › game over / missione / carburante 0.30–0.28 › aggancio 0.28 › sfrigolio 0.18 › **motore 0.055**. Rispetta quest'ordine quando aggiungi un suono: la sua importanza per il giocatore = la sua posizione qui.
 
@@ -124,12 +126,12 @@ Sottoinsieme di numeri verificato automaticamente da `npm run validate:audio` co
 | `chiave` | Valore | Dove nel codice (`SoundManager.ts`) |
 |---|---|---|
 | `base_volume` | 0.35 | `BASE_VOLUME` (livello del master) |
-| `engine_osc_hz` | 52 | `startEngine` → `engineOsc.frequency.value` |
-| `engine_lfo_hz` | 7 | `startEngine` → `engineLfo.frequency.value` |
-| `engine_lfo_gain` | 3 | `startEngine` → `lfoGain.gain.value` (ampiezza vibrato) |
+| `engine_osc_hz` | 46 | `startEngine` → `engineOsc.frequency.value` (fondamentale idle) |
+| `engine_lfo_hz` | 9 | `startEngine` → `engineLfo.frequency.value` (cadenza del chug idle) |
+| `engine_lfo_gain` | 0.2 | `startEngine` → `lfoGain.gain.value` (profondità del chug d'ampiezza) |
 | `engine_gain` | 0.055 | `startEngine` → `engineGain.gain.value` |
-| `engine_load_base` | 42 | `setEngineLoad` → `42 + factor·36` (frequenza minima) |
-| `engine_load_span` | 36 | `setEngineLoad` → `42 + factor·36` (escursione → max 78) |
+| `engine_load_base` | 46 | `setEngineLoad` → `46 + factor·40` (frequenza minima) |
+| `engine_load_span` | 40 | `setEngineLoad` → `46 + factor·40` (escursione → max 86) |
 | `engine_fade_s` | 0.3 | `stopEngine` → costante di dissolvenza `setTargetAtTime(…, 0.3)` |
 | `shot_filter_hz` | 2500 | `playShot` → highpass |
 | `impact_filter_hz` | 350 | `playImpact` → bandpass |
@@ -201,18 +203,22 @@ Sottoinsieme di numeri verificato automaticamente da `npm run validate:audio` co
 
 ## 6. Loop del motore (l'unica voce con stato)
 
-Bordone continuo che fa da battito del mondo per tutta la partita. Vive in 3 nodi persistenti: `engineOsc` (suono), `engineLfo` + lfoGain (vibrato), `engineGain` (livello).
+Bordone continuo che fa da battito del mondo per tutta la partita. **Non è un tono singolo:** un vero motore a scoppio è un *blocco che ringhia* + il *putt-putt* ritmico degli scoppi + la *grana meccanica* dell'aria. Per questo il loop somma tre strati, tutti pilotati dal carico (`setEngineLoad`), e fonde il tutto con un **tremolo d'ampiezza** (il "chug") — è quest'ultimo, non un vibrato di frequenza, a dare il carattere di motore invece di un drone.
+
+Nodi persistenti: `engineOsc` + `engineOsc2` (tonale), `engineLfo` + lfoGain (chug), `engineLowpass` (timbro), `engineNoise` (grana), `engineGain` (livello).
 
 | Parte | Valore | Ruolo |
 |---|---|---|
-| Oscillatore | `sawtooth`, base **52 Hz** | ronzio grave sporco |
-| LFO | **7 Hz** → gain **3** → `engineOsc.frequency` | vibrato ±3 Hz = "irregolarità" da motore |
+| Oscillatori tonali | 2 × `sawtooth`, base **46 Hz** + gemello **×1.012** (detune) | ringhio "a blocco"; il battimento ≈1 Hz dà la lopezza viva |
+| Lowpass | **240 Hz** (idle) → **1000 Hz** (pieno regime), Q 1.2 | apre col carico: cupo/ovattato fermo, brillante a tutto gas |
+| LFO chug | **9 Hz** (idle) → **25 Hz** (pieno) → gain **0.2** → `trem.gain` (centro 0.8) | tremolo d'ampiezza = il *putt-putt* degli scoppi |
+| Grana | `noise` loop → `bandpass` 320 Hz (mix 0.12) | aria/valvole; sotto il tonale, anch'essa pulsata dal chug |
 | Gain | **0.055** | volutamente bassissimo: bordone, non protagonista |
 
-- **`startEngine()`** — crea e avvia i nodi. **Idempotente**: se il motore è già attivo, esce subito (no doppioni).
-- **`setEngineLoad(factor)`** — `factor` 0..1 mappa la frequenza a **42 + factor·36 Hz** (range **42–78 Hz**), con `setTargetAtTime(…, 0.08)` (transizione morbida, niente salti). Chiamato ogni frame in `updateVehicle()` con
-  `factor = (engine.health/100) · max(0.3, 1 − nZombiAggrappati·0.15)` → **il motore "fatica" quando è danneggiato o coperto di zombi.**
-- **`stopEngine()`** — dissolve `engineGain` a 0.001 in **0.3 s**, poi ferma gli oscillatori a +1.2 s e azzera i riferimenti. **Mai un taglio secco.**
+- **`startEngine()`** — crea e avvia i nodi (2 osc + LFO + noise loop). **Idempotente**: se il motore è già attivo, esce subito (no doppioni).
+- **`setEngineLoad(factor)`** — `factor` 0..1 pilota *tutto e insieme*: la fondamentale **46 + factor·40 Hz** (range **46–86 Hz**), la cadenza del chug **9 + factor·16 Hz**, e l'apertura del lowpass **240 + factor·760 Hz** — con `setTargetAtTime` (transizioni morbide, niente salti). Chiamato ogni frame in `updateVehicle()` con
+  `factor = (engine.health/100) · max(0.3, 1 − nZombiAggrappati·0.15)` → **a pieno regime ringhia serrato e brillante; quando è danneggiato o coperto di zombi cala di tono, il chug rallenta in un putt-putt faticoso e il timbro si fa cupo.**
+- **`stopEngine()`** — dissolve `engineGain` a 0.001 in **0.3 s**, poi ferma tutti gli oscillatori e il rumore a +1.2 s e azzera i riferimenti. **Mai un taglio secco.**
 
 **Ciclo di vita** (vedi [`ARCHITETTURA.md`](./ARCHITETTURA.md)): start in `GameScene.create()`; stop allo `SHUTDOWN` della scena, alla pausa (overlay impostazioni), a missione completata e a game over; **restart** all'evento `RESUME` (ritorno dalla pausa), che riallinea anche il volume.
 
@@ -302,4 +308,5 @@ playNuovoSuono() {
 - [ ] Triggerato via `this.sfx?.…` (nessun crash se l'audio non c'è).
 - [ ] Nessun riferimento persistente per gli one-shot (solo il motore ha stato).
 - [ ] Testato a volume 1 e ~0.1 e **in sovrapposizione** con esplosione + sparo + motore.
+- [ ] Nessun clipping nei picchi: il **limiter master** (§4) fa da rete, ma il mix deve restare pulito ai livelli di §4 (il limiter non è una scusa per voci troppo forti).
 - [ ] Scheda in §5 aggiornata.

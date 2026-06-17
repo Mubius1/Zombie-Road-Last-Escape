@@ -174,14 +174,15 @@ Fonte: `WEAPONS`. Sono validati **Prezzo · Cooldown · Danno** (valori-sorgente
 | `chiave` | Arma | Prezzo ★ | Cooldown | Danno | DPS | Range | Profilo |
 |---|---|---|---|---|---|---|---|
 | `mg` | Mitragliatrice | 0 | 280 | 1 | 3.6 | ∞ | base |
-| `double_mg` | Doppia MG | 200 | 310 | 1 | 3.2 | ∞ | due linee parallele |
-| `rifle` | Fucile Auto | 350 | 140 | 2 | 14.3 | ∞ | massimo DPS singolo |
+| `double_mg` | Doppia MG | 200 | 280 | 1 | 3.6 | ∞ | due linee parallele larghe (±14 px) |
+| `rifle` | Fucile Auto | 350 | 140 | 2 | 14.3 | ∞ | massimo DPS singolo, raggio infinito |
 | `rockets` | Razzi | 550 | 900 | 5 | 5.6 | ∞ | esplosione r≈90, anti-orda/boss |
-| `flamethrower` | Lanciafiamme | 400 | 70 | 1 | 14.3 | 440 | flusso continuo corto |
+| `flamethrower` | Lanciafiamme | 400 | 70 | 2 | 28.6 | 440 | DPS altissimo, raggio corto |
 
-- **DPS** è il danno per *singola linea di fuoco*. La **Doppia MG** spara 2 proiettili → danno-su-bersaglio effettivo ~2× il DPS tabellato; i **Razzi** aggiungono danno ad area non incluso nel DPS.
+- **DPS** è il danno per *singola linea di fuoco*. La **Doppia MG** spara 2 proiettili → danno-su-bersaglio effettivo fino a ~2× il DPS tabellato; i **Razzi** aggiungono danno ad area non incluso nel DPS.
 - La **cadenza effettiva** scala con `fireMult` del veicolo, l'upgrade Torretta (×1.25) e il degrado torretta (§4).
-- *Da rivedere:* la Doppia MG ha DPS/linea inferiore alla MG base ma costa 200 — il valore è la **doppia linea**; verificare che si percepisca.
+- **Doppia MG (rivisto):** cooldown allineato alla MG base (280) → DPS/linea **3.6** identico, ma con **due linee** distanziate di **±14 px** (vedi `fireWeapon`) per coprire più corsia. A parità di per-linea non è mai peggio della MG gratuita, e su bersagli sparsi/orde rende ~2×: il valore dei 200 ★ è la **larghezza di copertura**.
+- **Lanciafiamme (rivisto):** danno per colpo **2** (era 1) → DPS/linea **28.6**, il più alto del gioco, **giustificato dal raggio corto** (440) che costringe a lasciar avvicinare i nemici. Identità chiara vs Fucile (14.3 DPS / raggio ∞ / 350 ★): trade-off DPS↔raggio, non più scelta dominata. Il danno è derivato da `WEAPONS.flamethrower.damage` in `fireWeapon` (niente più valore cablato).
 
 ---
 

@@ -4,6 +4,7 @@ import { VEHICLES, VEHICLE_KEYS, WEAPONS, WEAPON_KEYS, WeaponType, SURVIVORS } f
 import Juice from '../Juice';
 import Ui, { UI } from '../Ui';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
+import { resetRunState } from '../RunState';
 
 const H = 600;
 
@@ -19,9 +20,9 @@ const ZOMBIE_INFO: ZombieInfo[] = [
 ];
 
 const OBJECT_INFO: Array<{ key: string; label: string; scale: number; over?: boolean }> = [
-  { key: 'bullet',      label: 'Proiettile', scale: 3 },
-  { key: 'rocket',      label: 'Razzo',      scale: 2.4 },
-  { key: 'fuel_can',    label: 'Tanica',     scale: 2, over: true }, // texture sovracampionata (OS_G)
+  { key: 'bullet',      label: 'Proiettile', scale: 3,   over: true }, // sovracampionata (OS_G)
+  { key: 'rocket',      label: 'Razzo',      scale: 2.4, over: true }, // sovracampionata (OS_G)
+  { key: 'fuel_can',    label: 'Tanica',     scale: 2,   over: true }, // sovracampionata (OS_G)
   { key: 'particle',    label: 'Particella', scale: 3 },
   { key: 'toxic_cloud', label: 'Nube tox.',  scale: 1.4 },
 ];
@@ -197,15 +198,7 @@ export default class DebugScene extends Phaser.Scene {
   }
 
   private startFresh() {
-    this.registry.set('missionNumber', 1);
-    this.registry.set('money', 0);
-    this.registry.set('survivors', []);
-    this.registry.set('upgrades', {});
-    this.registry.set('vehicle', 'civilian_car');
-    this.registry.set('ownedVehicles', ['civilian_car']);
-    this.registry.set('ownedWeapons', ['mg']);
-    this.registry.set('currentWeapon', 'mg');
-    this.registry.set('components', null);
+    resetRunState(this.registry);
     Juice.go(this, 'GameScene');
   }
 

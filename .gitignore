@@ -2,3 +2,8 @@ node_modules/
 dist/
 .vscode/
 .DS_Store
+
+# Output JS/sourcemap di tsc accanto ai sorgenti .ts (tsc è in noEmit: Vite transpila i .ts).
+# Guard anti-ricaduta: i sorgenti sono .ts, in src/ non esistono .js scritti a mano.
+src/**/*.js
+src/**/*.js.map

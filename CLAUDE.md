@@ -87,6 +87,7 @@ Tutto vive in uno **spazio di design alto 600** (`DESIGN_H`); larghezza di rifer
 ## Convenzioni
 
 - Mantieni lo stile/idioma del codice circostante (TypeScript stretto, niente PNG, niente dipendenze nuove senza motivo).
+- **Sorgenti solo `.ts`: mai un `.js` in `src/`.** Transpila Vite; `tsc` è in `noEmit` (solo type-check). Un `.js` ombra accanto a un `.ts` verrebbe caricato da Vite al posto del sorgente → codice stantio silenzioso. `src/**/*.js` è in `.gitignore`: non rimuovere i guard. Dettaglio in [`docs/ARCHITETTURA.md`](docs/ARCHITETTURA.md) §1.
 - UI e testi rivolti al giocatore: **in italiano**.
 - Gli effetti "vivi" (rotazione, respiro, VFX) sono **solo visivi**: non devono alterare hitbox o bilanciamento.
 - Quando aggiungi un nemico/boss/evento, parti dalla **scheda-template** in fondo all'art bible (§10).

@@ -3,6 +3,7 @@ import Juice from '../Juice';
 import Ui, { UI } from '../Ui';
 import GameScene from './GameScene';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
+import { resetRunState } from '../RunState';
 
 const H = 600;
 
@@ -152,16 +153,7 @@ export default class MenuScene extends Phaser.Scene {
 
   private newGame() {
     // Azzera completamente il progresso (stessa logica del game over) e parte da capo.
-    this.registry.set('missionNumber', 1);
-    this.registry.set('money', 0);
-    this.registry.set('survivors', []);
-    this.registry.set('upgrades', {});
-    this.registry.set('vehicle', 'civilian_car');
-    this.registry.set('ownedVehicles', ['civilian_car']);
-    this.registry.set('ownedWeapons', ['mg']);
-    this.registry.set('currentWeapon', 'mg');
-    this.registry.set('components', null);
-
+    resetRunState(this.registry);
     Juice.go(this, 'GameScene');
   }
 

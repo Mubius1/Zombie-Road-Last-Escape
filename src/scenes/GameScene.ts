@@ -6,6 +6,7 @@ import Environment from '../Environment';
 import Settings from '../Settings';
 import Ui, { UI } from '../Ui';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
+import { resetRunState } from '../RunState';
 
 // Spazio di design: l'altezza è fissa (H), la larghezza varia col formato (designW,
 // più ampia in 16:9). La camera in zoom adatta tutto alla risoluzione nativa — vedi Config.ts.
@@ -27,6 +28,8 @@ const DASH_COOLDOWN = 5000; // ms: ricarica dello scatto anti-aggancio
 const DASH_GRACE = 350;     // ms: dopo lo scatto nessun nuovo zombi si aggrappa
 // Colore del moltiplicatore combo per livello (×1..×5) — toni funzionali UI
 const COMBO_COLORS = [UI.muted, UI.gold, UI.amber, UI.redText, UI.red];
+// Riga HUD della modalità debug (G) — definita una volta sola: usata in buildHUD e nel toggle.
+const GOD_HUD = '◆ GOD MODE  (G off · B boss · N fine · H ripara)';
 
 export type BossType = 'mega_mutant' | 'giant_worm' | 'armored_colossus' | 'radioactive_beast';
 
@@ -172,6 +175,10 @@ export default class GameScene extends Phaser.Scene {
   private hudCombo!: Phaser.GameObjects.Text;
   private hudDash!: Phaser.GameObjects.Text;
   private weaponSlots: { key: WeaponType; txt: Phaser.GameObjects.Text }[] = [];
+  // Cache HUD: evita setText (re-render del canvas + upload texture GPU) quando il valore mostrato
+  // non cambia. Resettata in buildHUD a ogni create() (i Text vengono ricreati). Le barre
+  // (displayWidth/setFillStyle) restano per-frame: sono economiche.
+  private hudCache = { score: -1, km: -1, fuel: -1, attached: -1, combo: '', dash: '' };
 
   private sfx: SoundManager | null = null;
   private grain: Phaser.GameObjects.TileSprite | null = null;
@@ -281,12 +288,23 @@ export default class GameScene extends Phaser.Scene {
       this.sfx.setVolume(Settings.volume);
       this.sfx.startEngine();
     }
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.sfx?.stopEngine());
-
-    // Ritorno dalle impostazioni (pausa ESC): riallinea il volume e riavvia il motore.
-    this.events.on(Phaser.Scenes.Events.RESUME, () => {
+    // Ritorno dalle impostazioni (pausa ESC): riallinea il volume e riavvia il motore — ma SOLO se
+    // la partita è ancora in corso, così un RESUME residuo non riaccende il motore "da morto"
+    // (coerente con openPauseSettings, che già controlla alive/missionDone).
+    const onResume = () => {
+      if (!this.alive || this.missionDone) return;
       this.sfx?.setVolume(Settings.volume);
       this.sfx?.startEngine();
+    };
+    this.events.on(Phaser.Scenes.Events.RESUME, onResume);
+
+    // Allo SHUTDOWN: ferma il motore E rimuovi il listener RESUME. Phaser NON ripulisce i listener
+    // utente su scene.events allo shutdown: con scene.restart() (game over/fine missione) create()
+    // viene rieseguito e, senza off(), ogni RESUME si accumulerebbe → startEngine() chiamato N volte
+    // su istanze SoundManager stale. Registrato con .once perché lo SHUTDOWN avviene una sola volta.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.sfx?.stopEngine();
+      this.events.off(Phaser.Scenes.Events.RESUME, onResume);
     });
 
     // Juice: overlay filmico (opzionale) + entrata in dissolvenza
@@ -971,14 +989,26 @@ export default class GameScene extends Phaser.Scene {
       g.generateTexture('boss_radioactive_beast',216,56); AF('boss_radioactive_beast',72,56,3); g.destroy();
     }
 
-    // ── BULLET (18×5) ─────────────────────────────────────────────────────────
+    // ── BULLET (18×5) — tracer AAA · sovracampionato (OS_G) · tinta a runtime ──
+    // Scia di velocità a sinistra, nucleo bianco caldo (prende la tinta dell'arma),
+    // punta luminosa a destra = direzione inequivocabile (§4.4). Luce dall'alto.
     {
-      const g = G(18,5);
-      g.fillStyle(0xffdd00,0.3); g.fillRect(0,0,18,5);
-      g.fillStyle(0xaa8800); g.fillRect(0,1,6,3);
-      g.fillStyle(0xffffff); g.fillRect(2,2,10,2);
-      g.fillStyle(0xffee44); g.fillRect(12,0,5,5);
-      g.fillStyle(0xffffff); g.fillRect(14,1,3,3);
+      const g = OS_G(18,5);
+      // 1) scia di velocità (alone caldo che si assottiglia a sinistra)
+      g.fillStyle(0xffdd00,0.16); g.fillTriangle(0,2.5, 10,1.1, 10,3.9);
+      g.fillStyle(0xffcc33,0.30); g.fillTriangle(3,2.5, 11,1.6, 11,3.4);
+      // 2) alone morbido attorno al corpo
+      g.fillStyle(0xffdd00,0.38); g.fillRoundedRect(7,0.4,10.5,4.2,2);
+      // 3) culatta in ottone (rear del proietto)
+      g.fillStyle(0x886600); g.fillRoundedRect(8,1.2,3.4,2.6,1);
+      g.fillStyle(0xaa8800); g.fillRoundedRect(8,1.0,3.4,2.2,1);
+      g.fillStyle(0xd4aa44); g.fillRect(8.4,1.0,2.6,0.7);
+      // 4) nucleo bianco caldo (qui si legge la tinta dell'arma)
+      g.fillStyle(0xffffff); g.fillRoundedRect(10.5,1.0,5.2,3.0,1.4);
+      g.fillStyle(0xfff2c0); g.fillRect(11,3.1,4.4,0.9);   // fondo più caldo (luce dall'alto)
+      // 5) punta + nucleo della punta (accento emissivo + direzione)
+      g.fillStyle(0xffee44); g.fillTriangle(15.2,0.5, 15.2,4.5, 18,2.5);
+      g.fillStyle(0xffffff); g.fillTriangle(15.6,1.3, 15.6,3.7, 17.7,2.5);
       g.generateTexture('bullet', 18, 5);
       g.destroy();
     }
@@ -1035,55 +1065,93 @@ export default class GameScene extends Phaser.Scene {
       g.destroy();
     }
 
-    // ── PARTICLE (12×12) ──────────────────────────────────────────────────────
+    // ── PARTICLE (12×12) — mote caldo AAA · VFX condiviso · tinta a runtime ─────
+    // Falloff radiale morbido (alone → nucleo bianco) + glint a croce per la lettura
+    // "scintilla" (§4.6). Base bianco-calda: tinge pulito su qualsiasi colore (debris
+    // metallici grigi, schegge verdi, scintille arancio…).
     {
       const g = G(12,12);
-      g.fillStyle(0xff6600,0.5); g.fillCircle(6,6,6);
-      g.fillStyle(0xffaa00); g.fillCircle(6,6,4);
-      g.fillStyle(0xffee44); g.fillCircle(6,6,2);
-      g.fillStyle(0xffffff); g.fillCircle(6,6,1);
+      // alone radiale (dal bordo morbido al nucleo incandescente)
+      g.fillStyle(0xff6600,0.22); g.fillCircle(6,6,6);
+      g.fillStyle(0xff8800,0.35); g.fillCircle(6,6,5);
+      g.fillStyle(0xffaa00,0.55); g.fillCircle(6,6,3.8);
+      g.fillStyle(0xffcc33,0.85); g.fillCircle(6,6,2.6);
+      g.fillStyle(0xffee88);      g.fillCircle(6,6,1.7);
+      g.fillStyle(0xffffff);      g.fillCircle(6,6,1.0);
+      // glint a croce (assottigliato verso le punte) — la "scintilla"
+      g.fillStyle(0xfff4cc,0.30); g.fillRect(1,5.7,10,0.6); g.fillRect(5.7,1,0.6,10);
+      g.fillStyle(0xffffff,0.55); g.fillRect(3,5.85,6,0.3); g.fillRect(5.85,3,0.3,6);
       g.generateTexture('particle', 12, 12);
       g.destroy();
     }
 
-    // ── ROCKET (28×12) ────────────────────────────────────────────────────────
+    // ── ROCKET (28×12) — missile AAA · sovracampionato (OS_G) ───────────────────
+    // Vola a destra, fiamma in coda a sinistra (CONTENUTA nella texture). Corpo
+    // acciaio top-lit con rivetti/giunti, testata rossa con gradiente, ogiva a punta,
+    // ugello in kit metallo (§3.2) con bagliore caldo, alette (§4.5).
     {
-      const g = G(28,12);
-      // Body
-      g.fillStyle(0xcccccc); g.fillRect(4,2,18,8);
-      g.fillStyle(0xeeeeee); g.fillRect(4,3,18,3);
-      // Warhead
-      g.fillStyle(0xcc2200); g.fillRect(20,1,6,10);
-      g.fillStyle(0xff4422); g.fillRect(21,2,4,8);
-      g.fillStyle(0xff6644); g.fillRect(22,3,2,6);
-      // Nose cone
-      g.fillStyle(0xbb1100); g.fillTriangle(26,0,26,12,28,6);
-      // Band/stripe
-      g.fillStyle(0x888888); g.fillRect(10,2,3,8); g.fillRect(16,2,2,8);
-      // Nozzle
-      g.fillStyle(0x444444); g.fillRect(0,3,6,6);
-      g.fillStyle(0x222222); g.fillRect(0,4,4,4);
-      // Fins
-      g.fillStyle(0x888888);
-      g.fillTriangle(0,0,0,4,5,2); g.fillTriangle(0,8,0,12,5,10);
-      // Exhaust flame
-      g.fillStyle(0xff5500,0.9); g.fillTriangle(-10,4,-10,8,1,6);
-      g.fillStyle(0xffaa00,0.7); g.fillTriangle(-6,5,-6,7,0,6);
-      g.fillStyle(0xffffff,0.5); g.fillTriangle(-3,5,-3,7,0,6);
+      const g = OS_G(28,12);
+      // ── Fiamma di scarico (coda, a sinistra) — strati che si appuntano a sx
+      g.fillStyle(0xff5500,0.85); g.fillTriangle(0,6, 7,2.5, 7,9.5);
+      g.fillStyle(0xff8800,0.90); g.fillTriangle(1,6, 7,3.6, 7,8.4);
+      g.fillStyle(0xffcc33,1.0);  g.fillTriangle(2.5,6, 7,4.4, 7,7.6);
+      g.fillStyle(0xffffff,1.0);  g.fillTriangle(4.5,6, 7,5.0, 7,7.0);
+      g.fillStyle(0xff8800,0.6);  g.fillTriangle(0.5,4.4, 4,3.2, 4,5.2); // lingue di fiamma
+      g.fillStyle(0xff8800,0.6);  g.fillTriangle(0.5,7.6, 4,6.8, 4,8.8);
+      // ── Ugello (kit metallo §3.2) + bagliore interno caldo
+      g.fillStyle(0x26262c); g.fillRect(6,3.5,3.5,5);
+      g.fillStyle(0x444444); g.fillRect(6.5,4.0,3.0,4.0);
+      g.fillStyle(0x70707a); g.fillRect(8.4,4.0,1.1,4.0);            // rim destro
+      g.fillStyle(0xffcc66,0.8); g.fillRect(6.3,5.1,1.2,1.8);        // glow interno
+      // ── Corpo (cilindro d'acciaio top-lit)
+      g.fillStyle(0x8e8e98); g.fillRoundedRect(9,3.0,13,6.0,1);      // ombra base
+      g.fillStyle(0xcfcfd6); g.fillRoundedRect(9,3.0,13,5.0,1);      // mezzo-tono
+      g.fillStyle(0xeeeef2); g.fillRect(9.5,3.2,12,1.6);            // banda di luce in cima
+      g.fillStyle(0xf8f8fc); g.fillRect(9.5,3.2,7,0.8);            // picco di luce (fronte)
+      g.fillStyle(0x70707a); g.fillRect(9.5,7.8,12,0.9);            // ombra inferiore
+      // giunti, rivetti, banda di colore (materia/storia)
+      g.fillStyle(0x70707a); g.fillRect(13,3.4,0.6,5.0); g.fillRect(17,3.4,0.6,5.0);
+      g.fillStyle(0x55555c); g.fillCircle(11,7.0,0.5); g.fillCircle(15,7.0,0.5); g.fillCircle(19,7.0,0.5);
+      g.fillStyle(0xf8f8fc); g.fillCircle(11,4.2,0.4); g.fillCircle(15,4.2,0.4); g.fillCircle(19,4.2,0.4);
+      g.fillStyle(0xcc2200); g.fillRect(12.5,3.0,1.4,5.6);          // banda rossa
+      // ── Testata (rossa, gradiente top-lit)
+      g.fillStyle(0xaa1800); g.fillRoundedRect(21,2.5,6,7.0,{tl:1,tr:2,bl:1,br:2});
+      g.fillStyle(0xcc2200); g.fillRoundedRect(21,2.5,6,6.0,{tl:1,tr:2,bl:0,br:1});
+      g.fillStyle(0xff4422); g.fillRect(21.5,3.0,5.0,2.4);
+      g.fillStyle(0xff7755); g.fillRect(21.5,3.0,4.0,1.0);          // luce in cima
+      g.fillStyle(0x8a1000); g.fillRect(21,8.0,5.5,1.2);           // ombra in basso
+      g.fillStyle(0x6a0c00); g.fillRect(20.6,2.8,0.7,6.4);         // giunto corpo/testata
+      // ── Ogiva a punta (direzione + pericolo)
+      g.fillStyle(0xbb1100); g.fillTriangle(26.5,2.2, 26.5,9.8, 28,6);
+      g.fillStyle(0xff5533); g.fillTriangle(26.5,3.0, 26.5,5.5, 27.8,6); // spigolo illuminato
+      // ── Alette (acciaio, sopra/sotto al retro del corpo)
+      g.fillStyle(0x55555c); g.fillTriangle(9,3.0, 9,0.6, 13.5,3.0);
+      g.fillStyle(0x8e8e98); g.fillTriangle(9.4,3.0, 9.4,1.3, 12.8,3.0);
+      g.fillStyle(0x44444a); g.fillTriangle(9,9.0, 9,11.4, 13.5,9.0);
+      g.fillStyle(0x70707a); g.fillTriangle(9.4,9.0, 9.4,10.7, 12.8,9.0);
       g.generateTexture('rocket', 28, 12);
       g.destroy();
     }
 
-    // ── TOXIC CLOUD (50×50) ───────────────────────────────────────────────────
+    // ── TOXIC CLOUD (50×50) — minaccia residua AAA ──────────────────────────────
+    // Sacca di gas verde-tossico: silhouette IRREGOLARE (blob sovrapposti, non un
+    // disco), bolle di ebollizione, nucleo malato denso (§4.7). Tutto a bassa alpha →
+    // resta gas traslucido, tinge e sfuma bene (riuso anche nella morte del Reattore).
     {
       const g = G(50,50);
-      g.fillStyle(0x003300,0.15); g.fillCircle(25,25,25);
-      g.fillStyle(0x006600,0.2);  g.fillCircle(25,25,21);
-      g.fillStyle(0x00aa33,0.3);  g.fillCircle(25,25,17);
-      g.fillStyle(0x00cc44,0.3);
-      g.fillCircle(19,19,12); g.fillCircle(31,21,11); g.fillCircle(22,29,11);
-      g.fillStyle(0x00ff55,0.2);  g.fillCircle(25,25,9);
-      g.fillStyle(0x44ff88,0.12); g.fillCircle(25,25,5);
+      // corpo morbido — blob irregolari sovrapposti (lettura "gas", non cerchio)
+      g.fillStyle(0x003300,0.14); g.fillCircle(25,25,24);
+      g.fillStyle(0x004d11,0.16); g.fillCircle(22,27,22); g.fillCircle(29,22,20);
+      g.fillStyle(0x006600,0.20); g.fillCircle(25,25,18);
+      g.fillStyle(0x008822,0.22); g.fillCircle(20,21,13); g.fillCircle(31,24,12); g.fillCircle(24,31,12);
+      g.fillStyle(0x00aa33,0.26); g.fillCircle(25,24,12);
+      g.fillStyle(0x00cc44,0.28); g.fillCircle(23,23,8); g.fillCircle(28,27,7);
+      // bolle di ebollizione (boil tossico) — mote più brillanti
+      g.fillStyle(0x33dd55,0.5);  g.fillCircle(21,22,2.4); g.fillCircle(30,26,2.0); g.fillCircle(26,30,1.8); g.fillCircle(27,20,1.6);
+      // nucleo malato denso + nucleo incandescente
+      g.fillStyle(0x00ff55,0.22); g.fillCircle(25,25,7);
+      g.fillStyle(0x44ff88,0.30); g.fillCircle(25,25,4);
+      g.fillStyle(0x88ffaa,0.50); g.fillCircle(24,24,1.8);
       g.generateTexture('toxic_cloud', 50, 50);
       g.destroy();
     }
@@ -1572,6 +1640,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private buildHUD(missionNum: number) {
+    // I Text dell'HUD vengono ricreati a ogni create(): azzera la cache così il primo update li popola.
+    this.hudCache = { score: -1, km: -1, fuel: -1, attached: -1, combo: '', dash: '' };
     const D = 20, BAR_W = 110, COMP_BAR_W = 120;
     const panel = this.add.graphics().setDepth(D);
     panel.fillStyle(UI.black, 0.62); panel.fillRoundedRect(0,0,this.designW,84,{ tl:0, tr:0, bl:16, br:16 });
@@ -1606,6 +1676,7 @@ export default class GameScene extends Phaser.Scene {
       this.weaponSlots.push({ key: wk, txt: t });
       wsx += 16;
     });
+    this.refreshWeaponHUD(); // nome arma + evidenziazione del selettore (eventi discreti, non per-frame)
 
     // Barra progresso missione
     const DIST_KM = Math.floor(MISSION_DIST / 100);
@@ -1636,7 +1707,7 @@ export default class GameScene extends Phaser.Scene {
 
     Ui.text(this, this.designW/2,H-6,'↑↓ Muovi · SPAZIO Spara · 1-5/Q Arma · SHIFT Scatto',{fontSize:'11px',color:UI.disabled}).setOrigin(0.5,1).setDepth(D);
     Ui.text(this, 4,H-6,'0=Debug',{fontSize:'9px',color:'#2a3a2a'}).setOrigin(0,1).setDepth(D);
-    this.hudDebug = Ui.text(this, this.designW-6,H-6,'',{fontSize:'10px',color:'#00ff88',fontStyle:'bold'}).setOrigin(1,1).setDepth(D+5);
+    this.hudDebug = Ui.text(this, this.designW-6,H-6, this.debugGod ? GOD_HUD : '', {fontSize:'10px',color:'#00ff88',fontStyle:'bold'}).setOrigin(1,1).setDepth(D+5);
   }
 
   private buildInput() {
@@ -1654,7 +1725,11 @@ export default class GameScene extends Phaser.Scene {
 
     // Tasti debug
     kb.on('keydown-ZERO', () => this.scene.start('DebugScene'));
-    kb.on('keydown-G', () => { this.debugGod = !this.debugGod; if (this.debugGod) this.fuel = this.maxFuel; });
+    kb.on('keydown-G', () => {
+      this.debugGod = !this.debugGod;
+      if (this.debugGod) this.fuel = this.maxFuel;
+      this.hudDebug?.setText(this.debugGod ? GOD_HUD : ''); // evento discreto: non più aggiornato per-frame
+    });
     kb.on('keydown-B', () => { if (this.alive && !this.bossSpawned) this.spawnBoss(); });
     kb.on('keydown-N', () => { if (this.alive && !this.missionDone) this.triggerMissionComplete(); });
     kb.on('keydown-H', () => { this.health = this.maxHealth; this.fuel = this.maxFuel;
@@ -1709,10 +1784,19 @@ export default class GameScene extends Phaser.Scene {
     if (!this.ownedWeapons.includes(key) || key === this.currentWeapon) return;
     this.currentWeapon = key;
     this.registry.set('currentWeapon', key);
+    this.refreshWeaponHUD();
     // Pop visivo del nome arma (cosmetico)
     this.tweens.killTweensOf(this.hudWeapon);
     this.hudWeapon.setScale(1.3);
     this.tweens.add({ targets: this.hudWeapon, scale: 1, duration: 160 });
+  }
+
+  /** Nome arma + evidenziazione del selettore. Eventi discreti (init/cambio arma): non per-frame. */
+  private refreshWeaponHUD() {
+    this.hudWeapon.setText(WEAPONS[this.currentWeapon].name.toUpperCase());
+    for (const slot of this.weaponSlots) {
+      slot.txt.setColor(slot.key === this.currentWeapon ? UI.gold : UI.muted);
+    }
   }
 
   // ─── Scatto / scrollata anti-aggancio ──────────────────────────────────────
@@ -1890,44 +1974,46 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private updateHUD() {
+    // Barre: economiche (displayWidth/setFillStyle), restano per-frame.
     const hpPct = this.health / this.maxHealth;
     this.hudHealthFill.displayWidth = Math.max(0, hpPct * 110);
     this.hudHealthFill.setFillStyle(hpPct < 0.3 ? UI.hpLow : hpPct < 0.6 ? UI.hpMid : UI.hpHigh);
-
     this.hudFuelFill.displayWidth = Math.max(0, (this.fuel / this.maxFuel) * 110);
-    this.hudFuelNum.setText(`${Math.round(this.fuel)}%`);
-    this.hudScore.setText(`PUNTEGGIO: ${this.score}`);
-    const km = Math.floor(this.distance / 100);
-    this.hudDist.setText(`${km} km`);
     const distPct = Math.min(1, this.distance / MISSION_DIST);
     this.hudDistFill.displayWidth = Math.max(1, distPct * 110);
-    const barColor = distPct > 0.8 ? 0x88ff44 : distPct > 0.5 ? 0x44aaff : 0x4466cc;
-    this.hudDistFill.setFillStyle(barColor);
+    this.hudDistFill.setFillStyle(distPct > 0.8 ? 0x88ff44 : distPct > 0.5 ? 0x44aaff : 0x4466cc);
 
-    this.hudDebug?.setText(this.debugGod ? '◆ GOD MODE  (G off · B boss · N fine · H ripara)' : '');
-
+    // Testi: setText solo quando il valore mostrato cambia (vedi hudCache).
+    const fuel = Math.round(this.fuel);
+    if (fuel !== this.hudCache.fuel)   { this.hudFuelNum.setText(`${fuel}%`);          this.hudCache.fuel  = fuel; }
+    if (this.score !== this.hudCache.score) { this.hudScore.setText(`PUNTEGGIO: ${this.score}`); this.hudCache.score = this.score; }
+    const km = Math.floor(this.distance / 100);
+    if (km !== this.hudCache.km)       { this.hudDist.setText(`${km} km`);             this.hudCache.km    = km; }
     const n = this.attachedZombies.length;
-    this.hudAttached.setText(n > 0 ? `[${n} aggrappati]` : '');
-    this.hudWeapon.setText(WEAPONS[this.currentWeapon].name.toUpperCase());
+    if (n !== this.hudCache.attached)  { this.hudAttached.setText(n > 0 ? `[${n} aggrappati]` : ''); this.hudCache.attached = n; }
 
     // Combo
     if (this.combo >= 2) {
       const m = this.comboMultiplier();
-      this.hudCombo.setText(`COMBO ${this.combo}  ×${m}`);
-      this.hudCombo.setColor(COMBO_COLORS[m - 1] ?? UI.white);
+      const txt = `COMBO ${this.combo}  ×${m}`;
+      if (txt !== this.hudCache.combo) {
+        this.hudCombo.setText(txt);
+        this.hudCombo.setColor(COMBO_COLORS[m - 1] ?? UI.white);
+        this.hudCache.combo = txt;
+      }
       this.hudCombo.setVisible(true);
     } else {
+      if (this.hudCache.combo !== '') this.hudCache.combo = '';
       this.hudCombo.setVisible(false);
     }
 
     // Scatto (cooldown)
     const dashRemain = this.dashReadyAt - this.time.now;
-    if (dashRemain <= 0) { this.hudDash.setText('↯ SCATTO'); this.hudDash.setColor(UI.greenOk); }
-    else { this.hudDash.setText(`↯ ${Math.ceil(dashRemain / 1000)}s`); this.hudDash.setColor(UI.faint); }
-
-    // Selettore armi: evidenzia quella attiva
-    for (const slot of this.weaponSlots) {
-      slot.txt.setColor(slot.key === this.currentWeapon ? UI.gold : UI.muted);
+    const dashTxt = dashRemain <= 0 ? '↯ SCATTO' : `↯ ${Math.ceil(dashRemain / 1000)}s`;
+    if (dashTxt !== this.hudCache.dash) {
+      this.hudDash.setText(dashTxt);
+      this.hudDash.setColor(dashRemain <= 0 ? UI.greenOk : UI.faint);
+      this.hudCache.dash = dashTxt;
     }
 
     for (const key of Object.keys(this.components) as ComponentKey[]) {
@@ -2100,11 +2186,13 @@ export default class GameScene extends Phaser.Scene {
         this.spawnBullet(vx, vy, w.damage, w.speed, w.color, this.designW + 40);
         break;
       case 'double_mg':
-        this.spawnBullet(vx, vy - 8, w.damage, w.speed, w.color, this.designW + 40);
-        this.spawnBullet(vx, vy + 8, w.damage, w.speed, w.color, this.designW + 40);
+        // Due linee distanziate (±14) per coprire più corsia — vedi BALANCE §7.
+        this.spawnBullet(vx, vy - 14, w.damage, w.speed, w.color, this.designW + 40);
+        this.spawnBullet(vx, vy + 14, w.damage, w.speed, w.color, this.designW + 40);
         break;
       case 'flamethrower':
-        this.spawnBullet(vx, vy + Phaser.Math.Between(-6, 6), 1, w.speed, w.color, vx - 50 + w.range);
+        // Danno derivato dalla tabella WEAPONS (non più cablato a 1) → ribilanciabile da BALANCE §7.
+        this.spawnBullet(vx, vy + Phaser.Math.Between(-6, 6), w.damage, w.speed, w.color, vx - 50 + w.range);
         break;
       case 'rockets':
         this.spawnRocket(vx, vy);
@@ -2116,15 +2204,17 @@ export default class GameScene extends Phaser.Scene {
 
   private spawnBullet(x: number, y: number, damage: number, speed: number, color: number, maxX: number) {
     const b = this.bullets.create(x, y, 'bullet') as Phaser.Physics.Arcade.Sprite;
-    b.setVelocityX(speed).setDepth(8).setTint(color);
+    // Texture sovracampionata (OS_G) → torna a scala design; hitbox auto = 18×5 invariata.
+    b.setScale(1 / OVERSAMPLE).setVelocityX(speed).setDepth(8).setTint(color);
     b.setData('damage', damage);
     b.setData('maxX', maxX);
   }
 
   private spawnRocket(x: number, y: number) {
     const r = this.rockets.create(x, y, 'rocket') as Phaser.Physics.Arcade.Sprite;
-    r.setVelocityX(WEAPONS.rockets.speed).setDepth(8);
-    (r.body as Phaser.Physics.Arcade.Body).setSize(22, 8);
+    r.setScale(1 / OVERSAMPLE).setVelocityX(WEAPONS.rockets.speed).setDepth(8);
+    // body in unità design: source ×OVERSAMPLE compensa lo scale 1/OVERSAMPLE → 22×8.
+    (r.body as Phaser.Physics.Arcade.Body).setSize(22 * OVERSAMPLE, 8 * OVERSAMPLE);
   }
 
   private fireAutoShot(y: number) {
@@ -2153,15 +2243,11 @@ export default class GameScene extends Phaser.Scene {
     const hp   = (zombie.getData('hp') as number) - dmg;
     if (hp <= 0) {
       this.addKillScore(ZOMBIE_STATS[type].score);
-      this.spawnHitParticles(zombie.x, zombie.y);
+      this.killBurst(type, zombie.x, zombie.y);
       this.environment?.addDecal('blood', zombie.x, zombie.y);
       this.sfx?.playZombieKill();
       if (type === 'toxic') this.spawnToxicCloud(zombie.x, zombie.y);
-      if (type === 'giant') {
-        this.cameras.main.shake(200, 0.012);
-        this.spawnHitParticles(zombie.x, zombie.y);
-        this.spawnHitParticles(zombie.x + 10, zombie.y - 10);
-      }
+      if (type === 'giant') this.cameras.main.shake(200, 0.012); // il burst gore del gigante è già più ricco (n=10)
       zombie.destroy();
     } else {
       zombie.setData('hp', hp);
@@ -2259,9 +2345,10 @@ export default class GameScene extends Phaser.Scene {
       if (Phaser.Math.Distance.Between(rx, ry, z.x, z.y) > AOE) continue;
       const hp = (z.getData('hp') as number) - dmg;
       if (hp <= 0) {
-        this.addKillScore(ZOMBIE_STATS[z.getData('type') as ZombieType].score);
-        this.spawnHitParticles(z.x, z.y);
-        if (z.getData('type') === 'toxic') this.spawnToxicCloud(z.x, z.y);
+        const zt = z.getData('type') as ZombieType;
+        this.addKillScore(ZOMBIE_STATS[zt].score);
+        this.killBurst(zt, z.x, z.y);
+        if (zt === 'toxic') this.spawnToxicCloud(z.x, z.y);
         z.destroy();
       } else {
         z.setData('hp', hp);
@@ -2365,9 +2452,11 @@ export default class GameScene extends Phaser.Scene {
     const bonus = this.vehicleArmorBonus / 100;
     const base  = armorPct<=0 ? 2.5 : armorPct<0.3 ? 1.8 : armorPct<0.6 ? 1.3 : 1.0;
     const mult  = Math.max(0.5, base - bonus);
-    this.health = Math.max(0, this.health - Math.round(amount * mult));
+    const dealt = Math.round(amount * mult);
+    this.health = Math.max(0, this.health - dealt);
     this.flashHealthBar();
     if (this.health <= 0) this.endGame('Veicolo distrutto!');
+    else this.flashVehicleDamage(dealt); // se è game over, ci pensa endGame a tingere il veicolo
   }
 
   /** Feedback al colpo: lampo bianco sulla barra salute + breve "thump" verticale. */
@@ -2375,6 +2464,21 @@ export default class GameScene extends Phaser.Scene {
     const f = this.add.rectangle(63, 34, 116, 14, 0xffffff, 0.55).setDepth(24);
     this.tweens.add({ targets: f, alpha: 0, duration: 160, onComplete: () => f.destroy() });
     if (this.hudHealthFill) this.tweens.add({ targets: this.hudHealthFill, scaleY: 1.9, duration: 80, yoyo: true });
+  }
+
+  /**
+   * Reazione del veicolo al danno (l'evento negativo che il giocatore deve "sentire"): tinta
+   * rossa breve sul corpo + lampo rosso ai bordi schermo, con intensità scalata sull'entità del
+   * colpo. Solo visivo: niente shake qui (lo gestiscono già i rami di collisione). Vedi art bible
+   * zombi §VFX ("VFX + suono + feedback schermo nello stesso frame, niente azione muta").
+   */
+  private flashVehicleDamage(dealt: number) {
+    if (this.vehicle?.active) {
+      this.vehicle.setTint(0xff4422);
+      this.time.delayedCall(120, () => { if (this.vehicle?.active && this.alive) this.vehicle.clearTint(); });
+    }
+    const intensity = Phaser.Math.Clamp(0.10 + dealt * 0.018, 0.10, 0.30);
+    Juice.flash(this, 0xff1111, intensity, 110);
   }
 
   private getEffectiveVerticalSpeed(): number {
@@ -2451,16 +2555,8 @@ export default class GameScene extends Phaser.Scene {
     if (!this.alive) return;
     this.alive = false;
 
-    // Reset tutto al game over
-    this.registry.set('missionNumber', 1);
-    this.registry.set('money', 0);
-    this.registry.set('survivors', []);
-    this.registry.set('upgrades', {});
-    this.registry.set('vehicle', 'civilian_car');
-    this.registry.set('ownedVehicles', ['civilian_car']);
-    this.registry.set('ownedWeapons', ['mg']);
-    this.registry.set('currentWeapon', 'mg');
-    this.registry.set('components', null);
+    // Reset tutto al game over (default centralizzati in RunState).
+    resetRunState(this.registry);
 
     this.sfx?.playGameOver();
     this.sfx?.stopEngine();
@@ -2616,8 +2712,10 @@ export default class GameScene extends Phaser.Scene {
     const p = this.bossProjectiles.create(x, fromY, 'bullet') as Phaser.Physics.Arcade.Sprite;
     const dy = Phaser.Math.Clamp(this.vehicle.y - fromY, -80, 80);
     p.setVelocityX(-200).setVelocityY(dy);
-    p.setScale(2.4, 1.6).setTint(0x8844ff).setDepth(9);
-    (p.body as Phaser.Physics.Arcade.Body).setSize(16, 6);
+    // Texture sovracampionata → scala ÷OVERSAMPLE e body ×OVERSAMPLE (visivo + hitbox
+    // identici a prima). flipX: la punta segue la direzione di volo (verso sinistra).
+    p.setScale(2.4 / OVERSAMPLE, 1.6 / OVERSAMPLE).setFlipX(true).setTint(0x8844ff).setDepth(9);
+    (p.body as Phaser.Physics.Arcade.Body).setSize(16 * OVERSAMPLE, 6 * OVERSAMPLE);
   }
 
   private onBulletHitBoss(bullet: Phaser.Physics.Arcade.Sprite, boss: Phaser.Physics.Arcade.Sprite) {
@@ -2832,6 +2930,42 @@ export default class GameScene extends Phaser.Scene {
         x: x + Math.cos(angle)*spd*0.4, y: y + Math.sin(angle)*spd*0.4,
         alpha: 0, scale: 0.1, duration: 330, ease: 'Power2',
         onComplete: () => p.destroy(),
+      });
+    }
+  }
+
+  /**
+   * Schizzo di morte COLORATO per tipo (l'uccisione è l'evento più frequente: deve comunicare
+   * COSA hai ucciso, non un generico scoppietto arancione). Rosso-sangue per la carne, verde-melma
+   * per il tossico, scintille metalliche per il corazzato — coerente coi colori-firma (art bible
+   * zombi). Impulso verso SINISTRA (controproiettile) per dare "punch" direzionale. La texture
+   * 'particle' è bianco-calda → si tinge pulita. Fire-and-forget.
+   */
+  private killBurst(type: ZombieType, x: number, y: number) {
+    // [chiaro, scuro] per tipo
+    const palette: Record<ZombieType, [number, number]> = {
+      common:  [0xcc1a1a, 0x6e1410],
+      runner:  [0xcc1a1a, 0x6e1410],
+      jumper:  [0xcc1a1a, 0x6e1410],
+      giant:   [0xb31818, 0x540c0a],
+      toxic:   [0x6cff3a, 0x2cbb2a],
+      armored: [0x9aa7b5, 0x5f6b78],
+    };
+    const [c1, c2] = palette[type];
+    const n = type === 'giant' ? 10 : Phaser.Math.Between(4, 6);
+    for (let i = 0; i < n; i++) {
+      const p = this.add.image(x, y, 'particle').setDepth(15)
+        .setScale(Phaser.Math.FloatBetween(0.35, 0.6))
+        .setTint(i % 2 === 0 ? c1 : c2);
+      const a = Math.PI + Phaser.Math.FloatBetween(-1.1, 1.1); // emisfero sinistro (opposto al proiettile)
+      const sp = Phaser.Math.Between(50, 150);
+      this.tweens.add({
+        targets: p,
+        x: x + Math.cos(a) * sp,
+        y: y + Math.sin(a) * sp * 0.7 + Phaser.Math.Between(-10, 22),
+        alpha: 0, scale: 0.06,
+        duration: 300 + Phaser.Math.Between(-60, 120),
+        ease: 'Quad.easeOut', onComplete: () => p.destroy(),
       });
     }
   }

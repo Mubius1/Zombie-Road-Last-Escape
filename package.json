@@ -1,7 +1,8 @@
 {
-  "name": "phaser-game-starter",
+  "name": "zombie-road-last-escape",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.1.0",
+  "description": "Zombie Road: Last Escape — arcade survival top-down (Phaser 3 + TypeScript, grafica e audio 100% procedurali).",
   "type": "module",
   "scripts": {
     "dev": "vite",

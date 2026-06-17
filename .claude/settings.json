@@ -15,7 +15,20 @@
       "Bash(node -c scripts/vite-plugin-validate.mjs)",
       "Bash(node -c scripts/validate-audio.mjs)",
       "PowerShell(npm run validate:art)",
-      "PowerShell(npm run build)"
+      "PowerShell(npm run build)",
+      "Bash(xargs wc -l)",
+      "Bash(grep -E '\\\\.\\(js|js\\\\.map\\)$')",
+      "Bash(node scripts/validate-audio.mjs)",
+      "Bash(node scripts/validate-balance.mjs)",
+      "Bash(node -p \"require\\('./package-lock.json'\\).name\")",
+      "Bash(cd \"/c/Users/manda/Documents/progetto della domenica\" && grep -rn \"version\" node_modules/phaser/package.json | head -5)",
+      "Read(//c/c/Users/manda/Documents/progetto della domenica/node_modules/phaser/**)",
+      "Bash(grep -E '\\\\.js\\(\\\\.map\\)?$')",
+      "Bash(cd \"/c/Users/manda/Documents/progetto della domenica\" && node -p \"require\\('./package-lock.json'\\).name\" && grep -i \"stato\\\\|v0\\\\.\\\\|versione\\\\|version\" docs/TESTING.md | head -20)",
+      "Read(//c/c/Users/manda/Documents/progetto della domenica/docs/**)",
+      "Bash(git rm *)",
+      "Bash(grep -zE 'src/.*\\\\.js\\(\\\\.map\\)?$')",
+      "Bash(xargs -0 -r git rm --cached -q)"
     ]
   }
 }

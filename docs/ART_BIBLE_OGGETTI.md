@@ -170,22 +170,27 @@ Tutto ciò che è meccanico (torrette, canne, testate, beccucci, bull bar) usa l
 | Chiave (`WeaponType`) | Nome | Prezzo | Cooldown (ms) | Danno | Velocità | Colore (tinta) | Range |
 |---|---|---|---|---|---|---|---|
 | `mg` | Mitragliatrice | 0 | 280 | 1 | 680 | `#ffee00` | 9999 |
-| `double_mg` | Doppia MG | 200 | 310 | 1 | 680 | `#ffdd44` | 9999 |
+| `double_mg` | Doppia MG | 200 | 280 | 1 | 680 | `#ffdd44` | 9999 |
 | `rifle` | Fucile Auto | 350 | 140 | 2 | 720 | `#44ff88` | 9999 |
 | `rockets` | Razzi | 550 | 900 | 5 | 340 | `#ff4400` | 9999 |
-| `flamethrower` | Lanciafiamme | 400 | 70 | 1 | 480 | `#ff6600` | 440 |
+| `flamethrower` | Lanciafiamme | 400 | 70 | 2 | 480 | `#ff6600` | 440 |
 
 > **Note:** `range 9999` = praticamente illimitato (il proiettile esce dallo schermo); il **Lanciafiamme** ha range corto reale `440`. Il `desc` di ogni arma vive nel codice/HUD, non qui.
 
 ---
 
-### 4.4 PROIETTILE — `bullet` · **18×5** · *tinta a runtime*
+### 4.4 PROIETTILE — `bullet` · **18×5** · *tinta a runtime · sovracampionato (OS_G)*
 **Concept:** il piombo del giocatore. Una sola texture per **tutte** le armi a proiettile; cambia solo la **tinta** (colore dell'arma) allo spawn.
 
-**Palette (texture base, poi tinteggiata):**
-alone caldo `#ffdd00` alpha `0.3` (scia) · culatta `#aa8800` · **nucleo `#ffffff`** (lo sparo) · punta `#ffee44` + nucleo punta `#ffffff`.
+**Palette (texture base, poi tinteggiata):** disegnata come **tracer** a 5 livelli.
+- **scia di velocità** (a sinistra, si assottiglia): `#ffdd00` alpha `0.16` → `#ffcc33` alpha `0.30` (triangoli appuntiti) · **alone caldo** del corpo `#ffdd00` alpha `0.38`.
+- **culatta in ottone** (rear): ombra `#886600` · `#aa8800` · luce `#d4aa44`.
+- **nucleo bianco caldo** `#ffffff` (qui si legge la tinta dell'arma) + fondo più caldo `#fff2c0` (luce dall'alto).
+- **punta** `#ffee44` + **nucleo della punta `#ffffff`** (l'accento emissivo, la direzione).
 
-**Silhouette:** sottile e **orizzontale** con punta luminosa e coda alonata = "sta volando verso destra". Il nucleo bianco è l'accento emissivo.
+**Silhouette:** sottile e **orizzontale**, **punta a triangolo a destra + scia che si assottiglia a sinistra** = "sta volando verso destra", direzione inequivocabile. Il nucleo bianco è l'accento emissivo.
+
+**Nitidezza nativa:** texture **sovracampionata `OS_G` 2×** come veicolo/zombie/tanica; lo sprite torna a scala design con `setScale(1/OVERSAMPLE)` allo spawn (`spawnBullet`). **Hitbox invariata** (frame×scala = 18×5). I numeri di `generateTexture('bullet',18,5)` restano di design → validatore invariato. *Eccezione direzione:* il **proiettile-boss** (riuso del `bullet`, tinta viola) usa `setFlipX(true)` perché viaggia verso sinistra.
 
 **VFX:** **muzzle-flash** allo sparo (`Juice.muzzleFlash`, `fx_light` additivo tinto col colore dell'arma) — **tranne il lanciafiamme**, che ne fa a meno (è già un getto continuo).
 
@@ -193,13 +198,21 @@ alone caldo `#ffdd00` alpha `0.3` (scia) · culatta `#aa8800` · **nucleo `#ffff
 
 ---
 
-### 4.5 RAZZO — `rocket` · **28×12** · *texture dedicata*
+### 4.5 RAZZO — `rocket` · **28×12** · *texture dedicata · sovracampionato (OS_G)*
 **Concept:** l'arma pesante. Un vero missile riconoscibile, con testata e scia di scarico — deve "leggersi" come AoE in arrivo.
 
-**Palette:**
-corpo `#cccccc` / `#eeeeee` (acciaio) · **testata `#cc2200` / `#ff4422` / `#ff6644`** · ogiva `#bb1100` (triangolo) · bande `#888888` · ugello `#444444` / `#222222` · alette `#888888` · **fiamma di scarico `#ff5500` → `#ffaa00` → `#ffffff`** (triangoli a coda, dietro l'ugello).
+**Palette (acciaio top-lit + testata rossa):**
+- **corpo** cilindro d'acciaio: ombra `#8e8e98` → mezzo `#cfcfd6` → **banda di luce** `#eeeef2` / picco `#f8f8fc` (luce dall'alto) · ombra inferiore `#70707a`.
+- **materia/storia:** giunti `#70707a`, rivetti scuri `#55555c` + lumini `#f8f8fc`, **banda rossa** d'accento `#cc2200`.
+- **testata** (gradiente): ombra `#aa1800` → `#cc2200` → `#ff4422` → luce `#ff7755` · ombra in basso `#8a1000` · giunto corpo/testata `#6a0c00`.
+- **ogiva a punta** `#bb1100` + spigolo illuminato `#ff5533`.
+- **ugello = kit metallo §3.2** `#26262c` / `#444444` / `#70707a` + **bagliore interno** caldo `#ffcc66`.
+- **alette** (acciaio, su/giù al retro) `#55555c` / `#8e8e98` (alto) · `#44444a` / `#70707a` (basso, più in ombra).
+- **fiamma di scarico** (coda a sinistra, **contenuta nella texture**): `#ff5500` → `#ff8800` → `#ffcc33` → nucleo `#ffffff` (triangoli appuntiti + 2 lingue laterali).
 
-**Silhouette:** affusolata, **testata rossa in punta + fiamma in coda** = direzione e pericolo immediati. Il più "grosso e lento" dei proiettili (velocità `340` vs `680+`): la lettura visiva di massa combacia.
+**Silhouette:** affusolata, **ogiva rossa in punta a destra + fiamma in coda a sinistra** = direzione e pericolo immediati. Il più "grosso e lento" dei proiettili (velocità `340` vs `680+`): la lettura visiva di massa combacia.
+
+**Nitidezza nativa:** texture **sovracampionata `OS_G` 2×**; lo sprite torna a scala design con `setScale(1/OVERSAMPLE)` (`spawnRocket`) e il body è `setSize(22·OVERSAMPLE, 8·OVERSAMPLE)` per compensare → **hitbox 22×8 invariata**. Dimensioni `generateTexture` di design → validatore invariato.
 
 **VFX:** all'impatto → **esplosione** con `Juice.bloomBurst`/`lightFlash` (luce arancione che illumina la scena) + **decal `scorch`** sull'asfalto (vedi `ART_BIBLE_AMBIENTE` §7) + hit-stop ~30 ms (vedi budget in `ART_BIBLE_ZOMBIES`).
 
@@ -210,9 +223,9 @@ corpo `#cccccc` / `#eeeeee` (acciaio) · **testata `#cc2200` / `#ff4422` / `#ff6
 ### 4.6 SCINTILLA / MOTE — `particle` · **12×12** · *VFX condiviso*
 **Concept:** il "mote" caldo generico — schegge d'impatto, scintille d'esplosione, frammenti. Riusato ovunque serva un puntino incandescente.
 
-**Palette:** alone `#ff6600` alpha `0.5` → `#ffaa00` → `#ffee44` → **nucleo `#ffffff`** (gradiente radiale a cerchi concentrici).
+**Palette:** falloff radiale morbido — alone `#ff6600` a`0.22` → `#ff8800` a`0.35` → `#ffaa00` a`0.55` → `#ffcc33` a`0.85` → `#ffee88` → **nucleo `#ffffff`** · **glint a croce** (`#fff4cc` a`0.30` + `#ffffff` a`0.55`, assottigliato verso le punte) per la lettura "scintilla". Base bianco-calda → **tinge pulito** su qualsiasi colore (debris metallici grigi, schegge verdi, scintille arancio).
 
-**Silhouette:** punto luminoso con alone caldo. Sempre **fire-and-forget** (tween posizione + alpha → 0).
+**Silhouette:** punto luminoso con alone caldo **e glint a croce**. Sempre **fire-and-forget** (tween posizione + alpha → 0).
 
 > Coerente col toolkit VFX dei nemici (`emitSparks`, `ART_BIBLE_ZOMBIES` §4): stessa famiglia di scintille calde.
 
@@ -221,9 +234,9 @@ corpo `#cccccc` / `#eeeeee` (acciaio) · **testata `#cc2200` / `#ff4422` / `#ff6
 ### 4.7 NUBE TOSSICA — `toxic_cloud` · **50×50** · *minaccia residua*
 **Concept:** ciò che lo **zombi Tossico** lascia morendo: una sacca di gas che resta sull'asfalto e danneggia chi la attraversa. È un **oggetto-minaccia**, non un VFX innocuo — la palette lo dichiara.
 
-**Palette (cerchi stratificati, bassa alpha):** `#003300` → `#006600` → `#00aa33` → `#00cc44` → `#00ff55` → nucleo `#44ff88`. Verde-tossico firma, lo stesso `#6cff3a`/famiglia di `emitZombieFx`.
+**Palette (blob stratificati, bassa alpha):** silhouette **irregolare** (cerchi sovrapposti e sfalsati, non un disco): `#003300` a`0.14` → `#004d11` → `#006600` → `#008822` → `#00aa33` → `#00cc44` (blob esterni) · **bolle di ebollizione** `#33dd55` a`0.5` (mote brillanti sparsi) · **nucleo malato** `#00ff55` a`0.22` → `#44ff88` a`0.30` → incandescente `#88ffaa` a`0.5`. Verde-tossico firma, la stessa famiglia `#6cff3a` di `emitZombieFx`.
 
-**Silhouette:** alone verde **morbido e pulsante**, più denso al centro. Leggibile come "zona da evitare".
+**Silhouette:** sacca di gas dal contorno **irregolare**, con **bolle** e nucleo denso. Leggibile come "zona da evitare". (Resta volutamente **morbida/traslucida** → a risoluzione design, non sovracampionata: la nitidezza non serve a una nube di gas.)
 
 **Note di gameplay:** è l'unico **oggetto di colore "fuoco del giocatore"-incompatibile** a terra: il verde malato segnala *minaccia*, non *pickup*. Coerenza di fazione (§3.1) rispettata.
 
