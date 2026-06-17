@@ -29,7 +29,10 @@
       "Bash(git rm *)",
       "Bash(grep -zE 'src/.*\\\\.js\\(\\\\.map\\)?$')",
       "Bash(xargs -0 -r git rm --cached -q)",
-      "Bash(cd \"c:/Users/manda/Documents/progetto della domenica\" && rm -f /tmp/GameScene.bak.ts && echo \"=== riferimenti ai metodi texture nei doc ===\" && grep -rn \"buildEntityTextures\\\\|buildVehicleTexture\\\\|GameScene.buildEntity\\\\|GameScene.buildVehicle\" CLAUDE.md docs/*.md 2>/dev/null)"
+      "Bash(cd \"c:/Users/manda/Documents/progetto della domenica\" && rm -f /tmp/GameScene.bak.ts && echo \"=== riferimenti ai metodi texture nei doc ===\" && grep -rn \"buildEntityTextures\\\\|buildVehicleTexture\\\\|GameScene.buildEntity\\\\|GameScene.buildVehicle\" CLAUDE.md docs/*.md 2>/dev/null)",
+      "Bash(echo \"=== tsc exit: $? ===\")",
+      "Bash(cp src/scenes/GameScene.ts /tmp/GS.bak.ts)",
+      "Bash(sed -i '1285,1396d;1408,1622d' src/scenes/GameScene.ts)"
     ],
     "additionalDirectories": [
       "\\tmp"

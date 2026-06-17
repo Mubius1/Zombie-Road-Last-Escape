@@ -9,11 +9,13 @@ import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { resetRunState } from '../RunState';
 import { buildEntityTextures } from '../EntityTextures';
 import { buildVehicleTexture } from '../VehicleTextures';
+import HudController from '../HudController';
+import BossController, { BossHost } from '../BossController';
 
 // Spazio di design: l'altezza è fissa (H), la larghezza varia col formato (designW,
 // più ampia in 16:9). La camera in zoom adatta tutto alla risoluzione nativa — vedi Config.ts.
 const H = 600;
-const ROAD_TOP = 155, ROAD_BOTTOM = 445, ROAD_CENTER = 300;
+export const ROAD_TOP = 155, ROAD_BOTTOM = 445, ROAD_CENTER = 300;
 const VEHICLE_X = 150;
 const SCROLL_SPEED = 240;
 const BASE_FUEL_DRAIN = 2.2;
@@ -28,10 +30,6 @@ const BOSS_TRIGGER = 0.82; // % missione a cui appare il boss
 const COMBO_WINDOW = 2500;  // ms: finestra per mantenere la catena di uccisioni
 const DASH_COOLDOWN = 5000; // ms: ricarica dello scatto anti-aggancio
 const DASH_GRACE = 350;     // ms: dopo lo scatto nessun nuovo zombi si aggrappa
-// Colore del moltiplicatore combo per livello (×1..×5) — toni funzionali UI
-const COMBO_COLORS = [UI.muted, UI.gold, UI.amber, UI.redText, UI.red];
-// Riga HUD della modalità debug (G) — definita una volta sola: usata in buildHUD e nel toggle.
-const GOD_HUD = '◆ GOD MODE  (G off · B boss · N fine · H ripara)';
 
 export type BossType = 'mega_mutant' | 'giant_worm' | 'armored_colossus' | 'radioactive_beast';
 
@@ -76,11 +74,11 @@ const ENVIRONMENTS: EnvConfig[] = [
   { name: 'Città Finale',           bgColor: 0x0c0612, skyColor: 0x100618, groundColor: 0x0c0612, roadColor: 0x180c22, lineColor: 0xcc44ff, shoulderColor: 0x140a1a, grade: 0xb074d8, gradeAlpha: 0.48, emissive: 0xcc44ff, hazeColor: 0x240a36 },
 ];
 
-type ZombieType = 'common' | 'runner' | 'armored' | 'jumper' | 'giant' | 'toxic';
-type ComponentKey = 'engine' | 'wheels' | 'tank' | 'turret' | 'armor';
+export type ZombieType = 'common' | 'runner' | 'armored' | 'jumper' | 'giant' | 'toxic';
+export type ComponentKey = 'engine' | 'wheels' | 'tank' | 'turret' | 'armor';
 
 interface ZombieStats { speed: number; hp: number; scale: number; damage: number; score: number; }
-interface ComponentData { health: number; label: string; baseColor: number; fill?: Phaser.GameObjects.Rectangle; }
+export interface ComponentData { health: number; label: string; baseColor: number; fill?: Phaser.GameObjects.Rectangle; }
 interface AttachedZombie {
   sprite: Phaser.GameObjects.Sprite;
   slotIndex: number; comp: ComponentKey; hp: number; timer: number;
@@ -130,12 +128,12 @@ const ATTACH_SLOTS: Array<{ dx: number; dy: number; comp: ComponentKey }> = [
   { dx:  20, dy:  13, comp: 'turret' },
 ];
 
-export default class GameScene extends Phaser.Scene {
-  private vehicle!: Phaser.Physics.Arcade.Sprite;
-  private zombies!: Phaser.Physics.Arcade.Group;
+export default class GameScene extends Phaser.Scene implements BossHost {
+  vehicle!: Phaser.Physics.Arcade.Sprite;
+  zombies!: Phaser.Physics.Arcade.Group;
   private bullets!: Phaser.Physics.Arcade.Group;
   private fuelCans!: Phaser.Physics.Arcade.Group;
-  private toxicClouds!: Phaser.Physics.Arcade.Group;
+  toxicClouds!: Phaser.Physics.Arcade.Group;
 
   private attachedZombies: AttachedZombie[] = [];
   private components!: Record<ComponentKey, ComponentData>;
@@ -162,47 +160,22 @@ export default class GameScene extends Phaser.Scene {
   private giantTimer = 0;
   private envIndex = 0;
 
-  private hudHealthFill!: Phaser.GameObjects.Rectangle;
-  private hudFuelFill!: Phaser.GameObjects.Rectangle;
-  private hudDistFill!: Phaser.GameObjects.Rectangle;
-  private hudScore!: Phaser.GameObjects.Text;
-  private hudDist!: Phaser.GameObjects.Text;
-  private hudFuelNum!: Phaser.GameObjects.Text;
-  private hudAttached!: Phaser.GameObjects.Text;
+  private hud!: HudController;
 
   private currentWeapon: WeaponType = 'mg';
   private ownedWeapons: WeaponType[] = ['mg'];
   private rockets!: Phaser.Physics.Arcade.Group;
-  private hudWeapon!: Phaser.GameObjects.Text;
-  private hudCombo!: Phaser.GameObjects.Text;
-  private hudDash!: Phaser.GameObjects.Text;
-  private weaponSlots: { key: WeaponType; txt: Phaser.GameObjects.Text }[] = [];
-  // Cache HUD: evita setText (re-render del canvas + upload texture GPU) quando il valore mostrato
-  // non cambia. Resettata in buildHUD a ogni create() (i Text vengono ricreati). Le barre
-  // (displayWidth/setFillStyle) restano per-frame: sono economiche.
-  private hudCache = { score: -1, km: -1, fuel: -1, attached: -1, combo: '', dash: '' };
 
-  private sfx: SoundManager | null = null;
+  sfx: SoundManager | null = null;
   private grain: Phaser.GameObjects.TileSprite | null = null;
-  private environment: Environment | null = null;
+  environment: Environment | null = null;
   private frozen = false;
 
-  // Boss system
-  private bossActive = false;
-  private bossSpawned = false;
-  // True nei ~2.2s di celebrazione tra la morte del boss e triggerMissionComplete: congela il
-  // mondo (niente spawn zombi/gigante, niente danni) così la vittoria è garantita e pulita.
-  private bossDefeated = false;
-  private bossSprite: Phaser.Physics.Arcade.Sprite | null = null;
-  private bossMaxHp = 0;
-  private bossGroup!: Phaser.Physics.Arcade.Group;
-  private bossProjectiles!: Phaser.Physics.Arcade.Group;
-  private bossHudObjects: Phaser.GameObjects.GameObject[] = [];
-  private bossHudFill?: Phaser.GameObjects.Rectangle;
+  // Sottosistema boss (stato + gruppi + barra HP) — vedi BossController.
+  private boss!: BossController;
 
   // Debug
   private debugGod = false;
-  private hudDebug?: Phaser.GameObjects.Text;
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private spaceKey!: Phaser.Input.Keyboard.Key;
@@ -220,7 +193,7 @@ export default class GameScene extends Phaser.Scene {
   private spawnInterval = 2100;
 
   /** Larghezza dello spazio di design (800 in 4:3, maggiore in 16:9 → più strada). */
-  private designW = DESIGN_W;
+  designW = DESIGN_W;
 
   constructor() { super({ key: 'GameScene' }); }
 
@@ -259,12 +232,7 @@ export default class GameScene extends Phaser.Scene {
     if (!this.ownedWeapons.includes(this.currentWeapon)) this.currentWeapon = this.ownedWeapons[0] ?? 'mg';
     this.combo = 0; this.comboTimer = 0;
     this.dashReadyAt = 0; this.dashGraceUntil = 0;
-    this.bossActive = false;
-    this.bossSpawned = false;
-    this.bossDefeated = false;
-    this.bossSprite = null;
-    this.bossHudObjects = [];
-    this.bossHudFill = undefined;
+    this.boss = new BossController(this); // stato boss fresco + gruppi fisici (usati da buildColliders)
 
     const def = { engine: 100, wheels: 100, tank: 100, turret: 100, armor: 100 };
     const c = savedComp ?? def;
@@ -340,7 +308,7 @@ export default class GameScene extends Phaser.Scene {
     this.updateDistance(dt);
     this.updateZombieSpawning(delta);
     this.updateGiantSpawning(delta);
-    this.updateBoss(delta);
+    this.boss.update(delta);
     this.updateZombieMotion(time, delta);
     this.updateAttachedZombies(delta);
     this.checkBulletsVsAttached();
@@ -432,8 +400,7 @@ export default class GameScene extends Phaser.Scene {
     this.rockets         = this.physics.add.group();
     this.fuelCans        = this.physics.add.group();
     this.toxicClouds     = this.physics.add.group();
-    this.bossGroup       = this.physics.add.group();
-    this.bossProjectiles = this.physics.add.group();
+    // I gruppi del boss (corpo + proiettili) sono creati dal BossController in create().
   }
 
   private buildColliders() {
@@ -447,85 +414,26 @@ export default class GameScene extends Phaser.Scene {
       (_v,c) => this.onVehicleHitCloud(c as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.rockets, this.zombies,
       (r,z) => this.onRocketHitZombie(r as Phaser.Physics.Arcade.Sprite, z as Phaser.Physics.Arcade.Sprite));
-    this.physics.add.overlap(this.bullets, this.bossGroup,
-      (b,boss) => this.onBulletHitBoss(b as Phaser.Physics.Arcade.Sprite, boss as Phaser.Physics.Arcade.Sprite));
-    this.physics.add.overlap(this.rockets, this.bossGroup,
-      (r,boss) => this.onRocketHitBoss(r as Phaser.Physics.Arcade.Sprite, boss as Phaser.Physics.Arcade.Sprite));
-    this.physics.add.overlap(this.vehicle, this.bossGroup,
-      (_v,boss) => this.onVehicleHitBoss(boss as Phaser.Physics.Arcade.Sprite));
-    this.physics.add.overlap(this.vehicle, this.bossProjectiles,
-      (_v,p) => this.onBossProjectileHitVehicle(p as Phaser.Physics.Arcade.Sprite));
+    this.physics.add.overlap(this.bullets, this.boss.group,
+      (b,boss) => this.boss.onBulletHit(b as Phaser.Physics.Arcade.Sprite, boss as Phaser.Physics.Arcade.Sprite));
+    this.physics.add.overlap(this.rockets, this.boss.group,
+      (r,boss) => this.boss.onRocketHit(r as Phaser.Physics.Arcade.Sprite, boss as Phaser.Physics.Arcade.Sprite));
+    this.physics.add.overlap(this.vehicle, this.boss.group,
+      (_v,boss) => this.boss.onVehicleHit(boss as Phaser.Physics.Arcade.Sprite));
+    this.physics.add.overlap(this.vehicle, this.boss.projectiles,
+      (_v,p) => this.boss.onProjectileHitVehicle(p as Phaser.Physics.Arcade.Sprite));
   }
 
   private buildHUD(missionNum: number) {
-    // I Text dell'HUD vengono ricreati a ogni create(): azzera la cache così il primo update li popola.
-    this.hudCache = { score: -1, km: -1, fuel: -1, attached: -1, combo: '', dash: '' };
-    const D = 20, BAR_W = 110, COMP_BAR_W = 120;
-    const panel = this.add.graphics().setDepth(D);
-    panel.fillStyle(UI.black, 0.62); panel.fillRoundedRect(0,0,this.designW,84,{ tl:0, tr:0, bl:16, br:16 });
-    panel.lineStyle(1,UI.strokeDim,0.7); panel.lineBetween(0,46,this.designW,46);
-
-    Ui.text(this, 8,8,'SALUTE',{fontSize:'11px',color:UI.redText}).setDepth(D+1);
-    Ui.box(this, 8+BAR_W/2,34,BAR_W,10,{ fill:UI.barRed, radius:3 }).setDepth(D+1);
-    this.hudHealthFill = this.add.rectangle(8,34,BAR_W,10,UI.hpFill).setOrigin(0,0.5).setDepth(D+2);
-
-    Ui.text(this, 138,8,'CARBURANTE',{fontSize:'11px',color:UI.amberSoft}).setDepth(D+1);
-    Ui.box(this, 138+BAR_W/2,34,BAR_W,10,{ fill:UI.barAmber, radius:3 }).setDepth(D+1);
-    this.hudFuelFill = this.add.rectangle(138,34,BAR_W,10,UI.fuelBar).setOrigin(0,0.5).setDepth(D+2);
-
-    // Tacche di segmentazione sulle due barre principali (gauge "premium")
-    const ticks = this.add.graphics().setDepth(D+3);
-    ticks.fillStyle(UI.black, 0.45);
-    for (let i = 1; i < 5; i++) { ticks.fillRect(8 + i*22, 30, 1, 8); ticks.fillRect(138 + i*22, 30, 1, 8); }
-    this.hudFuelNum  = Ui.text(this, 255,28,'',{fontSize:'11px',color:UI.amberSoft}).setDepth(D+2);
-
-    this.hudScore    = Ui.text(this, 290,6,'PUNTEGGIO: 0',{fontSize:'13px',color:UI.white}).setDepth(D+1);
-    Ui.text(this, 620,6,`MISS.${missionNum}`,{fontSize:'12px',color:UI.greenSoft}).setDepth(D+1);
-    this.hudAttached = Ui.text(this, 700,6,'',{fontSize:'11px',color:'#ff8800'}).setDepth(D+1);
-    this.hudWeapon   = Ui.text(this, 620,22,'',{fontSize:'10px',color:'#ffaa44'}).setDepth(D+1);
-    this.hudCombo    = Ui.text(this, 470,6,'',{fontSize:'13px',fontStyle:'bold',color:UI.gold}).setDepth(D+1).setVisible(false);
-    this.hudDash     = Ui.text(this, this.designW-10,22,'↯ SCATTO',{fontSize:'11px',fontStyle:'bold',color:UI.greenOk}).setOrigin(1,0).setDepth(D+1);
-    // Selettore armi: una cifra-hotkey per ogni arma posseduta (la selezionata in oro)
-    this.weaponSlots = [];
-    let wsx = 620;
-    WEAPON_KEYS.forEach((wk, i) => {
-      if (!this.ownedWeapons.includes(wk)) return;
-      const t = Ui.text(this, wsx,34,`${i+1}`,{fontSize:'11px',fontStyle:'bold',color:UI.muted}).setDepth(D+1);
-      this.weaponSlots.push({ key: wk, txt: t });
-      wsx += 16;
+    this.hud = new HudController(this, this.designW);
+    this.hud.build({
+      missionNum, missionDist: MISSION_DIST,
+      components: this.components,
+      activeSurvivors: this.activeSurvivors,
+      ownedWeapons: this.ownedWeapons,
+      currentWeapon: this.currentWeapon,
+      debugGod: this.debugGod,
     });
-    this.refreshWeaponHUD(); // nome arma + evidenziazione del selettore (eventi discreti, non per-frame)
-
-    // Barra progresso missione
-    const DIST_KM = Math.floor(MISSION_DIST / 100);
-    const DIST_BAR_W = 110;
-    Ui.text(this, 290,24,'PERCORSO',{fontSize:'10px',color:'#7777aa'}).setDepth(D+1);
-    this.hudDist = Ui.text(this, 395,24,'',{fontSize:'10px',color:UI.blueInfo}).setDepth(D+2);
-    Ui.box(this, 290+DIST_BAR_W/2,37,DIST_BAR_W,7,{ fill:UI.barBlue, radius:2 }).setDepth(D+1);
-    this.hudDistFill = this.add.rectangle(290,37,DIST_BAR_W,7,UI.distBar).setOrigin(0,0.5).setDepth(D+2);
-    // label meta (static)
-    Ui.text(this, 408,33,`/ ${DIST_KM} km`,{fontSize:'9px',color:UI.faint}).setDepth(D+1);
-
-    // Survivors icons
-    if (this.activeSurvivors.length > 0) {
-      const names: Record<string,string> = { mechanic:'[M]', medic:'[+]', soldier:'[S]', explorer:'[E]' };
-      const txt = this.activeSurvivors.map(s => names[s]??s).join(' ');
-      Ui.text(this, this.designW-10,8,txt,{fontSize:'11px',color:'#cccc44'}).setOrigin(1,0).setDepth(D+1);
-    }
-
-    const compKeys: ComponentKey[] = ['engine','wheels','tank','turret','armor'];
-    compKeys.forEach((key,i) => {
-      const comp = this.components[key];
-      const sx = 10 + i * 158;
-      Ui.text(this, sx,49,comp.label,{fontSize:'10px',color:UI.muted}).setDepth(D+1);
-      Ui.box(this, sx+COMP_BAR_W/2,72,COMP_BAR_W,7,{ fill:UI.barGrey, radius:2 }).setDepth(D+1);
-      const fill = this.add.rectangle(sx,72,COMP_BAR_W,7,comp.baseColor).setOrigin(0,0.5).setDepth(D+2);
-      comp.fill = fill;
-    });
-
-    Ui.text(this, this.designW/2,H-6,'↑↓ Muovi · SPAZIO Spara · 1-5/Q Arma · SHIFT Scatto',{fontSize:'11px',color:UI.disabled}).setOrigin(0.5,1).setDepth(D);
-    Ui.text(this, 4,H-6,'0=Debug',{fontSize:'9px',color:'#2a3a2a'}).setOrigin(0,1).setDepth(D);
-    this.hudDebug = Ui.text(this, this.designW-6,H-6, this.debugGod ? GOD_HUD : '', {fontSize:'10px',color:'#00ff88',fontStyle:'bold'}).setOrigin(1,1).setDepth(D+5);
   }
 
   private buildInput() {
@@ -546,9 +454,9 @@ export default class GameScene extends Phaser.Scene {
     kb.on('keydown-G', () => {
       this.debugGod = !this.debugGod;
       if (this.debugGod) this.fuel = this.maxFuel;
-      this.hudDebug?.setText(this.debugGod ? GOD_HUD : ''); // evento discreto: non più aggiornato per-frame
+      this.hud.setDebug(this.debugGod); // evento discreto: non più aggiornato per-frame
     });
-    kb.on('keydown-B', () => { if (this.alive && !this.bossSpawned) this.spawnBoss(); });
+    kb.on('keydown-B', () => { if (this.alive && !this.boss.spawned) this.boss.spawn(); });
     kb.on('keydown-N', () => { if (this.alive && !this.missionDone) this.triggerMissionComplete(); });
     kb.on('keydown-H', () => { this.health = this.maxHealth; this.fuel = this.maxFuel;
       (Object.keys(this.components) as ComponentKey[]).forEach(k => this.components[k].health = 100); });
@@ -602,19 +510,7 @@ export default class GameScene extends Phaser.Scene {
     if (!this.ownedWeapons.includes(key) || key === this.currentWeapon) return;
     this.currentWeapon = key;
     this.registry.set('currentWeapon', key);
-    this.refreshWeaponHUD();
-    // Pop visivo del nome arma (cosmetico)
-    this.tweens.killTweensOf(this.hudWeapon);
-    this.hudWeapon.setScale(1.3);
-    this.tweens.add({ targets: this.hudWeapon, scale: 1, duration: 160 });
-  }
-
-  /** Nome arma + evidenziazione del selettore. Eventi discreti (init/cambio arma): non per-frame. */
-  private refreshWeaponHUD() {
-    this.hudWeapon.setText(WEAPONS[this.currentWeapon].name.toUpperCase());
-    for (const slot of this.weaponSlots) {
-      slot.txt.setColor(slot.key === this.currentWeapon ? UI.gold : UI.muted);
-    }
+    this.hud.setWeapon(key); // nome + selettore + pop cosmetico
   }
 
   // ─── Scatto / scrollata anti-aggancio ──────────────────────────────────────
@@ -660,35 +556,31 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /** Aggiunge punteggio da un'uccisione applicando il moltiplicatore combo. */
-  private addKillScore(base: number) {
+  addKillScore(base: number) {
     this.combo++;
     this.comboTimer = COMBO_WINDOW;
     this.score += base * this.comboMultiplier();
-    if (this.combo >= 2 && this.hudCombo) {
-      this.tweens.killTweensOf(this.hudCombo);
-      this.hudCombo.setScale(1.35);
-      this.tweens.add({ targets: this.hudCombo, scale: 1, duration: 180 });
-    }
+    if (this.combo >= 2) this.hud.popCombo();
   }
 
   private updateFuel(dt: number) {
     if (this.debugGod) { this.fuel = this.maxFuel; return; }
-    if (this.bossDefeated) return; // niente consumo durante la celebrazione di vittoria (X4: nessun game over post-vittoria)
+    if (this.boss.defeated) return; // niente consumo durante la celebrazione di vittoria (X4: nessun game over post-vittoria)
     this.fuel -= this.getEffectiveFuelDrain() * dt;
     if (this.fuel <= 0) { this.fuel = 0; this.endGame('Carburante esaurito!'); }
   }
 
   private updateDistance(dt: number) {
     this.distance += SCROLL_SPEED * dt;
-    if (!this.bossSpawned && this.distance >= MISSION_DIST * BOSS_TRIGGER) {
-      this.spawnBoss();
+    if (!this.boss.spawned && this.distance >= MISSION_DIST * BOSS_TRIGGER) {
+      this.boss.spawn();
     }
-    if (this.bossActive) return;
+    if (this.boss.active) return;
     if (this.distance >= MISSION_DIST) this.triggerMissionComplete();
   }
 
   private updateZombieSpawning(delta: number) {
-    if (this.bossActive || this.bossDefeated) return;
+    if (this.boss.active || this.boss.defeated) return;
     this.spawnTimer -= delta;
     if (this.spawnTimer <= 0) {
       this.spawnZombie();
@@ -698,7 +590,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private updateGiantSpawning(delta: number) {
-    if (this.bossActive || this.bossDefeated) return; // niente gigante durante la celebrazione di vittoria (X6)
+    if (this.boss.active || this.boss.defeated) return; // niente gigante durante la celebrazione di vittoria (X6)
     this.giantTimer -= delta;
     if (this.giantTimer <= 0) {
       this.spawnGiant();
@@ -793,55 +685,15 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private updateHUD() {
-    // Barre: economiche (displayWidth/setFillStyle), restano per-frame.
-    const hpPct = this.health / this.maxHealth;
-    this.hudHealthFill.displayWidth = Math.max(0, hpPct * 110);
-    this.hudHealthFill.setFillStyle(hpPct < 0.3 ? UI.hpLow : hpPct < 0.6 ? UI.hpMid : UI.hpHigh);
-    this.hudFuelFill.displayWidth = Math.max(0, (this.fuel / this.maxFuel) * 110);
-    const distPct = Math.min(1, this.distance / MISSION_DIST);
-    this.hudDistFill.displayWidth = Math.max(1, distPct * 110);
-    this.hudDistFill.setFillStyle(distPct > 0.8 ? 0x88ff44 : distPct > 0.5 ? 0x44aaff : 0x4466cc);
-
-    // Testi: setText solo quando il valore mostrato cambia (vedi hudCache).
-    const fuel = Math.round(this.fuel);
-    if (fuel !== this.hudCache.fuel)   { this.hudFuelNum.setText(`${fuel}%`);          this.hudCache.fuel  = fuel; }
-    if (this.score !== this.hudCache.score) { this.hudScore.setText(`PUNTEGGIO: ${this.score}`); this.hudCache.score = this.score; }
-    const km = Math.floor(this.distance / 100);
-    if (km !== this.hudCache.km)       { this.hudDist.setText(`${km} km`);             this.hudCache.km    = km; }
-    const n = this.attachedZombies.length;
-    if (n !== this.hudCache.attached)  { this.hudAttached.setText(n > 0 ? `[${n} aggrappati]` : ''); this.hudCache.attached = n; }
-
-    // Combo
-    if (this.combo >= 2) {
-      const m = this.comboMultiplier();
-      const txt = `COMBO ${this.combo}  ×${m}`;
-      if (txt !== this.hudCache.combo) {
-        this.hudCombo.setText(txt);
-        this.hudCombo.setColor(COMBO_COLORS[m - 1] ?? UI.white);
-        this.hudCache.combo = txt;
-      }
-      this.hudCombo.setVisible(true);
-    } else {
-      if (this.hudCache.combo !== '') this.hudCache.combo = '';
-      this.hudCombo.setVisible(false);
-    }
-
-    // Scatto (cooldown)
-    const dashRemain = this.dashReadyAt - this.time.now;
-    const dashTxt = dashRemain <= 0 ? '↯ SCATTO' : `↯ ${Math.ceil(dashRemain / 1000)}s`;
-    if (dashTxt !== this.hudCache.dash) {
-      this.hudDash.setText(dashTxt);
-      this.hudDash.setColor(dashRemain <= 0 ? UI.greenOk : UI.faint);
-      this.hudCache.dash = dashTxt;
-    }
-
-    for (const key of Object.keys(this.components) as ComponentKey[]) {
-      const comp = this.components[key];
-      if (!comp.fill) continue;
-      const pct = comp.health / 100;
-      comp.fill.displayWidth = Math.max(0, pct * 120);
-      comp.fill.setFillStyle(pct<=0 ? 0x440000 : pct<0.3 ? 0xff2222 : pct<0.6 ? 0xffcc00 : comp.baseColor);
-    }
+    this.hud.update({
+      health: this.health, maxHealth: this.maxHealth,
+      fuel: this.fuel, maxFuel: this.maxFuel,
+      score: this.score, distance: this.distance,
+      attachedCount: this.attachedZombies.length,
+      combo: this.combo, comboMult: this.comboMultiplier(),
+      dashReadyAt: this.dashReadyAt, now: this.time.now,
+      components: this.components,
+    });
   }
 
   private cleanOffScreen() {
@@ -851,7 +703,7 @@ export default class GameScene extends Phaser.Scene {
     clean(this.fuelCans,   -80,  this.designW+80);
     clean(this.toxicClouds,-80,  this.designW+80);
     clean(this.rockets,         -20,  this.designW+60);
-    clean(this.bossProjectiles, -80,  this.designW+80);
+    clean(this.boss.projectiles, -80,  this.designW+80);
     // Bullets respect per-projectile maxX (lanciafiamme ha range breve)
     (this.bullets.getChildren() as Phaser.Physics.Arcade.Sprite[]).forEach(s => {
       if (!s.active) return;
@@ -863,7 +715,7 @@ export default class GameScene extends Phaser.Scene {
   // ─── Spawning ────────────────────────────────────────────────────────────────
 
   // Hit-stop: congela il gioco per pochi ms sugli impatti forti (vende il "peso")
-  private hitStop(ms: number) {
+  hitStop(ms: number) {
     if (this.frozen || !this.alive || this.missionDone) return;
     this.frozen = true;
     this.physics.pause();
@@ -944,7 +796,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // Scintille metalliche (proiettile che rimbalza sulla corazza)
-  private emitSparks(x: number, y: number) {
+  emitSparks(x: number, y: number) {
     for (let i = 0; i < 4; i++) {
       const a = Math.random() * Math.PI * 2, sp = Phaser.Math.Between(20, 60);
       const p = this.add.image(x, y, 'particle').setTint(0xfff2a0).setScale(0.35).setDepth(14);
@@ -1257,7 +1109,7 @@ export default class GameScene extends Phaser.Scene {
 
   // ─── Toxic cloud ─────────────────────────────────────────────────────────────
 
-  private spawnToxicCloud(x: number, y: number) {
+  spawnToxicCloud(x: number, y: number) {
     const cloud = this.toxicClouds.create(x, y, 'toxic_cloud') as Phaser.Physics.Arcade.Sprite;
     cloud.setVelocityX(-SCROLL_SPEED);
     cloud.setData('timer', 3000).setData('lastDmg', 0);
@@ -1267,31 +1119,24 @@ export default class GameScene extends Phaser.Scene {
 
   // ─── Component damage system ─────────────────────────────────────────────────
 
-  private damageComponent(key: ComponentKey, amount: number) {
-    if (this.debugGod || this.bossDefeated) return; // invulnerabile durante la celebrazione di vittoria
+  damageComponent(key: ComponentKey, amount: number) {
+    if (this.debugGod || this.boss.defeated) return; // invulnerabile durante la celebrazione di vittoria
     const comp = this.components[key];
     comp.health = Math.max(0, comp.health - amount);
     if (key === 'engine' && comp.health <= 0) this.endGame('Motore distrutto!');
   }
 
-  private dealDamage(amount: number) {
-    if (this.debugGod || this.bossDefeated) return; // invulnerabile durante la celebrazione di vittoria (X4)
+  dealDamage(amount: number) {
+    if (this.debugGod || this.boss.defeated) return; // invulnerabile durante la celebrazione di vittoria (X4)
     const armorPct = this.components.armor.health / 100;
     const bonus = this.vehicleArmorBonus / 100;
     const base  = armorPct<=0 ? 2.5 : armorPct<0.3 ? 1.8 : armorPct<0.6 ? 1.3 : 1.0;
     const mult  = Math.max(0.5, base - bonus);
     const dealt = Math.round(amount * mult);
     this.health = Math.max(0, this.health - dealt);
-    this.flashHealthBar();
+    this.hud.flashHealthBar();
     if (this.health <= 0) this.endGame('Veicolo distrutto!');
     else this.flashVehicleDamage(dealt); // se è game over, ci pensa endGame a tingere il veicolo
-  }
-
-  /** Feedback al colpo: lampo bianco sulla barra salute + breve "thump" verticale. */
-  private flashHealthBar() {
-    const f = this.add.rectangle(63, 34, 116, 14, 0xffffff, 0.55).setDepth(24);
-    this.tweens.add({ targets: f, alpha: 0, duration: 160, onComplete: () => f.destroy() });
-    if (this.hudHealthFill) this.tweens.add({ targets: this.hudHealthFill, scaleY: 1.9, duration: 80, yoyo: true });
   }
 
   /**
@@ -1333,7 +1178,7 @@ export default class GameScene extends Phaser.Scene {
     this.attachedZombies = [];
   }
 
-  private triggerMissionComplete() {
+  triggerMissionComplete() {
     if (this.missionDone) return;
     this.missionDone = true;
 
@@ -1400,8 +1245,8 @@ export default class GameScene extends Phaser.Scene {
     this.zombies.setVelocityX(0);
     this.bullets.setVelocityX(0);
     this.fuelCans.setVelocityX(0);
-    this.bossProjectiles.setVelocityX(0); // niente proiettili boss sospesi sopra l'overlay (X9)
-    this.bossGroup.setVelocityX(0);
+    this.boss.projectiles.setVelocityX(0); // niente proiettili boss sospesi sopra l'overlay (X9)
+    this.boss.group.setVelocityX(0);
     this.clearAttachedZombies(); // niente sprite/timer orfani sul veicolo congelato (X3)
 
     this.time.delayedCall(700, () => {
@@ -1422,119 +1267,7 @@ export default class GameScene extends Phaser.Scene {
 
   // ─── Boss system ─────────────────────────────────────────────────────────────
 
-  private spawnBoss() {
-    this.bossSpawned = true;
-    this.bossActive  = true;
-
-    const missionNum: number = this.registry.get('missionNumber') ?? 1;
-    const bossType = BOSS_ORDER[(missionNum - 1) % BOSS_ORDER.length];
-    const cfg = BOSS_CONFIG[bossType];
-    this.bossMaxHp = cfg.hp;
-
-    // Alert
-    const warn = Ui.text(this, this.designW / 2, H / 2, `⚠  ${cfg.name.toUpperCase()}  ⚠`, {
-      fontSize: '28px', color: '#ff4400', fontStyle: 'bold',
-      stroke: '#000000', strokeThickness: 5,
-    }).setOrigin(0.5).setDepth(28).setAlpha(0);
-    this.tweens.add({
-      targets: warn, alpha: 1, duration: 250, yoyo: true, hold: 800,
-      onComplete: () => {
-        this.tweens.add({ targets: warn, alpha: 0, y: H / 2 - 60, duration: 1200, onComplete: () => warn.destroy() });
-      },
-    });
-    this.cameras.main.shake(300, 0.016);
-    this.sfx?.playExplosion();
-
-    // Sprite boss (texture + animazione dedicate per ciascun tipo)
-    const texKey = `boss_${bossType}`;
-    const boss = this.bossGroup.create(this.designW + 90, ROAD_CENTER, texKey) as Phaser.Physics.Arcade.Sprite;
-    boss.setScale(cfg.scaleX / OVERSAMPLE, cfg.scaleY / OVERSAMPLE).setDepth(12);
-    boss.play(`walk_${texKey}`);
-    boss.setData('bossType', bossType);
-    boss.setData('hp', cfg.hp);
-    const t1init = bossType === 'armored_colossus' ? 3000
-                 : bossType === 'giant_worm'       ? 4000
-                 : bossType === 'radioactive_beast' ? 2500
-                 : 8000;
-    boss.setData('timer1', t1init);
-    boss.setData('lastVehicleHit', 0);
-    (boss.body as Phaser.Physics.Arcade.Body).setSize(cfg.bodyW, cfg.bodyH);
-    this.bossSprite = boss;
-
-    this.showBossHUD(cfg.name);
-  }
-
-  private updateBoss(delta: number) {
-    if (!this.bossSprite || !this.bossActive) return;
-    const boss = this.bossSprite;
-    if (!boss.active) { this.bossActive = false; return; }
-
-    const bossType = boss.getData('bossType') as BossType;
-    const cfg = BOSS_CONFIG[bossType];
-    const body = boss.body as Phaser.Physics.Arcade.Body;
-    const targetX = 560;
-
-    // Avanzamento e stop
-    if (boss.x > targetX) {
-      body.setVelocityX(-cfg.speed);
-    } else {
-      body.setVelocityX(0);
-      boss.x = targetX;
-    }
-
-    // Comportamento per tipo
-    let t1 = (boss.getData('timer1') as number) - delta;
-    boss.setData('timer1', t1);
-
-    switch (bossType) {
-      case 'mega_mutant':
-        boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER + Math.sin(this.time.now / 800) * 90, 0.04);
-        if (t1 <= 0) {
-          boss.setData('timer1', 8000);
-          this.spawnZombieAt('common', this.designW - 80, boss.y - 44);
-          this.spawnZombieAt('common', this.designW - 80, boss.y + 44);
-        }
-        break;
-
-      case 'giant_worm':
-        boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER + Math.sin(this.time.now / 600) * 105, 0.05);
-        if (t1 <= 0) {
-          boss.setData('timer1', 4000);
-          this.spawnToxicCloud(boss.x - 24, boss.y);
-        }
-        break;
-
-      case 'armored_colossus':
-        boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER, 0.03);
-        if (t1 <= 0) {
-          boss.setData('timer1', 3000);
-          this.fireBossProjectile(boss.x - 32, boss.y);
-        }
-        break;
-
-      case 'radioactive_beast':
-        boss.y = Phaser.Math.Linear(boss.y, ROAD_CENTER + Math.sin(this.time.now / 700) * 75, 0.04);
-        if (t1 <= 0) {
-          boss.setData('timer1', 2500);
-          this.spawnToxicCloud(boss.x - 10, boss.y);
-          if (Math.random() < 0.5)
-            this.spawnToxicCloud(boss.x + 20, boss.y + Phaser.Math.Between(-40, 40));
-        }
-        break;
-    }
-
-    boss.y = Phaser.Math.Clamp(boss.y, ROAD_TOP + 40, ROAD_BOTTOM - 40);
-
-    // Aggiorna barra HP
-    const hp = boss.getData('hp') as number;
-    if (this.bossHudFill) {
-      this.bossHudFill.displayWidth = Math.max(0, (hp / this.bossMaxHp) * 440);
-      const pct = hp / this.bossMaxHp;
-      this.bossHudFill.setFillStyle(pct < 0.25 ? 0xff2200 : pct < 0.55 ? 0xff8800 : 0xcc0000);
-    }
-  }
-
-  private spawnZombieAt(type: ZombieType, x: number, y: number) {
+  spawnZombieAt(type: ZombieType, x: number, y: number) {
     const stats = ZOMBIE_STATS[type];
     const z = this.zombies.create(
       x, Phaser.Math.Clamp(y, ROAD_TOP + 22, ROAD_BOTTOM - 22), `zombie_${type}`
@@ -1546,224 +1279,9 @@ export default class GameScene extends Phaser.Scene {
     z.play(`walk_${type}`); z.anims.setProgress(Math.random());
   }
 
-  private fireBossProjectile(x: number, fromY: number) {
-    const p = this.bossProjectiles.create(x, fromY, 'bullet') as Phaser.Physics.Arcade.Sprite;
-    const dy = Phaser.Math.Clamp(this.vehicle.y - fromY, -80, 80);
-    p.setVelocityX(-200).setVelocityY(dy);
-    // Texture sovracampionata → scala ÷OVERSAMPLE e body ×OVERSAMPLE (visivo + hitbox
-    // identici a prima). flipX: la punta segue la direzione di volo (verso sinistra).
-    p.setScale(2.4 / OVERSAMPLE, 1.6 / OVERSAMPLE).setFlipX(true).setTint(0x8844ff).setDepth(9);
-    (p.body as Phaser.Physics.Arcade.Body).setSize(16 * OVERSAMPLE, 6 * OVERSAMPLE);
-  }
-
-  private onBulletHitBoss(bullet: Phaser.Physics.Arcade.Sprite, boss: Phaser.Physics.Arcade.Sprite) {
-    if (!bullet.active || !boss.active) return;
-    const dmg = (bullet.getData('damage') as number) ?? 1;
-    bullet.destroy();
-    this.damageBoss(boss, dmg);
-    // Flash bianco pieno sull'impatto (la texture ha la palette cotta, niente tinta da ripristinare).
-    boss.setTintFill(0xffffff);
-    this.time.delayedCall(60, () => { if (boss?.active) boss.clearTint(); });
-  }
-
-  private onRocketHitBoss(rocket: Phaser.Physics.Arcade.Sprite, boss: Phaser.Physics.Arcade.Sprite) {
-    if (!rocket.active || !boss.active) return;
-    const rx = rocket.x, ry = rocket.y;
-    rocket.destroy();
-    this.damageBoss(boss, WEAPONS.rockets.damage * 3);
-    this.spawnHitParticles(rx, ry);
-    this.spawnHitParticles(rx + 10, ry - 8);
-    this.environment?.addDecal('scorch', rx, ry);
-    Juice.lightFlash(this, rx, ry, 0xff8a33, 4);
-    this.sfx?.playExplosion();
-    this.cameras.main.shake(120, 0.009);
-  }
-
-  private onVehicleHitBoss(boss: Phaser.Physics.Arcade.Sprite) {
-    if (!boss.active) return;
-    const lastHit = (boss.getData('lastVehicleHit') as number) ?? 0;
-    if (this.time.now - lastHit < 800) return;
-    boss.setData('lastVehicleHit', this.time.now);
-    this.dealDamage(20);
-    this.damageComponent('armor', 25);
-    this.cameras.main.shake(200, 0.016);
-    this.sfx?.playExplosion();
-  }
-
-  private onBossProjectileHitVehicle(p: Phaser.Physics.Arcade.Sprite) {
-    if (!p.active) return;
-    p.destroy();
-    this.dealDamage(12);
-    this.damageComponent('turret', 8);
-    this.cameras.main.shake(90, 0.006);
-    this.sfx?.playImpact();
-  }
-
-  private damageBoss(boss: Phaser.Physics.Arcade.Sprite, amount: number) {
-    const hp = (boss.getData('hp') as number) - amount;
-    boss.setData('hp', hp);
-    if (hp <= 0) this.killBoss();
-  }
-
-  private killBoss() {
-    if (!this.bossSprite || !this.bossActive) return;
-    this.bossActive = false;
-    this.bossDefeated = true; // celebrazione: mondo congelato e invulnerabilità fino a triggerMissionComplete
-    const bossType = this.bossSprite.getData('bossType') as BossType;
-    const cfg = BOSS_CONFIG[bossType];
-    const bx = this.bossSprite.x, by = this.bossSprite.y;
-
-    this.bossSprite.destroy();
-    this.bossSprite = null;
-    // Ripulisci i pericoli residui del boss: proiettili in volo e nubi tossiche non devono più
-    // colpire dopo la sua morte (X4).
-    this.bossProjectiles.clear(true, true);
-    this.toxicClouds.clear(true, true);
-    this.cameras.main.shake(500, 0.022);
-    this.hitStop(70);
-    this.bossDeathFx(bossType, bx, by); // sequenza di morte dedicata per tipo
-
-    const earned = cfg.reward;
-    this.addKillScore(500);
-    this.registry.set('money', (this.registry.get('money') ?? 0) + earned);
-    this.hideBossHUD();
-
-    const vt = Ui.text(this, this.designW / 2, H / 2 - 10, `BOSS SCONFITTO!  +${earned} monete`, {
-      fontSize: '24px', color: '#ffee00', fontStyle: 'bold',
-      stroke: '#000000', strokeThickness: 5,
-    }).setOrigin(0.5).setDepth(28);
-    this.tweens.add({ targets: vt, alpha: 0, y: H / 2 - 80, duration: 2200, onComplete: () => vt.destroy() });
-    this.sfx?.playMissionComplete();
-
-    this.time.delayedCall(2200, () => this.triggerMissionComplete());
-  }
-
-  /**
-   * Sequenza di morte DEDICATA per ogni boss (Standard AAA: VFX + suono + schermo
-   * sincronizzati). Tutto fire-and-forget (immagini tinte che si auto-distruggono):
-   * nessun emitter persistente, nessun impatto sul gameplay.
-   */
-  private bossDeathFx(bossType: BossType, x: number, y: number) {
-    const cfg = BOSS_CONFIG[bossType];
-    // Base condivisa: lampo bianco + alone nel colore-firma + boato-firma + scoppi a catena.
-    Juice.flash(this, 0xffffff, 0.5, 140);
-    Juice.lightFlash(this, x, y, cfg.tint, 8, 480);
-    Juice.bloomBurst(this, x, y, cfg.tint, 3, 320);
-    this.sfx?.playBossDeath(bossType);               // timbro di morte dedicato al tipo
-    for (let i = 0; i < 6; i++) {
-      this.time.delayedCall(i * 120, () => {
-        this.spawnHitParticles(x + Phaser.Math.Between(-44, 44), y + Phaser.Math.Between(-34, 34));
-        if (i % 2 === 0) this.sfx?.playExplosion();   // ~3 boati: lasciano respiro al timbro-firma
-      });
-    }
-
-    switch (bossType) {
-      case 'mega_mutant': {
-        // La Madre: la sacca si rompe e SPUTA LA COVATA (zombi-immagine che schizzano via).
-        Juice.bloomBurst(this, x, y, 0xff3020, 3.6, 420);
-        for (let i = 0; i < 5; i++) {
-          this.time.delayedCall(50 + i * 70, () => {
-            const a = -Math.PI / 2 + Phaser.Math.FloatBetween(-1.1, 1.1);
-            const sp = Phaser.Math.Between(70, 150);
-            const z = this.add.image(x, y, 'zombie_common', 0).setDepth(14)
-              .setScale(0.42).setFlipX(Math.random() < 0.5);
-            this.tweens.add({
-              targets: z, x: x + Math.cos(a) * sp, y: y - Math.abs(Math.sin(a)) * sp * 0.5 + 120,
-              angle: Phaser.Math.Between(-360, 360), alpha: 0, scale: 0.12,
-              duration: 760, ease: 'Quad.easeOut', onComplete: () => z.destroy(),
-            });
-            this.spawnDebris(x, y, 'particle', { tint: 0xff3020, n: 4, scale: 0.5, spread: 130 });
-          });
-        }
-        break;
-      }
-      case 'giant_worm': {
-        // Il Divoratore: il corpo si SFALDA NEI SEGMENTI, schizzati di lato.
-        this.spawnDebris(x, y, 'particle', { tint: 0x9a5a2e, n: 9, scale: 1.2, spread: 175, dir: 0.5, gravity: 80,  dur: 780, spin: 200 });
-        this.spawnDebris(x, y, 'particle', { tint: 0xff7722, n: 5, scale: 0.6, spread: 150, dir: 0.6, gravity: 60 });
-        this.spawnDebris(x, y, 'particle', { tint: 0x5a2e14, n: 5, scale: 0.85, spread: 125, dir: 0.5, gravity: 115 });
-        break;
-      }
-      case 'armored_colossus': {
-        // Il Bastione: la corazza ESPLODE IN SCHEGGE METALLICHE + scintille (impatto più pesante).
-        this.cameras.main.shake(220, 0.02);
-        for (let i = 0; i < 4; i++)
-          this.time.delayedCall(i * 90, () => this.emitSparks(x + Phaser.Math.Between(-30, 30), y + Phaser.Math.Between(-30, 30)));
-        this.spawnDebris(x, y, 'particle', { tint: 0x5f6b78, n: 8, scale: 0.95, spread: 160, gravity: 130, dur: 820, spin: 260 });
-        this.spawnDebris(x, y, 'particle', { tint: 0x8a97a5, n: 5, scale: 0.6,  spread: 140, gravity: 120 });
-        this.spawnDebris(x, y, 'particle', { tint: 0xffe9a0, n: 6, scale: 0.4,  spread: 185, gravity: 40, dur: 380 });
-        break;
-      }
-      case 'radioactive_beast': {
-        // Il Reattore: FUSIONE DEL NUCLEO — vampata verde + nubi radioattive (solo visive).
-        Juice.lightFlash(this, x, y, 0x7dff4a, 11, 560);
-        Juice.bloomBurst(this, x, y, 0xb6ff6a, 4, 480);
-        this.spawnDebris(x, y, 'particle', { tint: 0x6cff3a, n: 10, scale: 0.6, spread: 190, gravity: 30, dur: 520 });
-        ([[0,0,1.8],[-30,-12,1.2],[34,8,1.3],[4,24,1.1]] as [number,number,number][]).forEach(([dx,dy,s], i) =>
-          this.time.delayedCall(i * 80, () => {
-            const c = this.add.image(x + dx, y + dy, 'toxic_cloud').setDepth(13).setScale(s * 0.5).setAlpha(0.9);
-            this.tweens.add({ targets: c, scale: s * 1.8, alpha: 0, duration: 900, ease: 'Quad.easeOut', onComplete: () => c.destroy() });
-          }));
-        break;
-      }
-    }
-  }
-
-  /** Detriti fire-and-forget: immagini tinte che schizzano e svaniscono (no fisica, no danno). */
-  private spawnDebris(
-    x: number, y: number, texKey: string,
-    opts: { tint?: number; n?: number; scale?: number; spread?: number; gravity?: number; dir?: number; dur?: number; depth?: number; spin?: number } = {},
-  ) {
-    const { tint, n = 6, scale = 0.5, spread = 120, gravity = 90, dir = 0, dur = 700, depth = 14, spin = 0 } = opts;
-    for (let i = 0; i < n; i++) {
-      // dir 0 = scoppio radiale · dir>0 = bias orizzontale (es. verme che si sfalda di lato)
-      const a = dir > 0
-        ? (Math.random() < 0.5 ? 0 : Math.PI) + Phaser.Math.FloatBetween(-dir, dir)
-        : Math.random() * Math.PI * 2;
-      const sp = Phaser.Math.Between(spread * 0.4, spread);
-      const p = this.add.image(x, y, texKey).setDepth(depth).setScale(scale * Phaser.Math.FloatBetween(0.7, 1.3));
-      if (tint !== undefined) p.setTint(tint);
-      this.tweens.add({
-        targets: p,
-        x: x + Math.cos(a) * sp,
-        y: y + Math.sin(a) * sp * 0.6 + gravity,
-        alpha: 0, scale: 0.06,
-        angle: spin ? Phaser.Math.Between(-spin, spin) : 0,
-        duration: dur + Phaser.Math.Between(-120, 120),
-        ease: 'Quad.easeOut', onComplete: () => p.destroy(),
-      });
-    }
-  }
-
-  private showBossHUD(name: string) {
-    const cx = this.designW / 2, barW = 440, y = 96;
-    const bg    = this.add.rectangle(cx, y, barW + 8, 20, UI.black, 0.85).setDepth(22).setAlpha(0);
-    const fill  = this.add.rectangle(cx - barW / 2, y, barW, 14, UI.redCrit).setOrigin(0, 0.5).setDepth(23).setAlpha(0);
-    const label = Ui.text(this, cx, y - 14, name.toUpperCase(), {
-      fontSize: '13px', color: UI.red, fontStyle: 'bold',
-      stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(23).setAlpha(0);
-
-    this.bossHudObjects = [bg, fill, label];
-    this.bossHudFill = fill;
-    this.tweens.add({ targets: this.bossHudObjects, alpha: 1, duration: 400 });
-  }
-
-  private hideBossHUD() {
-    if (!this.bossHudObjects.length) return;
-    this.tweens.add({
-      targets: this.bossHudObjects, alpha: 0, duration: 500,
-      onComplete: () => {
-        this.bossHudObjects.forEach(o => (o as Phaser.GameObjects.GameObject & { destroy(): void }).destroy());
-        this.bossHudObjects = [];
-        this.bossHudFill = undefined;
-      },
-    });
-  }
-
   // ─── Visual FX ───────────────────────────────────────────────────────────────
 
-  private spawnHitParticles(x: number, y: number) {
+  spawnHitParticles(x: number, y: number) {
     for (let i = 0; i < Phaser.Math.Between(3,5); i++) {
       const p = this.add.image(x,y,'particle').setDepth(15).setScale(0.5);
       const angle = Math.random() * Math.PI * 2;

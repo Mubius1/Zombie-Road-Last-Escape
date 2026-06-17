@@ -34,14 +34,21 @@
 | **X8** | Il respiro (wob) compensa la dimensione del body → hitbox invariata | `GameScene.ts` `updateZombieMotion` |
 | **X9** | `endGame` ferma anche `bossProjectiles`/`bossGroup` | `GameScene.ts` |
 
-**Round 3 — Decomposizione `GameScene.ts` (A1, parziale)**
+**Round 3 — Decomposizione `GameScene.ts` (A1 ✅)**
 
-| Cosa | Risultato |
-|---|---|
-| Estratto l'authoring texture in `src/EntityTextures.ts` (nemici/boss/oggetti, `buildEntityTextures`) e `src/VehicleTextures.ts` (veicolo, `buildVehicleTexture` + `mixColor`) | **GameScene.ts: 2965 → 1815 righe (−1150)**; funzioni pure importate da GameScene/Shop/Debug/MenuScene; validatori (`validate:art`) ripuntati ai nuovi file + WATCHED del plugin Vite aggiornato. |
+`GameScene.ts` **da 2965 a 1333 righe (−1632, ~55%)**, estratto in 4 moduli coesi; tutto importato da GameScene/Shop/Debug/MenuScene, validatori e WATCHED del plugin Vite ripuntati. `npm run build` verde.
 
-**A1 ancora da completare:** estrarre `BossController` (spawnBoss/updateBoss/killBoss/bossDeathFx) e `HudController` (buildHUD/updateHUD) per portare GameScene sotto ~800 righe.
+| Modulo | Contenuto | Righe |
+|---|---|---|
+| `src/EntityTextures.ts` | `buildEntityTextures` — texture nemici/boss/oggetti (funzioni pure) | ~853 |
+| `src/VehicleTextures.ts` | `buildVehicleTexture` + `mixColor` — texture veicolo | ~354 |
+| `src/HudController.ts` | HUD di gioco (vista: barre, punteggio, combo, scatto, selettore armi, componenti, debug) | ~218 |
+| `src/BossController.ts` | sottosistema boss: spawn, movimento/attacchi per tipo, barra HP, danni, morte VFX; possiede stato e gruppi fisici; accede a GameScene via interfaccia `BossHost` | ~404 |
+
+`GameScene` resta l'orchestratore del game-loop + sistemi core (veicolo, mondo, spawn, collisioni, combo, scatto, carburante, sopravvissuti, missione/game over). I dati (`ZOMBIE_STATS`/`BOSS_CONFIG`/…) restano in GameScene (letti dai validatori lì).
+
 **Ancora aperti (principali):** QW1 sparo automatico (decisione di design); big bet *difficoltà late-game*, *object pooling*, *touch/pointer*, *fasi boss*, *meta-progressione + CI*; vari finding UI/UX (U1–U12) e game-design (G1–G10).
+> ⚠️ La decomposizione è un refactor sensibile al comportamento: il build verifica solo la compilazione, **non** il runtime. Consigliato un playtest (in particolare uno scontro col boss e un game over/restart) prima del commit.
 
 > ⚠️ **Le posizioni `file:riga` nelle sezioni sottostanti sono quelle dell'audit originale**: dopo gli interventi i numeri di riga sono cambiati. Per lo stato per-finding fare riferimento a questa sezione (gli ID — `A2`, `X4`, …— restano stabili).
 
@@ -63,7 +70,7 @@ A questo si aggiunge **igiene del repository da finalizzare** (artefatti `.js` c
 
 | Area | Salute (audit) | # finding | Risolti |
 |---|---|---|---|
-| Architettura & qualità del codice | discreto | 8 | A2 · A1 parziale (texture estratte) |
+| Architettura & qualità del codice | discreto | 8 | A2 · **A1 ✅** (texture+HUD+boss estratti) |
 | Performance & rendering | discreto | 6 | 1 (P2) |
 | Game design & progressione | discreto | 10 | — |
 | Bilanciamento & economia | discreto | 7 | 2 (B1, B2) |
