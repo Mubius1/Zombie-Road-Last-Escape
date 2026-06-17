@@ -79,7 +79,7 @@ Strada notturna desaturata · carne necrotica e metallo ossidato · **bagliori b
 
 | Cosa | Dove |
 |---|---|
-| Disegno texture + spritesheet a 3 frame | `src/scenes/GameScene.ts` → `static buildEntityTextures()` |
+| Disegno texture + spritesheet a 3 frame | `src/EntityTextures.ts` → `buildEntityTextures()` |
 | Creazione animazioni di camminata | stesso metodo, helper `walk(type, rate)` |
 | Statistiche di gioco (velocità, hp, scala, danno, punti) | `ZOMBIE_STATS` |
 | Personalità di movimento (rollio, tonfo, virata, VFX) | `ZOMBIE_MOTION` + `updateZombieMotion()` |

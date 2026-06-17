@@ -67,7 +67,8 @@ Se cambi una **regola di gioco** (core loop, game over, ruoli) aggiorna `GAME_DE
 | Modalità debug / galleria modelli | `src/scenes/DebugScene.ts` |
 | Dati condivisi (veicoli, armi, sopravvissuti) | `src/GameData.ts` |
 | Audio procedurale | `src/SoundManager.ts` |
-| Texture & animazioni nemici | `GameScene.buildEntityTextures()` |
+| Texture & animazioni nemici/boss/oggetti | `src/EntityTextures.ts` → `buildEntityTextures()` |
+| Texture veicolo | `src/VehicleTextures.ts` → `buildVehicleTexture()` |
 | Statistiche nemici | `ZOMBIE_STATS` |
 | Personalità di movimento + VFX | `ZOMBIE_MOTION`, `updateZombieMotion()`, `emitZombieFx()` |
 | Boss di fine regione | `BOSS_CONFIG`, `spawnBoss()`, `updateBoss()` |

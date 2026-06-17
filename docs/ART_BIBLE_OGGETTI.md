@@ -32,11 +32,11 @@ I tre pilastri del titolo (coesione · game feel · rifinitura) tradotti sugli o
 
 | Cosa | Dove |
 |---|---|
-| **Texture veicolo** (7 varianti, 100×44) | `src/scenes/GameScene.ts` → `static buildVehicleTexture()` |
+| **Texture veicolo** (7 varianti, 100×44) | `src/VehicleTextures.ts` → `buildVehicleTexture()` |
 | Istanza veicolo + fisica + hitbox | `GameScene.buildVehicle()` |
 | **Componenti danneggiabili** (motore/ruote/serbatoio/torretta/corazza) | `this.components`, `ComponentData`, `damageComponent()` |
 | Punti di aggancio zombi sul veicolo | `ATTACH_SLOTS` |
-| **Texture oggetti** (proiettile, tanica, scintilla, razzo, nube tossica) | `GameScene.buildEntityTextures()` (sezione finale) |
+| **Texture oggetti** (proiettile, tanica, scintilla, razzo, nube tossica) | `src/EntityTextures.ts` → `buildEntityTextures()` (sezione finale) |
 | Dati armi (cooldown, danno, velocità, colore, range) | `src/GameData.ts` → `WEAPONS`, `WEAPON_KEYS`, `WeaponType` |
 | Sparo / scelta proiettile per arma | `GameScene.fireWeapon()`, `spawnBullet()`, `spawnRocket()` |
 | Muzzle-flash + bloom + luce esplosione | `src/Juice.ts` → `muzzleFlash()`, `bloomBurst()`, `lightFlash()` |

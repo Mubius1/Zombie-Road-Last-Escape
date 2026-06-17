@@ -26,6 +26,11 @@ const root     = join(dirname(fileURLToPath(import.meta.url)), '..');
 const code     = readFileSync(join(root, 'src/scenes/GameScene.ts'), 'utf8');
 const gameData = readFileSync(join(root, 'src/GameData.ts'), 'utf8');
 const uiSrc    = readFileSync(join(root, 'src/Ui.ts'), 'utf8');
+// Authoring texture estratto da GameScene (decomposizione): le dimensioni-firma di nemici/boss/
+// oggetti (AF/generateTexture) vivono qui; quelle del veicolo in VehicleTextures.ts. I DATI
+// (ZOMBIE_STATS/ZOMBIE_MOTION/BOSS_CONFIG) restano in GameScene.ts → continuano a leggersi da `code`.
+const entityTex  = readFileSync(join(root, 'src/EntityTextures.ts'), 'utf8');
+const vehicleTex = readFileSync(join(root, 'src/VehicleTextures.ts'), 'utf8');
 const bibleZ   = readFileSync(join(root, 'docs/ART_BIBLE_ZOMBIES.md'), 'utf8');
 const bibleO   = readFileSync(join(root, 'docs/ART_BIBLE_OGGETTI.md'), 'utf8');
 const bibleI   = readFileSync(join(root, 'docs/ART_BIBLE_INTERFACCE.md'), 'utf8');
@@ -112,8 +117,8 @@ const codeMotion = {}, codeStats = {}, codeDims = {};
 for (const t of TYPES) {
   codeMotion[t] = Object.fromEntries(MOTION_FIELDS.map(f => [f, motionField(motionSrc, t, f)]));
   codeStats[t]  = { scale: motionField(statsSrc, t, 'scale') };
-  const af = new RegExp(`AF\\('zombie_${t}',\\s*(\\d+),\\s*(\\d+),\\s*3\\)`).exec(code);
-  if (!af) throw new Error(`AF('zombie_${t}', ...) non trovato nel codice`);
+  const af = new RegExp(`AF\\('zombie_${t}',\\s*(\\d+),\\s*(\\d+),\\s*3\\)`).exec(entityTex);
+  if (!af) throw new Error(`AF('zombie_${t}', ...) non trovato in EntityTextures.ts`);
   codeDims[t] = { fw: +af[1], fh: +af[2] };
 }
 
@@ -179,10 +184,10 @@ for (const t of BOSS_TYPES) {
   } catch (e) { errors.push(`[boss:${t}] BOSS_CONFIG: ${e.message}`); continue; }
 
   // Codice: AF('boss_t', fw, fh, 3) + generateTexture('boss_t', W, H)
-  const af = new RegExp(`AF\\('${key}',\\s*(\\d+),\\s*(\\d+),\\s*3\\)`).exec(code);
-  const gt = new RegExp(`generateTexture\\('${key}',\\s*(\\d+),\\s*(\\d+)\\)`).exec(code);
-  if (!af) { errors.push(`[boss:${t}] AF('${key}', ...) non trovato nel codice`); continue; }
-  if (!gt) { errors.push(`[boss:${t}] generateTexture('${key}', ...) non trovato nel codice`); continue; }
+  const af = new RegExp(`AF\\('${key}',\\s*(\\d+),\\s*(\\d+),\\s*3\\)`).exec(entityTex);
+  const gt = new RegExp(`generateTexture\\('${key}',\\s*(\\d+),\\s*(\\d+)\\)`).exec(entityTex);
+  if (!af) { errors.push(`[boss:${t}] AF('${key}', ...) non trovato in EntityTextures.ts`); continue; }
+  if (!gt) { errors.push(`[boss:${t}] generateTexture('${key}', ...) non trovato in EntityTextures.ts`); continue; }
   const codeFw = +af[1], codeFh = +af[2], codeW = +gt[1], codeH = +gt[2];
 
   // Coerenza interna al codice: lo spritesheet è fw*3 × fh
@@ -275,24 +280,24 @@ function bibleHeaderDim(bible, token) {
   const m = new RegExp(`###[^\\n]*${token}[^\\n]*?(\\d+)×(\\d+)`).exec(bible);
   return m ? { w: +m[1], h: +m[2] } : null;
 }
-// Dimensioni nel codice: generateTexture(<call>, W, H)
-function codeTexDim(call) {
-  const m = new RegExp(`generateTexture\\(${call},\\s*(\\d+),\\s*(\\d+)\\)`).exec(code);
+// Dimensioni nel codice: generateTexture(<call>, W, H) nel sorgente `src` indicato.
+function codeTexDim(call, src) {
+  const m = new RegExp(`generateTexture\\(${call},\\s*(\\d+),\\s*(\\d+)\\)`).exec(src);
   return m ? { w: +m[1], h: +m[2] } : null;
 }
 
-// { call: argomento di generateTexture nel codice · token: cosa cercare nell'header bible }
+// { call: argomento di generateTexture · src: file in cui cercarlo · token: header bible }
 const OBJECT_TEX = [
-  { label: 'veicolo',     call: 'key',            token: 'IL VEICOLO' },
-  { label: 'bullet',      call: "'bullet'",       token: '`bullet`' },
-  { label: 'rocket',      call: "'rocket'",       token: '`rocket`' },
-  { label: 'particle',    call: "'particle'",     token: '`particle`' },
-  { label: 'toxic_cloud', call: "'toxic_cloud'",  token: '`toxic_cloud`' },
-  { label: 'fuel_can',    call: "'fuel_can'",     token: '`fuel_can`' },
+  { label: 'veicolo',     call: 'key',            token: 'IL VEICOLO',    src: vehicleTex },
+  { label: 'bullet',      call: "'bullet'",       token: '`bullet`',      src: entityTex },
+  { label: 'rocket',      call: "'rocket'",       token: '`rocket`',      src: entityTex },
+  { label: 'particle',    call: "'particle'",     token: '`particle`',    src: entityTex },
+  { label: 'toxic_cloud', call: "'toxic_cloud'",  token: '`toxic_cloud`', src: entityTex },
+  { label: 'fuel_can',    call: "'fuel_can'",     token: '`fuel_can`',    src: entityTex },
 ];
 
-for (const { label, call, token } of OBJECT_TEX) {
-  const cd = codeTexDim(call);
+for (const { label, call, token, src } of OBJECT_TEX) {
+  const cd = codeTexDim(call, src);
   if (!cd) { errors.push(`[texture:${label}] generateTexture(${call}, ...) non trovato nel codice`); continue; }
   const bd = bibleHeaderDim(bibleO, token);
   if (!bd) { errors.push(`Art Bible §4: dimensione "NN×NN" per "${label}" (header ${token}) non trovata.`); continue; }

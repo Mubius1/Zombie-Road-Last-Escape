@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { VEHICLES, VEHICLE_KEYS, SURVIVORS, SurvivorData, Upgrades, WEAPONS, WEAPON_KEYS, WeaponType } from '../GameData';
-import GameScene from './GameScene';
+import { buildEntityTextures } from '../EntityTextures';
+import { buildVehicleTexture } from '../VehicleTextures';
 import Juice from '../Juice';
 import Settings from '../Settings';
 import Ui, { UI, MENU_VIGNETTE } from '../Ui';
@@ -84,8 +85,8 @@ export default class ShopScene extends Phaser.Scene {
   /** Genera (una volta) le texture procedurali per le anteprime di armi e veicoli. */
   private ensureTextures() {
     if (this.textures.exists('vehicle_experimental')) return; // già generate da una partita
-    GameScene.buildEntityTextures(this);
-    VEHICLE_KEYS.forEach(k => GameScene.buildVehicleTexture(this, k));
+    buildEntityTextures(this);
+    VEHICLE_KEYS.forEach(k => buildVehicleTexture(this, k));
   }
 
   private drawUI() {

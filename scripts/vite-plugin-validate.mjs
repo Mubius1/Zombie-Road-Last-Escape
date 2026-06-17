@@ -21,6 +21,7 @@ const VALIDATORS = [
 const WATCHED = [
   'src/GameData.ts', 'src/Ui.ts', 'src/SoundManager.ts',
   'src/scenes/GameScene.ts', 'src/scenes/ShopScene.ts',
+  'src/EntityTextures.ts', 'src/VehicleTextures.ts', // dimensioni-firma texture (validate:art)
   'docs/ART_BIBLE_ZOMBIES.md', 'docs/ART_BIBLE_OGGETTI.md', 'docs/ART_BIBLE_INTERFACCE.md',
   'docs/ART_BIBLE_AUDIO.md', 'docs/BALANCE.md',
 ].map(p => resolve(root, p));

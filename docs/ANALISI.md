@@ -4,6 +4,49 @@
 >
 > Documento di sola lettura/diagnosi: i numeri di riga sono indicativi al momento dell'analisi e vanno riverificati prima di intervenire. Quando si agisce su un finding, seguire le regole di `CLAUDE.md` (art bible / `BALANCE.md` / `npm run validate`).
 
+---
+
+## Stato di avanzamento
+
+> **Aggiornato il 2026-06-17** (branch `art_bible`). Dopo l'audit sono stati applicati **due round di interventi** — i Quick win 2–9 e i 6 bug di correttezza rimanenti — con `npm run build` (validatori + tsc + vite) **verde**. **21 dei 73 finding risolti**; la dimensione *Bug & correttezza* è chiusa al 100% (9/9). Gli unici valori di bilanciamento toccati (armi) sono stati aggiornati nei doc 🔒, quindi i validatori restano allineati.
+
+**Round 1 — Quick win 2–9**
+
+| Finding risolti | Intervento | File principali |
+|---|---|---|
+| **AU1** | Limiter brick-wall (`DynamicsCompressorNode`) tra master e destination | `SoundManager.ts`, `ART_BIBLE_AUDIO.md` §0/§4/§11 |
+| **V2** | Reazione del veicolo al danno: tinta rossa + flash schermo scalato sul colpo | `GameScene.ts` (`flashVehicleDamage`) |
+| **X1, X2** | Listener RESUME con handler nominato, guardia `alive/missionDone`, `off()` allo SHUTDOWN | `GameScene.ts` `create()` |
+| **P2** | HUD: `setText` solo al cambio valore (cache) + nome arma/selettore/debug su eventi discreti | `GameScene.ts` (`updateHUD`/`refreshWeaponHUD`) |
+| **A2** | Reset run centralizzato | nuovo `src/RunState.ts` + GameScene/MenuScene/DebugScene |
+| **B1, B2, X7** | Lanciafiamme 28.6 DPS (danno 2, non più cablato); Doppia MG cooldown 280 + linee ±14 | `GameData.ts`, `GameScene.ts`, BALANCE §7 + ART_BIBLE_OGGETTI §4.3 |
+| **V1** | Gore colorato per tipo alla morte (`killBurst`: rosso carne / verde tossico / metallo) | `GameScene.ts` |
+| **T1, T2, T3, T4, T7** | Rimossi 28 `.js`/`.js.map`, config Vite unificata in `.ts`, scratch eliminati, metadati `zombie-road-last-escape@0.1.0`, `lang="it"` | repo |
+
+**Round 2 — Bug di correttezza**
+
+| Finding risolti | Intervento | File |
+|---|---|---|
+| **X3** | `clearAttachedZombies()` a fine missione e al game over (niente sprite/timer orfani) | `GameScene.ts` |
+| **X4** | Flag `bossDefeated`: mondo congelato + invulnerabilità (danni/carburante) nei ~2,2s di celebrazione; `killBoss` ripulisce proiettili e nubi residui | `GameScene.ts` |
+| **X5** | Speronare il gigante dà punteggio/combo/gore (come ucciderlo a colpi) | `GameScene.ts` `onVehicleHitZombie` |
+| **X6** | Niente spawn gigante durante la celebrazione (stessa guardia `bossDefeated`) | `GameScene.ts` `updateGiantSpawning` |
+| **X8** | Il respiro (wob) compensa la dimensione del body → hitbox invariata | `GameScene.ts` `updateZombieMotion` |
+| **X9** | `endGame` ferma anche `bossProjectiles`/`bossGroup` | `GameScene.ts` |
+
+**Round 3 — Decomposizione `GameScene.ts` (A1, parziale)**
+
+| Cosa | Risultato |
+|---|---|
+| Estratto l'authoring texture in `src/EntityTextures.ts` (nemici/boss/oggetti, `buildEntityTextures`) e `src/VehicleTextures.ts` (veicolo, `buildVehicleTexture` + `mixColor`) | **GameScene.ts: 2965 → 1815 righe (−1150)**; funzioni pure importate da GameScene/Shop/Debug/MenuScene; validatori (`validate:art`) ripuntati ai nuovi file + WATCHED del plugin Vite aggiornato. |
+
+**A1 ancora da completare:** estrarre `BossController` (spawnBoss/updateBoss/killBoss/bossDeathFx) e `HudController` (buildHUD/updateHUD) per portare GameScene sotto ~800 righe.
+**Ancora aperti (principali):** QW1 sparo automatico (decisione di design); big bet *difficoltà late-game*, *object pooling*, *touch/pointer*, *fasi boss*, *meta-progressione + CI*; vari finding UI/UX (U1–U12) e game-design (G1–G10).
+
+> ⚠️ **Le posizioni `file:riga` nelle sezioni sottostanti sono quelle dell'audit originale**: dopo gli interventi i numeri di riga sono cambiati. Per lo stato per-finding fare riferimento a questa sezione (gli ID — `A2`, `X4`, …— restano stabili).
+
+---
+
 ## Verdetto complessivo
 
 "Zombie Road: Last Escape" è un progetto solido e sorprendentemente maturo per un titolo 100% procedurale: arte, audio e toolkit di juice sono di livello alto e coerenti con le proprie art bible. Le fondamenta tecniche sono buone — servizi condivisi ben separati, TypeScript strict, tre validatori anti-deriva agganciati a build e dev, documentazione architetturale eccellente.
@@ -18,17 +61,17 @@ A questo si aggiunge **igiene del repository da finalizzare** (artefatti `.js` c
 
 ### Stato di salute per area
 
-| Area | Salute | # finding |
-|---|---|---|
-| Architettura & qualità del codice | discreto | 8 |
-| Performance & rendering | discreto | 6 |
-| Game design & progressione | discreto | 10 |
-| Bilanciamento & economia | discreto | 7 |
-| Audio procedurale | buono | 7 |
-| Arte procedurale & VFX / game-feel | buono | 7 |
-| UI/UX, HUD & menu | buono | 12 |
-| Bug & correttezza | discreto | 9 |
-| Build, tooling, docs e igiene repo | discreto | 7 |
+| Area | Salute (audit) | # finding | Risolti |
+|---|---|---|---|
+| Architettura & qualità del codice | discreto | 8 | A2 · A1 parziale (texture estratte) |
+| Performance & rendering | discreto | 6 | 1 (P2) |
+| Game design & progressione | discreto | 10 | — |
+| Bilanciamento & economia | discreto | 7 | 2 (B1, B2) |
+| Audio procedurale | buono | 7 | 1 (AU1) |
+| Arte procedurale & VFX / game-feel | buono | 7 | 2 (V1, V2) |
+| UI/UX, HUD & menu | buono | 12 | — |
+| Bug & correttezza | discreto | 9 | **9 ✅ (tutti)** |
+| Build, tooling, docs e igiene repo | discreto | 7 | 5 (T1–T4, T7) |
 
 ### Temi trasversali
 
@@ -47,17 +90,19 @@ A questo si aggiunge **igiene del repository da finalizzare** (artefatti `.js` c
 
 ### Quick wins (alto impatto / basso sforzo)
 
-| # | Intervento | Posizione | Perché |
+| # | Stato | Intervento | Perché |
 |---|---|---|---|
-| 1 | Rendere lo sparo automatico (o allineare il doc) | `GameScene.ts:1690-1695` | Il doc dichiara "sparo automatico" ma il codice spara solo tenendo SPAZIO per ~75s a missione: cambia il game-feel del core loop e affatica l'input. |
-| 2 | Inserire un limiter sul master audio | `SoundManager.ts:14-19` | ~5 righe (DynamicsCompressorNode brick-wall) eliminano il clipping nel momento più climatico (morte boss). |
-| 3 | Feedback visivo del danno sul veicolo | `GameScene.ts:2362-2378` | Oggi il veicolo si tinge di verde per pickup/dash ma NON di rosso per il danno; l'unico segnale è un lampo sulla barra HP fuori dallo sguardo. |
-| 4 | Guardia su `alive/missionDone` nel callback RESUME + usare `.once` | `GameScene.ts:287-290` | Listener registrato con `.on` e mai rimosso: si accumula, riavvia il motore su istanze stale, può ripartire da morto. |
-| 5 | Aggiornare l'HUD solo quando i valori cambiano | `GameScene.ts:1892-1940` | `setText` incondizionato ogni frame forza re-render canvas + upload GPU 60 volte/s. |
-| 6 | Centralizzare il reset della run | `GameScene.ts:2455-2463`, `MenuScene.ts:155-163`, `DebugScene.ts:200-208` | 9 `registry.set` copiati identici in tre file: una sola `resetRunState(registry)` elimina una classe di bug. |
-| 7 | Finalizzare pulizia repo (.js committati, doppia config Vite, scratch, metadati) | `src/*.js`, `vite.config.ts`, `vite.config.mjs`, `package.json:2` | 28 artefatti in HEAD, config Vite contraddittorie, package ancora "phaser-game-starter". |
-| 8 | Differenziare Lanciafiamme e Doppia MG | `GameData.ts:46-48`, `GameScene.ts:2102-2104` | Scelte dominate dalle alternative (stesso/ peggior DPS a costo maggiore). |
-| 9 | Gore colorato per-tipo alla morte zombi | `GameScene.ts:2825-2837` | L'evento più frequente produce sempre lo stesso burst arancione, contro il rosso-sangue colore-firma. |
+| 1 | ⬜ aperto | Rendere lo sparo automatico (o allineare il doc) | Decisione di design: il doc dichiara "sparo automatico" ma il codice spara solo tenendo SPAZIO. |
+| 2 | ✅ fatto | Limiter sul master audio (AU1) | Elimina il clipping nel momento più climatico (morte boss). |
+| 3 | ✅ fatto | Feedback visivo del danno sul veicolo (V2) | Il danno ora si "sente" anche sul corpo del veicolo + ai bordi schermo. |
+| 4 | ✅ fatto | Guardia RESUME + cleanup listener (X1, X2) | Niente motore duplicato né riavvio "da morto". |
+| 5 | ✅ fatto | HUD aggiornato solo al cambio valore (P2) | Niente re-render canvas/upload GPU inutili 60 volte/s. |
+| 6 | ✅ fatto | Reset run centralizzato (A2) | `resetRunState()` elimina la tripla duplicazione. |
+| 7 | ✅ fatto | Igiene repo (T1–T4, T7) | `.js` rimossi, config Vite unica, scratch via, metadati corretti. |
+| 8 | ✅ fatto | Differenziare Lanciafiamme e Doppia MG (B1, B2, X7) | Non più scelte dominate; danno lanciafiamme non più cablato. |
+| 9 | ✅ fatto | Gore colorato per-tipo alla morte (V1) | L'uccisione comunica COSA hai ucciso (rosso/verde/metallo). |
+
+> **Bug & correttezza:** oltre ai quick win, i 6 bug residui (**X3, X4, X5, X6, X8, X9**) sono stati corretti — vedi §Stato di avanzamento. La dimensione è chiusa al 100%.
 
 ### Big bets (interventi strutturali)
 
@@ -75,6 +120,8 @@ A questo si aggiunge **igiene del repository da finalizzare** (artefatti `.js` c
 ## Finding per dimensione
 
 Legenda severità: **critico / alto / medio / basso**. Sforzo: **piccolo / medio / grande**. Tutti i finding sotto sono a confidenza di verifica **alta**.
+
+> ℹ️ Questa è la fotografia dell'**audit originale**. Per sapere quali finding sono **già risolti** (e con quale intervento) vedi la §Stato di avanzamento in cima al documento; i `file:riga` qui sotto sono dell'audit e possono non corrispondere più al codice attuale.
 
 ### 1. Architettura & qualità del codice — *discreto*
 

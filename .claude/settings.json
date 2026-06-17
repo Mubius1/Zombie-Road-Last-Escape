@@ -28,7 +28,11 @@
       "Read(//c/c/Users/manda/Documents/progetto della domenica/docs/**)",
       "Bash(git rm *)",
       "Bash(grep -zE 'src/.*\\\\.js\\(\\\\.map\\)?$')",
-      "Bash(xargs -0 -r git rm --cached -q)"
+      "Bash(xargs -0 -r git rm --cached -q)",
+      "Bash(cd \"c:/Users/manda/Documents/progetto della domenica\" && rm -f /tmp/GameScene.bak.ts && echo \"=== riferimenti ai metodi texture nei doc ===\" && grep -rn \"buildEntityTextures\\\\|buildVehicleTexture\\\\|GameScene.buildEntity\\\\|GameScene.buildVehicle\" CLAUDE.md docs/*.md 2>/dev/null)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }

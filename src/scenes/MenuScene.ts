@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import Juice from '../Juice';
 import Ui, { UI } from '../Ui';
-import GameScene from './GameScene';
+import { buildVehicleTexture } from '../VehicleTextures';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { resetRunState } from '../RunState';
 
@@ -99,7 +99,7 @@ export default class MenuScene extends Phaser.Scene {
     }
 
     // Veicolo che attraversa la strada accennata, fari accesi (silhouette del gioco)
-    if (!this.textures.exists('vehicle_armored_truck')) GameScene.buildVehicleTexture(this, 'armored_truck');
+    if (!this.textures.exists('vehicle_armored_truck')) buildVehicleTexture(this, 'armored_truck');
     const car = this.add.image(-150, 470, 'vehicle_armored_truck').setScale(1 / OVERSAMPLE).setDepth(2);
     const beam = this.add.image(car.x + 70, 468, 'fx_light')
       .setTint(0xfff4bc).setBlendMode(Phaser.BlendModes.ADD).setScale(3, 1.2).setAlpha(0.35).setDepth(2);

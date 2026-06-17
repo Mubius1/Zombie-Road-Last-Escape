@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
-import GameScene, { BOSS_CONFIG, BOSS_ORDER } from './GameScene';
+import { BOSS_CONFIG, BOSS_ORDER } from './GameScene';
+import { buildEntityTextures } from '../EntityTextures';
+import { buildVehicleTexture } from '../VehicleTextures';
 import { VEHICLES, VEHICLE_KEYS, WEAPONS, WEAPON_KEYS, WeaponType, SURVIVORS } from '../GameData';
 import Juice from '../Juice';
 import Ui, { UI } from '../Ui';
@@ -37,8 +39,8 @@ export default class DebugScene extends Phaser.Scene {
     this.designW = setupCamera(this).designW;
 
     // Genera TUTTE le texture (tutti i veicoli + entità)
-    GameScene.buildEntityTextures(this);
-    VEHICLE_KEYS.forEach(k => GameScene.buildVehicleTexture(this, k));
+    buildEntityTextures(this);
+    VEHICLE_KEYS.forEach(k => buildVehicleTexture(this, k));
 
     this.add.rectangle(this.designW / 2, H / 2, this.designW, H, UI.bgDeep);
     Ui.text(this, this.designW / 2, 6, 'MODALITÀ DEBUG — Galleria Modelli & Test', {

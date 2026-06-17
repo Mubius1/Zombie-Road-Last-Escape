@@ -52,7 +52,7 @@ main.ts ─ avvia →  game.ts ─ configura Phaser, registra le scene
 | [`SoundManager.ts`](../src/SoundManager.ts) | audio procedurale (vedi art bible audio) | nodi motore + master |
 | **scenes/** | `MenuScene` · `GameScene` · `ShopScene` · `SettingsScene` · `DebugScene` | stato di scena |
 
-`GameScene.ts` è di gran lunga il file più grande: contiene `buildEntityTextures` (texture/animazioni nemici, veicolo, proiettili), `buildWorld`, `buildHUD`/`updateHUD`, spawn nemici/pickup, `fireWeapon`, `spawnBoss`/`updateBoss`, `missionComplete`/`gameOver` e l'**`hitStop`** (qui e non in `Juice`, perché deve mettere in pausa il proprio `update()`). Per i punti precisi vedi la *Mappa del codice* in [`CLAUDE.md`](../CLAUDE.md).
+`GameScene.ts` resta il file più grande, ma l'**authoring delle texture procedurali è stato estratto** per coesione in [`EntityTextures.ts`](../src/EntityTextures.ts) (nemici, boss, oggetti) e [`VehicleTextures.ts`](../src/VehicleTextures.ts) (veicolo) — funzioni pure su `scene.textures`, importate da `GameScene`/`ShopScene`/`DebugScene`/`MenuScene`. In `GameScene` restano `buildWorld`, `buildHUD`/`updateHUD`, spawn nemici/pickup, `fireWeapon`, `spawnBoss`/`updateBoss`, `missionComplete`/`gameOver` e l'**`hitStop`** (qui e non in `Juice`, perché deve mettere in pausa il proprio `update()`). Per i punti precisi vedi la *Mappa del codice* in [`CLAUDE.md`](../CLAUDE.md).
 
 ---
 
@@ -87,7 +87,7 @@ Se una texture è generata alla dimensione di design e la camera la ingrandisce 
 | Pezzo | Dove | Cosa fa |
 |---|---|---|
 | `OVERSAMPLE = 2` | [`Config.ts`](../src/Config.ts) | fattore di sovracampionamento; copre i preset fino a 1600×1200 (zoom S ≤ 2) |
-| `OS_G(w,h)` | `GameScene.buildEntityTextures()` | factory di `Graphics` **sovracampionato**: fa `setScale(OVERSAMPLE)` e fa override di `generateTexture` per moltiplicare `w·h` per `OVERSAMPLE` internamente |
+| `OS_G(w,h)` | `EntityTextures.ts` → `buildEntityTextures()` | factory di `Graphics` **sovracampionato**: fa `setScale(OVERSAMPLE)` e fa override di `generateTexture` per moltiplicare `w·h` per `OVERSAMPLE` internamente |
 | `AF(key,fw,fh,n)` | idem | aggiunge `n` frame a una spritesheet sovracampionata (coordinate × `OVERSAMPLE`) |
 | `setScale(x / OVERSAMPLE)` | quando si istanzia lo sprite (es. `DebugScene`) | riporta lo sprite alla scala di design |
 | `Ui.text(...) → setResolution(OVERSAMPLE)` | [`Ui.ts`](../src/Ui.ts) | il testo è renderato a DPI maggiore → resta nitido sotto lo zoom |
