@@ -188,6 +188,9 @@ export default class GameScene extends Phaser.Scene {
   // Boss system
   private bossActive = false;
   private bossSpawned = false;
+  // True nei ~2.2s di celebrazione tra la morte del boss e triggerMissionComplete: congela il
+  // mondo (niente spawn zombi/gigante, niente danni) così la vittoria è garantita e pulita.
+  private bossDefeated = false;
   private bossSprite: Phaser.Physics.Arcade.Sprite | null = null;
   private bossMaxHp = 0;
   private bossGroup!: Phaser.Physics.Arcade.Group;
@@ -256,6 +259,7 @@ export default class GameScene extends Phaser.Scene {
     this.dashReadyAt = 0; this.dashGraceUntil = 0;
     this.bossActive = false;
     this.bossSpawned = false;
+    this.bossDefeated = false;
     this.bossSprite = null;
     this.bossHudObjects = [];
     this.bossHudFill = undefined;
@@ -1855,6 +1859,7 @@ export default class GameScene extends Phaser.Scene {
 
   private updateFuel(dt: number) {
     if (this.debugGod) { this.fuel = this.maxFuel; return; }
+    if (this.bossDefeated) return; // niente consumo durante la celebrazione di vittoria (X4: nessun game over post-vittoria)
     this.fuel -= this.getEffectiveFuelDrain() * dt;
     if (this.fuel <= 0) { this.fuel = 0; this.endGame('Carburante esaurito!'); }
   }
@@ -1869,7 +1874,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private updateZombieSpawning(delta: number) {
-    if (this.bossActive) return;
+    if (this.bossActive || this.bossDefeated) return;
     this.spawnTimer -= delta;
     if (this.spawnTimer <= 0) {
       this.spawnZombie();
@@ -1879,7 +1884,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private updateGiantSpawning(delta: number) {
-    if (this.bossActive) return;
+    if (this.bossActive || this.bossDefeated) return; // niente gigante durante la celebrazione di vittoria (X6)
     this.giantTimer -= delta;
     if (this.giantTimer <= 0) {
       this.spawnGiant();
@@ -2072,11 +2077,17 @@ export default class GameScene extends Phaser.Scene {
         z.setData('bob', bob);
       }
 
-      // Respiro / gonfiore (squash-stretch del volume)
+      // Respiro / gonfiore (squash-stretch del volume) — SOLO visivo.
       if (m.wob > 0) {
         const base = ZOMBIE_STATS[type].scale / OVERSAMPLE;
         const w = Math.sin(t * m.spd * 0.7 + ph) * m.wob;
         z.setScale(base * (1 + w), base * (1 - w));
+        // In Arcade il body scala con lo sprite: compenso la dimensione-sorgente in proporzione
+        // inversa così la hitbox effettiva resta invariata (X8 — coerente con "effetti vivi = solo
+        // visivi"). Sorgenti base = quelle passate a setBodySize allo spawn (gigante 38×50, toxic 20×28).
+        const bw = type === 'giant' ? 38 : 20;
+        const bh = type === 'giant' ? 50 : 28;
+        (z.body as Phaser.Physics.Arcade.Body).setSize(bw / (1 + w), bh / (1 - w));
       }
 
       // Inseguimento verticale con virata graduale (agile scatta · lento deriva)
@@ -2283,7 +2294,9 @@ export default class GameScene extends Phaser.Scene {
         this.environment?.addDecal('blood', zombie.x, zombie.y);
         break;
 
-      case 'giant':
+      case 'giant': {
+        const gx = zombie.x, gy = zombie.y;
+        this.addKillScore(ZOMBIE_STATS.giant.score); // speronarlo lo uccide → premia come ucciderlo a colpi (X5)
         zombie.destroy();
         this.damageComponent('armor', 30);
         this.damageComponent('engine', 20);
@@ -2291,12 +2304,13 @@ export default class GameScene extends Phaser.Scene {
         this.dealDamage(ZOMBIE_STATS.giant.damage);
         this.cameras.main.shake(400, 0.025);
         this.hitStop(50);
-        this.spawnHitParticles(zombie.x, zombie.y);
+        this.killBurst('giant', gx, gy);
         this.sfx?.playExplosion();
-        this.environment?.addDecal('skid', zombie.x, zombie.y);
-        this.environment?.addDecal('debris', zombie.x, zombie.y);
-        this.environment?.addDecal('blood', zombie.x, zombie.y);
+        this.environment?.addDecal('skid', gx, gy);
+        this.environment?.addDecal('debris', gx, gy);
+        this.environment?.addDecal('blood', gx, gy);
         break;
+      }
 
       case 'jumper':
         if (this.attachedZombies.length < ATTACH_SLOTS.length) {
@@ -2440,14 +2454,14 @@ export default class GameScene extends Phaser.Scene {
   // ─── Component damage system ─────────────────────────────────────────────────
 
   private damageComponent(key: ComponentKey, amount: number) {
-    if (this.debugGod) return;
+    if (this.debugGod || this.bossDefeated) return; // invulnerabile durante la celebrazione di vittoria
     const comp = this.components[key];
     comp.health = Math.max(0, comp.health - amount);
     if (key === 'engine' && comp.health <= 0) this.endGame('Motore distrutto!');
   }
 
   private dealDamage(amount: number) {
-    if (this.debugGod) return;
+    if (this.debugGod || this.bossDefeated) return; // invulnerabile durante la celebrazione di vittoria (X4)
     const armorPct = this.components.armor.health / 100;
     const bonus = this.vehicleArmorBonus / 100;
     const base  = armorPct<=0 ? 2.5 : armorPct<0.3 ? 1.8 : armorPct<0.6 ? 1.3 : 1.0;
@@ -2499,6 +2513,12 @@ export default class GameScene extends Phaser.Scene {
 
   // ─── Mission complete ────────────────────────────────────────────────────────
 
+  /** Distrugge gli zombi aggrappati e svuota l'array: niente sprite orfani né timer pendenti a fine run (X3). */
+  private clearAttachedZombies() {
+    this.attachedZombies.forEach(az => az.sprite.destroy());
+    this.attachedZombies = [];
+  }
+
   private triggerMissionComplete() {
     if (this.missionDone) return;
     this.missionDone = true;
@@ -2519,6 +2539,7 @@ export default class GameScene extends Phaser.Scene {
     this.sfx?.stopEngine();
     this.zombies.setVelocityX(0);
     this.fuelCans.setVelocityX(0);
+    this.clearAttachedZombies();
 
     const cx = this.designW/2, cy = H/2;
     Ui.box(this, cx,cy,500,260,{ fill:UI.black, fillAlpha:0.9, radius:16, stroke:UI.greenSig, strokeAlpha:0.45 }).setDepth(30);
@@ -2565,6 +2586,9 @@ export default class GameScene extends Phaser.Scene {
     this.zombies.setVelocityX(0);
     this.bullets.setVelocityX(0);
     this.fuelCans.setVelocityX(0);
+    this.bossProjectiles.setVelocityX(0); // niente proiettili boss sospesi sopra l'overlay (X9)
+    this.bossGroup.setVelocityX(0);
+    this.clearAttachedZombies(); // niente sprite/timer orfani sul veicolo congelato (X3)
 
     this.time.delayedCall(700, () => {
       const cx = this.designW/2, cy = H/2;
@@ -2770,12 +2794,17 @@ export default class GameScene extends Phaser.Scene {
   private killBoss() {
     if (!this.bossSprite || !this.bossActive) return;
     this.bossActive = false;
+    this.bossDefeated = true; // celebrazione: mondo congelato e invulnerabilità fino a triggerMissionComplete
     const bossType = this.bossSprite.getData('bossType') as BossType;
     const cfg = BOSS_CONFIG[bossType];
     const bx = this.bossSprite.x, by = this.bossSprite.y;
 
     this.bossSprite.destroy();
     this.bossSprite = null;
+    // Ripulisci i pericoli residui del boss: proiettili in volo e nubi tossiche non devono più
+    // colpire dopo la sua morte (X4).
+    this.bossProjectiles.clear(true, true);
+    this.toxicClouds.clear(true, true);
     this.cameras.main.shake(500, 0.022);
     this.hitStop(70);
     this.bossDeathFx(bossType, bx, by); // sequenza di morte dedicata per tipo
