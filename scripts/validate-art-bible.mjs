@@ -304,6 +304,9 @@ const OBJECT_TEX = [
   { label: 'particle',    call: "'particle'",     token: '`particle`',    src: entityTex },
   { label: 'toxic_cloud', call: "'toxic_cloud'",  token: '`toxic_cloud`', src: entityTex },
   { label: 'fuel_can',    call: "'fuel_can'",     token: '`fuel_can`',    src: entityTex },
+  { label: 'hazard_wreck',call: "'hazard_wreck'", token: '`hazard_wreck`',src: entityTex }, // A1
+  { label: 'hazard_oil',  call: "'hazard_oil'",   token: '`hazard_oil`',  src: entityTex }, // A1
+  { label: 'hazard_mine', call: "'hazard_mine'",  token: '`hazard_mine`', src: entityTex }, // A1
 ];
 
 for (const { label, call, token, src } of OBJECT_TEX) {

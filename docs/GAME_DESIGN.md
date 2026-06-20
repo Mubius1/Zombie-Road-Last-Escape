@@ -105,6 +105,7 @@ Tutto vive in uno **spazio di design alto 600** (vedi [CLAUDE.md → Risoluzione
 | Trigger boss | `82%` (`BOSS_TRIGGER`) | il boss appare a 14 760 u; l'avanzamento si congela finché vive |
 | Spawn zombi | a intervallo decrescente | parte da `max(700, 2100 − (missione−1)·80)` ms, accelera (§5) |
 | Gigante | ogni `22 000` ms | spawn speciale fuori dal pool ordinario |
+| Hazard di corsia | ogni `4500` ms | relitto/olio/mina che scorrono col mondo, da schivare (A1) |
 
 **Sequenza:** guida e sopravvivi → all'82% **spawn boss** (gli zombi ordinari smettono) → sconfiggi il boss → schermata *BOSS SCONFITTO* → dopo 2,2 s **MISSIONE COMPLETATA** → bottino → Negozio.
 

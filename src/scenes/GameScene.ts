@@ -49,6 +49,10 @@ const CHARGER_CHARGE_SPEED = 420; // velocità della carica (oltre lo scorriment
 // ── Sputatore (A2): nemico a distanza, lancia bile sulla corsia del veicolo. Vedi BALANCE §5. ──
 const SPITTER_FIRE_INTERVAL = 2000;   // ms tra uno sputo e l'altro
 const SPITTER_PROJECTILE_SPEED = 260; // velocità del proiettile tossico (lento → schivabile)
+// ── Hazard di corsia (A1): ostacoli su strada da schivare; le taniche tendono alla loro corsia. ──
+const HAZARD_SPAWN_INTERVAL = 4500; // ms tra un ostacolo e l'altro
+const OIL_SLOW_DURATION = 1500;     // ms di controllo verticale ridotto dopo l'olio
+const OIL_SLOW_MULT = 0.5;          // moltiplicatore della velocità verticale durante l'olio
 
 interface EnvConfig {
   name: string;
@@ -136,6 +140,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private fuelCans!: Phaser.Physics.Arcade.Group;
   toxicClouds!: Phaser.Physics.Arcade.Group;
   private spitProjectiles!: Phaser.Physics.Arcade.Group; // proiettili dello Sputatore (A2)
+  private hazards!: Phaser.Physics.Arcade.Group;         // ostacoli di corsia (A1)
+  private oilUntil = 0;                                   // controllo verticale ridotto finché now < oilUntil
+  private lastHazardY = ROAD_CENTER;                      // corsia dell'ultimo hazard (bias taniche)
 
   private attachedZombies: AttachedZombie[] = [];
   private components!: Record<ComponentKey, ComponentData>;
@@ -247,6 +254,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.combo = 0; this.comboTimer = 0;
     this.dashReadyAt = 0; this.dashGraceUntil = 0;
     this.overdrive = 0; this.overdriveActiveUntil = 0; this.overdriveGlow = null;
+    this.oilUntil = 0; this.lastHazardY = ROAD_CENTER;
     this.boss = new BossController(this); // stato boss fresco + gruppi fisici (usati da buildColliders)
 
     const def = { engine: 100, wheels: 100, tank: 100, turret: 100, armor: 100 };
@@ -270,6 +278,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
     const fuelDelay = this.activeSurvivors.includes('explorer') ? 5000 : 7500;
     this.time.addEvent({ delay: fuelDelay, callback: this.spawnFuelCan, callbackScope: this, loop: true });
+    this.time.addEvent({ delay: HAZARD_SPAWN_INTERVAL, callback: this.spawnHazard, callbackScope: this, loop: true });
 
     // Audio
     const webAudio = this.sound as Phaser.Sound.WebAudioSoundManager;
@@ -435,6 +444,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.fuelCans        = this.physics.add.group();
     this.toxicClouds     = this.physics.add.group();
     this.spitProjectiles = this.physics.add.group();
+    this.hazards         = this.physics.add.group();
     // I gruppi del boss (corpo + proiettili) sono creati dal BossController in create().
   }
 
@@ -449,6 +459,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       (_v,c) => this.onVehicleHitCloud(c as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.vehicle, this.spitProjectiles,
       (_v,p) => this.onSpitHitVehicle(p as Phaser.Physics.Arcade.Sprite));
+    this.physics.add.overlap(this.vehicle, this.hazards,
+      (_v,h) => this.onHazardHit(h as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.rockets, this.zombies,
       (r,z) => this.onRocketHitZombie(r as Phaser.Physics.Arcade.Sprite, z as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.bullets, this.boss.group,
@@ -862,6 +874,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     clean(this.fuelCans,   -80,  this.designW+80);
     clean(this.toxicClouds,-80,  this.designW+80);
     clean(this.spitProjectiles, -40, this.designW+60);
+    clean(this.hazards,    -80,  this.designW+80);
     clean(this.rockets,         -20,  this.designW+60);
     clean(this.boss.projectiles, -80,  this.designW+80);
     // Bullets respect per-projectile maxX (lanciafiamme ha range breve)
@@ -1092,9 +1105,56 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private spawnFuelCan() {
     if (!this.alive || this.missionDone) return;
-    const f = this.fuelCans.create(this.designW+20, Phaser.Math.Between(ROAD_TOP+22, ROAD_BOTTOM-22), 'fuel_can') as Phaser.Physics.Arcade.Sprite;
+    // A1: ~40% delle taniche escono nella corsia di un hazard recente → "su o giù?" diventa rischio/ricompensa.
+    const y = Math.random() < 0.4
+      ? Phaser.Math.Clamp(this.lastHazardY + Phaser.Math.Between(-20, 20), ROAD_TOP + 22, ROAD_BOTTOM - 22)
+      : Phaser.Math.Between(ROAD_TOP + 22, ROAD_BOTTOM - 22);
+    const f = this.fuelCans.create(this.designW + 20, y, 'fuel_can') as Phaser.Physics.Arcade.Sprite;
     // Texture sovracampionata (OS_G) → torna a scala design; hitbox invariata (frame×scala = 22×26).
     f.setVelocityX(-SCROLL_SPEED).setDepth(6).setScale(1 / OVERSAMPLE);
+  }
+
+  // ─── Hazard di corsia (A1) ───────────────────────────────────────────────────
+  private spawnHazard() {
+    if (!this.alive || this.missionDone || this.boss.active || this.boss.defeated) return;
+    const r = Math.random();
+    const kind = r < 0.4 ? 'wreck' : r < 0.75 ? 'oil' : 'mine';
+    const y = Phaser.Math.Between(ROAD_TOP + 24, ROAD_BOTTOM - 24);
+    const h = this.hazards.create(this.designW + 30, y, `hazard_${kind}`) as Phaser.Physics.Arcade.Sprite;
+    // Texture sovracampionata (OS_G) → torna a scala design; hitbox = frame×scala (auto).
+    h.setVelocityX(-SCROLL_SPEED).setScale(1 / OVERSAMPLE).setDepth(kind === 'oil' ? 5 : 7).setData('kind', kind);
+    this.lastHazardY = y;
+  }
+
+  private onHazardHit(h: Phaser.Physics.Arcade.Sprite) {
+    if (!h.active || this.boss.defeated) return;
+    const kind = h.getData('kind') as string;
+    const hx = h.x, hy = h.y;
+    h.destroy();
+    if (kind === 'oil') {
+      // Perdita di controllo temporanea (nessun danno): la vettura "scivola" e sterza male per un istante.
+      this.oilUntil = this.time.now + OIL_SLOW_DURATION;
+      this.vehicle.setTint(0x6688aa);
+      this.time.delayedCall(180, () => { if (this.vehicle?.active && this.alive) this.vehicle.clearTint(); });
+      this.cameras.main.shake(120, 0.006);
+      this.sfx?.playImpact();
+      this.environment?.addDecal('skid', hx, hy);
+    } else if (kind === 'mine') {
+      this.dealDamage(15);
+      this.damageComponent('engine', 10);
+      Juice.lightFlash(this, hx, hy, 0xff8a33, 4);
+      this.cameras.main.shake(220, 0.014);
+      this.hitStop(40);
+      this.sfx?.playExplosion();
+      this.environment?.addDecal('scorch', hx, hy);
+    } else { // wreck
+      this.dealDamage(20);
+      this.damageComponent('armor', 15);
+      this.cameras.main.shake(240, 0.016);
+      this.hitStop(40);
+      this.sfx?.playImpact();
+      this.environment?.addDecal('debris', hx, hy);
+    }
   }
 
   private fireWeapon() {
@@ -1447,7 +1507,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private getEffectiveVerticalSpeed(): number {
     const w = 0.15 + 0.85 * (this.components.wheels.health / 100);
     const a = Math.max(0.3, 1 - this.attachedZombies.length * 0.12);
-    return 230 * this.vehicleSpeedMult * w * a;
+    const oil = this.time.now < this.oilUntil ? OIL_SLOW_MULT : 1; // A1: olio → controllo verticale ridotto
+    return 230 * this.vehicleSpeedMult * w * a * oil;
   }
 
   private getEffectiveCooldown(): number {
@@ -1494,6 +1555,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.zombies.setVelocityX(0);
     this.fuelCans.setVelocityX(0);
     this.spitProjectiles.setVelocityX(0); this.spitProjectiles.setVelocityY(0);
+    this.hazards.setVelocityX(0);
     this.clearAttachedZombies();
 
     // Record persistente (G5) + rilevamento fine-ciclo (G6): completare le 7 regioni è una "vittoria",
@@ -1556,6 +1618,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.boss.projectiles.setVelocityX(0); // niente proiettili boss sospesi sopra l'overlay (X9)
     this.boss.group.setVelocityX(0);
     this.spitProjectiles.setVelocityX(0); this.spitProjectiles.setVelocityY(0);
+    this.hazards.setVelocityX(0);
     this.clearAttachedZombies(); // niente sprite/timer orfani sul veicolo congelato (X3)
 
     this.time.delayedCall(700, () => {

@@ -316,10 +316,10 @@ Questa roadmap, da sola, **non tocca codice** → tutti i validatori restano ver
 
 | ID | Voce | Track | Stato |
 |---|---|---|---|
-| A3 | Overdrive (tasto `F`) | A | ⬜ da fare |
-| A2a | Nemico Caricatore | A | ⬜ da fare |
-| A2b | Nemico Sputatore | A | ⬜ da fare |
-| A1 | Hazard di corsia | A | ⬜ da fare |
+| A3 | Overdrive (tasto `F`) | A | ✅ fatto |
+| A2a | Nemico Caricatore | A | ✅ fatto |
+| A2b | Nemico Sputatore | A | ✅ fatto |
+| A1 | Hazard di corsia | A | ✅ fatto |
 | B1 | Nodo scelta percorso | B | ⬜ da fare |
 | B2 | Eventi in-run | B | ⬜ da fare |
 | C1 | Pattern d'attacco boss | C | ⬜ da fare |

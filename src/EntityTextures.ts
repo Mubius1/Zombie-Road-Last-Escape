@@ -1023,6 +1023,49 @@ export function buildEntityTextures(scene: Phaser.Scene) {
     g.destroy();
   }
 
+  // ── HAZARD DI CORSIA (A1) — ostacoli su strada · sovracampionati (OS_G) ──────
+  // Relitto (44×38): carcassa carbonizzata da schivare. Danno pesante al contatto.
+  {
+    const g = OS_G(44,38);
+    const ch=0x2a2622, chHi=0x44403a, chSh=0x16140f, rust=0x6a3a1e, glass=0x1a2a2e, metal=0x55555c;
+    g.fillStyle(0x000000,0.3); g.fillEllipse(22,35,40,7);                 // ombra
+    g.fillStyle(chSh); g.fillRoundedRect(3,14,38,20,4);                   // corpo
+    g.fillStyle(ch);   g.fillRoundedRect(4,15,36,17,4);
+    g.fillStyle(chHi); g.fillRect(6,16,30,2);
+    g.fillStyle(chSh); g.fillRoundedRect(12,6,20,12,3);                   // cabina sfondata
+    g.fillStyle(glass); g.fillRect(14,8,7,7); g.fillRect(23,8,7,7);
+    g.fillStyle(chHi); g.fillRect(22,6,1,12);                             // montante
+    g.fillStyle(rust,0.7); g.fillEllipse(10,24,6,4); g.fillEllipse(34,22,5,4);
+    g.fillStyle(0x111111); g.fillCircle(12,33,5); g.fillCircle(32,33,5);  // ruote
+    g.fillStyle(metal); g.fillCircle(12,33,2); g.fillCircle(32,33,2);
+    g.fillStyle(0xff5522,0.4); g.fillCircle(20,12,3);                     // brace residua
+    g.generateTexture('hazard_wreck',44,38); g.destroy();
+  }
+  // Chiazza d'olio (50×18): pozza piatta e lucida. Niente danno, ma fa perdere il controllo.
+  {
+    const g = OS_G(50,18);
+    g.fillStyle(0x000000,0.25); g.fillEllipse(25,12,46,12);
+    g.fillStyle(0x0a0a10); g.fillEllipse(25,10,44,11);
+    g.fillStyle(0x16161e); g.fillEllipse(22,9,30,7);
+    g.fillStyle(0x2a3a4a,0.6); g.fillEllipse(20,8,12,3);                  // sheen iridescente
+    g.fillStyle(0x3a2a4a,0.4); g.fillEllipse(31,10,10,2.5);
+    g.fillStyle(0x4a4a5a,0.5); g.fillEllipse(18,7,5,1.5);
+    g.generateTexture('hazard_oil',50,18); g.destroy();
+  }
+  // Mina (22×22): cupola metallica con luce rossa + spuntoni. Danno a scoppio.
+  {
+    const g = OS_G(22,22);
+    g.fillStyle(0x000000,0.3); g.fillEllipse(11,19,18,5);
+    g.fillStyle(0x3a3a42); [3,8,14,19].forEach(x=>g.fillTriangle(x,8,x+3,8,x+1.5,3)); // spuntoni
+    g.fillStyle(0x33333a); g.fillCircle(11,12,8);
+    g.fillStyle(0x55555c); g.fillCircle(11,12,6);
+    g.fillStyle(0x70707a); g.fillCircle(9,10,2.5);
+    g.fillStyle(0xff2200,0.5); g.fillCircle(11,12,4);                     // luce rossa
+    g.fillStyle(0xff3018); g.fillCircle(11,12,2);
+    g.fillStyle(0xffaa88); g.fillCircle(10.5,11.5,0.8);
+    g.generateTexture('hazard_mine',22,22); g.destroy();
+  }
+
   // ── Animazioni di camminata (ciclo 0=passo sx · 1=neutro · 2=passo dx) ──────
   const walk = (type: string, rate: number) => {
     const key = `walk_${type}`;

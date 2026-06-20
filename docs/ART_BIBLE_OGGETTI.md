@@ -47,7 +47,7 @@ I tre pilastri del titolo (coesione · game feel · rifinitura) tradotti sugli o
 | Galleria di test (veicoli a scala reale) | `src/scenes/DebugScene.ts` → `drawVehicles()` |
 | Vetrina armi/veicoli nel negozio | `src/scenes/ShopScene.ts` |
 
-**Chiavi texture:** `vehicle_<chiave>` (es. `vehicle_civilian_car`), `bullet`, `rocket`, `fuel_can`, `particle`, `toxic_cloud`.
+**Chiavi texture:** `vehicle_<chiave>` (es. `vehicle_civilian_car`), `bullet`, `rocket`, `fuel_can`, `particle`, `toxic_cloud`, `hazard_wreck`, `hazard_oil`, `hazard_mine`.
 **Chiavi VFX condivise** (in `Juice.ts`): `fx_light` (alone additivo per muzzle/bloom/luce).
 
 ---
@@ -256,6 +256,22 @@ corpo rosso — base `#cc3300`, mezzo-tono `#e23d12`, **luce alto-sinistra `#ff5
 
 ---
 
+### 4.8 bis · HAZARD DI CORSIA (A1) — *ostacoli su strada da schivare*
+**Concept:** la strada non è più vuota. Tre ostacoli scorrono col mondo e rendono la **posizione verticale** una decisione continua, indipendente dall'autofire: o li schivi (su/giù, Scatto), o paghi. Le **taniche** tendono a uscire nella corsia di un hazard recente → "su o giù?" diventa rischio/ricompensa. Tutti **sovracampionati `OS_G` 2×** (sprite a `setScale(1/OVERSAMPLE)`, hitbox = frame×scala). Texture in `buildEntityTextures()`; dimensioni validate da `npm run validate:art`.
+
+#### `hazard_wreck` · **44×38** — *relitto · ostacolo pesante*
+Carcassa carbonizzata (corpo `#2a2622` / luce `#44403a` / ombra `#16140f`, cabina sfondata con vetri `#1a2a2e`, ruggine `#6a3a1e`, ruote `#111111`, brace residua `#ff5522`). **Contatto:** danno pesante (20) + corazza −15, shake + hit-stop.
+
+#### `hazard_oil` · **50×18** — *chiazza d'olio · perdita di controllo*
+Pozza piatta e lucida (`#0a0a10` / `#16161e` con sheen iridescente `#2a3a4a` / `#3a2a4a`). A terra (depth sotto i veicoli). **Contatto:** nessun danno, ma velocità verticale ×0.5 per ~1,5 s (sterzi male).
+
+#### `hazard_mine` · **22×22** — *mina · danno a scoppio*
+Cupola metallica (`#33333a` / `#55555c` / `#70707a`) con spuntoni `#3a3a42` e **luce rossa pulsante `#ff3018`**. **Contatto:** danno (15) + motore −10, esplosione (luce/scoppio) + shake + hit-stop.
+
+> Valori di danno/cadenza **non validati a numero** (derivati/da tarare, vedi [BALANCE §5](BALANCE.md#5--nemici-)); le **dimensioni** delle texture sì. Niente danno durante la celebrazione di vittoria, come gli altri sistemi.
+
+---
+
 ### 4.9 SOPRAVVISSUTI — *token, non sprite nel mondo*
 **Concept:** i compagni a bordo. **Non** hanno uno sprite nel mondo di gioco: sono rappresentati come **token colorati** nel negozio / HUD e agiscono tramite **effetti** (alcuni dei quali *generano oggetti*).
 
@@ -358,7 +374,7 @@ I numeri e gli hex di questo documento **non devono divergere** dal codice. `npm
 | **§4.1** Veicoli | `VEHICLES` (`src/GameData.ts`) | nome · prezzo · colore (hex) |
 | **§4.1** Texture veicolo | `generateTexture(key, …)` (`GameScene.ts`) | dimensione `100×44` |
 | **§4.3** Armi | `WEAPONS` (`src/GameData.ts`) | nome · prezzo · cooldown · danno · velocità · colore (hex) · range |
-| **§4.4–§4.8** Texture oggetti | `generateTexture('…', …)` (`GameScene.ts`) | dimensione `NN×NN` di `bullet`/`rocket`/`particle`/`toxic_cloud`/`fuel_can` |
+| **§4.4–§4.8 bis** Texture oggetti | `generateTexture('…', …)` (`EntityTextures.ts`) | dimensione `NN×NN` di `bullet`/`rocket`/`particle`/`toxic_cloud`/`fuel_can`/`hazard_wreck`/`hazard_oil`/`hazard_mine` |
 
 Lo script è agganciato a `npm run build`: **se i valori divergono, la build fallisce.** Quando cambi un veicolo, un'arma o una dimensione texture, aggiorna **entrambi** (codice + scheda) e rilancia la validazione.
 
