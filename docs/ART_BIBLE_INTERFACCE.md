@@ -46,7 +46,7 @@ I tre pilastri del titolo (coesione · game feel · rifinitura) tradotti sulla U
 | **Avviso "⚠ GIGANTE!"** | `GameScene` (spawn gigante) |
 | **Overlay esito** (missione completata · game over · boss sconfitto) | `GameScene` → `missionComplete()`, `gameOver()`, sezioni boss |
 | **Negozio / garage** (header, potenziamenti, armi, sopravvissuti, veicoli) | `src/scenes/ShopScene.ts` |
-| **Impostazioni & pausa** (volume, effetti schermo, indietro/riprendi) | `src/scenes/SettingsScene.ts` |
+| **Impostazioni & pausa** (volume, effetti schermo, risoluzione, schermo intero, daltonismo, indietro/riprendi) | `src/scenes/SettingsScene.ts` |
 | **Preferenze persistenti** (volume, screenFx → localStorage) | `src/Settings.ts` |
 | **Galleria di debug** (titolo, card modelli, pulsanti test) | `src/scenes/DebugScene.ts` |
 | **Transizioni + overlay filmico** (fade, vignetta, grana, scanline, aberrazione, flash) | `src/Juice.ts` → `go`/`fadeIn`/`addOverlay`/`jitterGrain`/`flash` |
@@ -302,8 +302,8 @@ Niente icone importate: usiamo **caratteri** coerenti, sempre con lo stesso sign
 
 **Ruolo:** i momenti di pausa narrativa. Velo + scatola centrata, depth **30–31** (sopra tutto tranne il flash).
 
-- **Missione completata** (`missionComplete`): scatola `500×260` `#000000` alpha 0.9 (depth 30); titolo **"MISSIONE COMPLETATA!"** (verde-conferma); righe valore `20/16/18/15px` — Punteggio `#ffffff`, Distanza `#aaaaff` (blu-info), Monete `+N` `#ffee44` (oro), Totale `#ffcc00`; hint `"[ SPAZIO ] per il negozio"` `13px` `#555555`.
-- **Game over** (`gameOver`): scatola `440×260` `#000000` alpha 0.88 (depth 30); **"GAME OVER"** grande; **motivo** `16px` `#ffaaaa` (rosso-pericolo); Punteggio `22px` `#ffffff`; Distanza `16px` `#aaaaff`; hint `"[ SPAZIO ] per ricominciare"` `14px` `#666666`. Più "[ M ] Torna al menu".
+- **Missione completata** (`missionComplete`): scatola `500×260` `#000000` alpha 0.9 (depth 30); titolo **"MISSIONE COMPLETATA!"** `32px` bold verde-conferma `#88ff44` stroke `#006600`; righe valore `20/16/18/15px` — Punteggio `#ffffff`, Distanza `#aaaaff` (blu-info), Monete `+N` `#ffee44` (oro), Totale `#ffcc00`; hint `"[ SPAZIO ] per il negozio"` `13px` `#556677` (faint).
+- **Game over** (`gameOver`): scatola `440×260` `#000000` alpha 0.88 (depth 30); **"GAME OVER"** `50px` bold `#ff3333` stroke `#880000`; **motivo** `16px` `#ffaaaa` (rosso-pericolo); Punteggio `22px` `#ffffff`; Distanza `16px` `#aaaaff`; avviso **"Progressione azzerata — si riparte dalla Missione 1"** `12px` `#ffaa66` (il game over resetta tutto, non più silenzioso — U8); hint `"[ SPAZIO ] per ricominciare"` `14px` `#556677` (faint). Più "[ M ] Torna al menu".
 - **Boss sconfitto:** testo centrale `"BOSS SCONFITTO! +N monete"` + nascondi barra boss; lega col **flash a schermo** (`Juice.flash`) e l'hit-stop dell'uccisione boss (vedi budget `ART_BIBLE_ZOMBIES`).
 
 **Reazione:** transizione verso `ShopScene`/restart via `Juice.go` (fade). Il game over e l'uccisione boss sono accompagnati dal feedback schermo del titolo (flash/shake/hit-stop) — l'UI è l'**ultimo strato** di una risposta multisensoriale sincronizzata.
@@ -333,14 +333,17 @@ Niente icone importate: usiamo **caratteri** coerenti, sempre con lo stesso sign
 
 ### 4.6 IMPOSTAZIONI & PAUSA — `SettingsScene` · *un componente, due usi*
 
-**Ruolo:** doppio: da **MENU** è scena a sé ("◂ INDIETRO" torna al menu); da **PARTITA** (ESC) è **overlay di pausa** sopra la scena congelata ("▶ RIPRENDI" + "Esci al menu"). Gestisce **volume** ed **effetti schermo** (persistiti in `Settings`/localStorage).
+**Ruolo:** doppio: da **MENU** è scena a sé ("◂ INDIETRO" torna al menu); da **PARTITA** (ESC) è **overlay di pausa** sopra la scena congelata ("▶ RIPRENDI" + "Esci al menu"). Gestisce **volume**, **effetti schermo**, **risoluzione**, **schermo intero** e **daltonismo** (persistiti in `Settings`/localStorage).
 
 **Layout (modale centrato):**
-- Velo `0x080810` (alpha 0.8 in pausa, 1 da menu) + scatola `540×380` `0x0e0e1a` (alpha 0.96 in pausa) bordo `0x222244`.
-- In pausa, sopra: `❚❚ PAUSA` `15px` bold `#667799`. Titolo **"IMPOSTAZIONI"** `34px` bold `#9ab6ff`.
+- Velo `0x080810` (alpha 0.8 in pausa, 1 da menu) + scatola `540×480` `0x0e0e1a` (alpha 0.96 in pausa) bordo `0x222244`.
+- In pausa, sopra: `❚❚ PAUSA · ESC per riprendere` `13px` bold `#9ab6ff`. Titolo **"IMPOSTAZIONI"** `34px` bold `#9ab6ff`.
 - **VOLUME AUDIO** (label `15px` bold `#ffcc44`): **barra a 10 celle** `38×30` (fondo `0x1a1a24`, bordo `0x33344a`); celle accese `0x3acb3a` (verde), spente `0x1a1a24`; etichetta `%`/"Muto" a destra `#dddddd`; **🔇 Muto** `14px` `#888899` (→ `#ff6666` quando attivo). Click su una cella imposta il volume e **suona un'anteprima**.
 - **EFFETTI SCHERMO** (label `15px` bold `#88ddff`, sub `"Vignetta · grana · scanline CRT"` `11px` `#556677`): toggle `130×38` — ON `0x16301a` bordo `0x44cc44` testo `ATTIVI #88ff88`; OFF `0x301616` bordo `0x995544` testo `DISATTIVI #ffaa88`. Il toggle fa `scene.restart` per riapplicare/rimuovere l'overlay all'istante.
-- **Indietro/Riprendi** (basso): box `220×46` `0x14141f` bordo `0x88aaff`, testo `20px` bold `#9ab6ff` (`▶ RIPRENDI` o `◂ INDIETRO`). In pausa, sotto: "Esci al menu principale" `12px` `#886677` (→ `#ffaaaa` hover).
+- **RISOLUZIONE** (label `15px` bold `#ffaa00`): valore/aspetto al centro con frecce `◂ ▸` (`24px` `#9ab6ff`) per ciclare i preset; in pausa è di sola lettura (si cambia dal menu).
+- **SCHERMO INTERO** (label `15px` bold `#88ddff`): toggle `130×38` ON/OFF (`ATTIVO`/`ATTIVA`); l'attivazione effettiva richiede il click (vincolo browser).
+- **DALTONISMO** (label `15px` bold `#88ddff`, sub `"Barre di stato blu/giallo (no rosso↔verde)"`): toggle `130×38` ON/OFF — quando attivo le barre HP/componenti dell'HUD usano una palette daltonico-safe (vedi `Settings.colorblind`).
+- **Indietro/Riprendi** (basso): box `240×46` `0x14141f` bordo `0x88aaff`, testo `20px` bold `#9ab6ff` (`▶ RIPRENDI · ESC` o `◂ INDIETRO`). In pausa, sotto: "Esci al menu principale" `12px` `#886677` (→ `#ffaaaa` hover).
 
 **Reazione:** hover su tutti i pulsanti (cambio fill/colore); ESC = indietro/riprendi; **anteprima sonora** al cambio volume (`playPreview` riproduce `playZombieKill` al volume scelto). Da menu: `Juice.fadeIn` + overlay filmico opzionale.
 
@@ -414,7 +417,7 @@ Niente icone importate: usiamo **caratteri** coerenti, sempre con lo stesso sign
 2. **Palette funzionale** a 6 ruoli applicata ovunque; stati (comprabile/posseduto/equipaggiato/bloccato, salute a soglie) leggibili dal colore.
 3. **Overlay filmico opzionale** (`Juice.addOverlay` + `jitterGrain`) gated da `Settings.screenFx`; **transizioni in dissolvenza** (`Juice.fadeIn`/`go`) su Menu/Settings + esiti di GameScene.
 4. **HUD** con barre a soglie, percorso, 5 componenti color-codati, barra boss, banner ambiente, avvisi, depth coerente.
-5. **Impostazioni persistenti** (`Settings.ts` → localStorage): volume (barra 10 segmenti + anteprima sonora) ed effetti schermo.
+5. **Impostazioni persistenti** (`Settings.ts` → localStorage): volume (barra 10 segmenti + anteprima sonora), effetti schermo, risoluzione, schermo intero e **daltonismo** (palette barre di stato).
 6. **Negozio** con 4 regioni, swatch che **citano** i colori-dato di `GameData` (no duplicazione palette).
 7. **Modulo chrome condiviso** [`src/Ui.ts`](../src/Ui.ts) — `FONT` esplicito, palette canonica `UI.*`, helper `Ui.text`/`panel`/`button`/`enter`. Tutte e 5 le scene vi sono migrate (`npx tsc --noEmit` pulito · `npm run build` verde).
 

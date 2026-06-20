@@ -433,6 +433,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       ownedWeapons: this.ownedWeapons,
       currentWeapon: this.currentWeapon,
       debugGod: this.debugGod,
+      onSelectWeapon: (k) => this.selectWeapon(k), // selettore HUD cliccabile (U3)
     });
   }
 
@@ -1258,9 +1259,11 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       }).setOrigin(0.5).setDepth(31);
       Ui.text(this, cx,cy-28,reason,{fontSize:'16px',color:UI.redSoft}).setOrigin(0.5).setDepth(31);
       Ui.text(this, cx,cy+10,`Punteggio: ${this.score}`,{fontSize:'22px',color:UI.white}).setOrigin(0.5).setDepth(31);
-      Ui.text(this, cx,cy+44,`Distanza: ${Math.floor(this.distance/100)} km`,{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
-      Ui.text(this, cx,cy+78,'[ SPAZIO ] per ricominciare',{fontSize:'14px',color:UI.faint}).setOrigin(0.5).setDepth(31);
-      this.addMenuReturn(cx, cy+104);
+      Ui.text(this, cx,cy+42,`Distanza: ${Math.floor(this.distance/100)} km`,{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
+      // Comunica che il game over azzera tutto il progresso (prima era silenzioso — U8).
+      Ui.text(this, cx,cy+68,'Progressione azzerata — si riparte dalla Missione 1',{fontSize:'12px',color:UI.amberSoft}).setOrigin(0.5).setDepth(31);
+      Ui.text(this, cx,cy+92,'[ SPAZIO ] per ricominciare',{fontSize:'14px',color:UI.faint}).setOrigin(0.5).setDepth(31);
+      this.addMenuReturn(cx, cy+116);
       this.input.keyboard?.once('keydown-M', () => Juice.go(this, 'MenuScene'));
     });
   }

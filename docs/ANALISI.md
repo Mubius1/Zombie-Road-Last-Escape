@@ -47,8 +47,27 @@
 
 `GameScene` resta l'orchestratore del game-loop + sistemi core (veicolo, mondo, spawn, collisioni, combo, scatto, carburante, sopravvissuti, missione/game over). I dati (`ZOMBIE_STATS`/`BOSS_CONFIG`/…) restano in GameScene (letti dai validatori lì).
 
-**Ancora aperti (principali):** QW1 sparo automatico (decisione di design); big bet *difficoltà late-game*, *object pooling*, *touch/pointer*, *fasi boss*, *meta-progressione + CI*; vari finding UI/UX (U1–U12) e game-design (G1–G10).
 > ⚠️ La decomposizione è un refactor sensibile al comportamento: il build verifica solo la compilazione, **non** il runtime. Consigliato un playtest (in particolare uno scontro col boss e un game over/restart) prima del commit.
+
+**Round 4 — UI/UX (11 finding)**
+
+| Finding | Intervento | File |
+|---|---|---|
+| **U1** | HUD: blocco di destra (missione/arma/selettore) ancorato a `designW` → in 16:9 si distribuisce invece di addensarsi | `HudController.ts` |
+| **U3** | Selettore armi HUD cliccabile (callback → `selectWeapon`) | `HudController.ts`, `GameScene.ts` |
+| **U4** | Floor tipografici alzati: HUD `/ N km` 10px; negozio nomi 8→10px, prezzi/stato 9→11px | `HudController.ts`, `ShopScene.ts` |
+| **U5** | % salute sovrapposta alla barra (ridondanza) + toggle **DALTONISMO** in Impostazioni → palette barre blu/giallo (`Settings.colorblind`) | `HudController.ts`, `SettingsScene.ts`, `Settings.ts` |
+| **U6** | Card potenziamento non acquistabili: marker `🔒 + manca N★` + feedback al click (suono + lampo rosso sul contatore) | `ShopScene.ts` |
+| **U7** | Feedback acquisti: suono + "pop" del contatore monete prima del refresh | `ShopScene.ts` (`SoundManager` statico riusato → no leak master) |
+| **U8** | Game over comunica "Progressione azzerata — si riparte dalla Missione 1" | `GameScene.ts` |
+| **U9** | Pausa: etichetta `PAUSA` leggibile (blu) + "ESC per riprendere" sul pulsante RIPRENDI | `SettingsScene.ts` |
+| **U10** | `ART_BIBLE_INTERFACCE` allineata al codice (pannello 540×480, righe risoluzione/schermo intero/daltonismo, titoli esito 32/50px + stroke) | `docs/ART_BIBLE_INTERFACCE.md` |
+| **U11** | Hint comandi HUD da `#333` (illeggibile) a `UI.faint` | `HudController.ts` |
+| **U12** | Menu: voce **CONTINUA** se c'è una corsa in corso (verde, primaria) + avviso "azzera il progresso" su NUOVA PARTITA; INVIO continua se c'è progresso | `MenuScene.ts` |
+
+Resta aperto in UI/UX solo **U2** (controlli touch/pointer — big bet). `npm run build` verde (47 token UI ancora validati: la palette daltonico-safe vive in `HudController`, non nei token `UI`).
+
+**Ancora aperti (principali):** QW1 sparo automatico (decisione di design); big bet *difficoltà late-game*, *object pooling*, *touch/pointer (U2)*, *fasi boss*, *meta-progressione + CI*; finding di game-design (G1–G10), performance (P1/P3–P6), audio (AU2–AU7), arte/VFX (V3–V7), architettura (A3–A8), bilanciamento (B3–B7), tooling (T6).
 
 > ⚠️ **Le posizioni `file:riga` nelle sezioni sottostanti sono quelle dell'audit originale**: dopo gli interventi i numeri di riga sono cambiati. Per lo stato per-finding fare riferimento a questa sezione (gli ID — `A2`, `X4`, …— restano stabili).
 
@@ -76,7 +95,7 @@ A questo si aggiunge **igiene del repository da finalizzare** (artefatti `.js` c
 | Bilanciamento & economia | discreto | 7 | 2 (B1, B2) |
 | Audio procedurale | buono | 7 | 1 (AU1) |
 | Arte procedurale & VFX / game-feel | buono | 7 | 2 (V1, V2) |
-| UI/UX, HUD & menu | buono | 12 | — |
+| UI/UX, HUD & menu | buono | 12 | 11 (U1, U3–U12) · resta U2 (touch) |
 | Bug & correttezza | discreto | 9 | **9 ✅ (tutti)** |
 | Build, tooling, docs e igiene repo | discreto | 7 | 5 (T1–T4, T7) |
 

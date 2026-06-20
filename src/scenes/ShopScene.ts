@@ -4,6 +4,7 @@ import { buildEntityTextures } from '../EntityTextures';
 import { buildVehicleTexture } from '../VehicleTextures';
 import Juice from '../Juice';
 import Settings from '../Settings';
+import SoundManager from '../SoundManager';
 import Ui, { UI, MENU_VIGNETTE } from '../Ui';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 
@@ -34,6 +35,9 @@ export default class ShopScene extends Phaser.Scene {
 
   private moneyText!: Phaser.GameObjects.Text;
   private grain: Phaser.GameObjects.TileSprite | null = null;
+  // SoundManager condiviso (statico): il negozio fa scene.restart a ogni acquisto, quindi NON va
+  // creato a ogni create() (lascerebbe un master appeso a ogni restart — cfr. AU7). Riusato.
+  private static sfx?: SoundManager;
   /** true quando la scena si ri-disegna dopo un acquisto (niente nuova dissolvenza). */
   private replay = false;
 
@@ -62,6 +66,13 @@ export default class ShopScene extends Phaser.Scene {
 
     const available = SURVIVORS.filter(s => !this.survivors.includes(s.key));
     this.offeredSurvivors = Phaser.Utils.Array.Shuffle([...available]).slice(0, 3) as SurvivorData[];
+
+    // Audio del negozio (feedback acquisti U7 / diniego U6) — istanza statica riusata fra i restart.
+    const webAudio = this.sound as Phaser.Sound.WebAudioSoundManager;
+    if (webAudio?.context) {
+      if (!ShopScene.sfx) ShopScene.sfx = new SoundManager(webAudio.context);
+      ShopScene.sfx.setVolume(Settings.volume);
+    }
 
     this.ensureTextures();
     this.drawUI();
@@ -136,10 +147,11 @@ export default class ShopScene extends Phaser.Scene {
 
       const bg = Ui.box(this, px + 220, iy + 18, 440, 42, { fill: bgColor, radius: 6, stroke: UI.stroke, strokeAlpha: 0.5 });
       if (!bought) {
-        bg.setInteractive(canAfford);
+        // Interattiva anche se non acquistabile: serve il feedback "monete insufficienti" (U6).
+        bg.setInteractive(true);
         bg.on('pointerover', () => { if (canAfford) bg.setFillStyle(0x181830); });
         bg.on('pointerout',  () => bg.setFillStyle(bgColor));
-        bg.on('pointerdown', () => { if (canAfford) this.buyItem(item); });
+        bg.on('pointerdown', () => { if (canAfford) this.buyItem(item); else this.denyPurchase(); });
       }
 
       const lc = bought ? UI.greenDim : canAfford ? UI.text : '#554444';
@@ -147,8 +159,12 @@ export default class ShopScene extends Phaser.Scene {
       Ui.text(this, px + 6, iy + 24, item.desc,  { fontSize: '10px', color: UI.faint });
       if (bought) {
         Ui.text(this, px + 432, iy + 15, '✓', { fontSize: '13px', color: UI.greenDim }).setOrigin(1, 0.5);
+      } else if (canAfford) {
+        Ui.text(this, px + 432, iy + 15, `★ ${item.cost}`, { fontSize: '13px', color: UI.gold }).setOrigin(1, 0.5);
       } else {
-        Ui.text(this, px + 432, iy + 15, `★ ${item.cost}`, { fontSize: '13px', color: canAfford ? UI.gold : '#663333' }).setOrigin(1, 0.5);
+        // Marker esplicito di "non acquistabile" + quanto manca (U6).
+        Ui.text(this, px + 432, iy + 9,  `🔒 ★${item.cost}`,            { fontSize: '12px', color: '#aa5555' }).setOrigin(1, 0.5);
+        Ui.text(this, px + 432, iy + 26, `manca ${item.cost - this.money}★`, { fontSize: '10px', color: '#996644' }).setOrigin(1, 0.5);
       }
     });
   }
@@ -174,19 +190,19 @@ export default class ShopScene extends Phaser.Scene {
       // bullet/rocket sono texture sovracampionate (OS_G) → scala ÷OVERSAMPLE.
       this.add.image(wx + 40, py + 22, projKey)
         .setTint(w.color).setScale((key === 'rockets' ? 1.7 : 2.4) / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
-      Ui.text(this, wx + 40, py + 32, w.name, { fontSize: '8px', color: owned ? UI.text : '#444444', wordWrap: { width: 78 }, align: 'center' }).setOrigin(0.5, 0);
+      Ui.text(this, wx + 40, py + 32, w.name, { fontSize: '10px', color: owned ? UI.text : '#444444', wordWrap: { width: 78 }, align: 'center' }).setOrigin(0.5, 0);
 
       if (owned) {
         Ui.text(this, wx + 40, py + 68, selected ? '● ATTIVA' : 'Usa',
-          { fontSize: '9px', color: selected ? UI.goldDim : UI.blueUse }).setOrigin(0.5);
+          { fontSize: '10px', color: selected ? UI.goldDim : UI.blueUse }).setOrigin(0.5);
         if (!selected) {
           bg.on('pointerover',  () => bg.setFillStyle(0x1a1400));
           bg.on('pointerout',   () => bg.setFillStyle(bgColor));
           bg.on('pointerdown',  () => this.selectWeapon(key));
         }
       } else {
-        Ui.text(this, wx + 40, py + 56, `★${w.price}`, { fontSize: '10px', color: canBuy ? UI.gold : '#443333' }).setOrigin(0.5);
-        Ui.text(this, wx + 40, py + 70, canBuy ? 'COMPRA' : '🔒', { fontSize: '9px', color: canBuy ? UI.amber : UI.disabled }).setOrigin(0.5);
+        Ui.text(this, wx + 40, py + 56, `★${w.price}`, { fontSize: '11px', color: canBuy ? UI.gold : '#443333' }).setOrigin(0.5);
+        Ui.text(this, wx + 40, py + 70, canBuy ? 'COMPRA' : '🔒', { fontSize: '11px', color: canBuy ? UI.amber : UI.disabled }).setOrigin(0.5);
         if (canBuy) {
           bg.on('pointerover',  () => bg.setFillStyle(0x1a1000));
           bg.on('pointerout',   () => bg.setFillStyle(bgColor));
@@ -197,7 +213,7 @@ export default class ShopScene extends Phaser.Scene {
 
     // Descrizione arma attiva
     Ui.text(this, px, py + 92, `▸ ${WEAPONS[this.currentWeapon].desc}`,
-      { fontSize: '10px', color: '#888866' });
+      { fontSize: '11px', color: '#888866' });
   }
 
   // ─── Survivors panel (right) ─────────────────────────────────────────────────
@@ -261,7 +277,7 @@ export default class ShopScene extends Phaser.Scene {
       // Anteprima reale: lo sprite del veicolo (sbiadito se non posseduto)
       this.add.image(vx + 50, py + 30, `vehicle_${key}`).setScale(0.7 / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
       Ui.text(this, vx + 50, py + 50, v.name, {
-        fontSize: '8px', color: owned ? UI.text : '#444444', wordWrap: { width: 100 }, align: 'center',
+        fontSize: '10px', color: owned ? UI.text : '#444444', wordWrap: { width: 100 }, align: 'center',
       }).setOrigin(0.5, 0);
 
       if (owned) {
@@ -276,7 +292,7 @@ export default class ShopScene extends Phaser.Scene {
         Ui.text(this, vx + 50, py + 74, `★ ${v.price}`,
           { fontSize: '11px', color: canBuy ? UI.gold : '#444444' }).setOrigin(0.5);
         Ui.text(this, vx + 50, py + 92, canBuy ? 'COMPRA' : 'BLOCCATO',
-          { fontSize: '9px', color: canBuy ? UI.amber : UI.disabled }).setOrigin(0.5);
+          { fontSize: '10px', color: canBuy ? UI.amber : UI.disabled }).setOrigin(0.5);
         if (canBuy) {
           bg.on('pointerover',  () => bg.setFillStyle(0x141420));
           bg.on('pointerout',   () => bg.setFillStyle(bgColor));
@@ -308,13 +324,14 @@ export default class ShopScene extends Phaser.Scene {
       (this.upgrades as Record<string,boolean>)[item.key] = true;
       this.registry.set('upgrades', { ...this.upgrades });
     }
-    this.refresh();
+    this.afterPurchase();
   }
 
   private recruitSurvivor(key: string) {
     if (this.survivors.includes(key)) return;
     this.registry.set('survivors', [...this.survivors, key]);
-    this.refresh();
+    ShopScene.sfx?.playFuelPickup();
+    this.time.delayedCall(150, () => this.refresh());
   }
 
   private selectVehicle(key: string) {
@@ -330,7 +347,7 @@ export default class ShopScene extends Phaser.Scene {
     this.registry.set('money', this.money);
     this.registry.set('ownedVehicles', newOwned);
     this.registry.set('vehicle', key);
-    this.refresh();
+    this.afterPurchase();
   }
 
   private selectWeapon(key: WeaponType) {
@@ -346,7 +363,25 @@ export default class ShopScene extends Phaser.Scene {
     this.registry.set('money', this.money);
     this.registry.set('ownedWeapons', newOwned);
     this.registry.set('currentWeapon', key);
-    this.refresh();
+    this.afterPurchase();
+  }
+
+  /** Feedback positivo all'acquisto (U7): suono + "pop" del contatore monete, poi ri-disegna. */
+  private afterPurchase() {
+    ShopScene.sfx?.playFuelPickup();
+    this.moneyText.setText(`★ ${this.money} monete`);
+    this.tweens.killTweensOf(this.moneyText);
+    this.moneyText.setScale(1.25);
+    this.tweens.add({ targets: this.moneyText, scale: 1, duration: 180 });
+    this.time.delayedCall(160, () => this.refresh());
+  }
+
+  /** Feedback negativo (U6): monete insufficienti → suono + lampo rosso sul contatore monete. */
+  private denyPurchase() {
+    ShopScene.sfx?.playImpact();
+    this.tweens.killTweensOf(this.moneyText);
+    this.moneyText.setColor(UI.red).setScale(1.12);
+    this.tweens.add({ targets: this.moneyText, scale: 1, duration: 220, onComplete: () => this.moneyText.setColor(UI.gold) });
   }
 
   private continueGame() {

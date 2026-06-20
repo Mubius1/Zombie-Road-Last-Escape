@@ -32,7 +32,7 @@ export default class MenuScene extends Phaser.Scene {
       fontSize: '12px', color: UI.ghost,
     }).setOrigin(0.5).setDepth(10);
 
-    this.input.keyboard?.on('keydown-ENTER', () => this.newGame());
+    this.input.keyboard?.on('keydown-ENTER', () => this.hasProgress() ? this.continueGame() : this.newGame());
 
     this.grain = Ui.enter(this);
   }
@@ -138,15 +138,54 @@ export default class MenuScene extends Phaser.Scene {
   // ─── Pulsanti ───────────────────────────────────────────────────────────────────
 
   private buildButtons() {
-    const nuova = Ui.button(this, this.designW / 2, 330, 340, 58, 'NUOVA PARTITA', {
-      fill: 0x13260f, hover: 0x1f3a17, border: UI.greenSig, color: UI.green,
-      fontSize: '24px', scaleOnHover: 1.04, onClick: () => this.newGame(),
-    });
-    const imp = Ui.button(this, this.designW / 2, 402, 340, 58, 'IMPOSTAZIONI', {
-      fill: 0x101826, hover: 0x1a2740, border: UI.blueLine, color: UI.blue,
-      fontSize: '24px', scaleOnHover: 1.04, onClick: () => this.openSettings(),
-    });
-    for (const b of [nuova, imp]) { b.bg.setDepth(10); b.txt.setDepth(11); }
+    const cx = this.designW / 2;
+    const prog = this.hasProgress();
+    const btns: ReturnType<typeof Ui.button>[] = [];
+
+    if (prog) {
+      // C'è una corsa in corso (uscita al menu dalla pausa): "Continua" è l'azione primaria (verde),
+      // NUOVA PARTITA è demota a secondaria con avviso che azzera tutto (U12).
+      btns.push(Ui.button(this, cx, 312, 340, 54, 'CONTINUA', {
+        fill: 0x13260f, hover: 0x1f3a17, border: UI.greenSig, color: UI.green,
+        fontSize: '24px', scaleOnHover: 1.04, onClick: () => this.continueGame(),
+      }));
+      btns.push(Ui.button(this, cx, 378, 340, 50, 'NUOVA PARTITA', {
+        fill: 0x101826, hover: 0x1a2740, border: UI.blueLine, color: UI.blue,
+        fontSize: '20px', scaleOnHover: 1.04, onClick: () => this.newGame(),
+      }));
+      Ui.text(this, cx, 408, 'azzera il progresso attuale', { fontSize: '11px', color: UI.faint })
+        .setOrigin(0.5).setDepth(11);
+      btns.push(Ui.button(this, cx, 446, 340, 50, 'IMPOSTAZIONI', {
+        fill: 0x101826, hover: 0x1a2740, border: UI.blueLine, color: UI.blue,
+        fontSize: '20px', scaleOnHover: 1.04, onClick: () => this.openSettings(),
+      }));
+    } else {
+      btns.push(Ui.button(this, cx, 330, 340, 58, 'NUOVA PARTITA', {
+        fill: 0x13260f, hover: 0x1f3a17, border: UI.greenSig, color: UI.green,
+        fontSize: '24px', scaleOnHover: 1.04, onClick: () => this.newGame(),
+      }));
+      btns.push(Ui.button(this, cx, 402, 340, 58, 'IMPOSTAZIONI', {
+        fill: 0x101826, hover: 0x1a2740, border: UI.blueLine, color: UI.blue,
+        fontSize: '24px', scaleOnHover: 1.04, onClick: () => this.openSettings(),
+      }));
+    }
+    for (const b of btns) { b.bg.setDepth(10); b.txt.setDepth(11); }
+  }
+
+  /** Una corsa è in corso se il registry ha stato oltre i default (es. uscita al menu dalla pausa). */
+  private hasProgress(): boolean {
+    const mn = this.registry.get('missionNumber');
+    if (typeof mn !== 'number') return false;
+    return mn > 1
+      || (this.registry.get('money') ?? 0) > 0
+      || ((this.registry.get('survivors') as string[] | null)?.length ?? 0) > 0
+      || ((this.registry.get('ownedWeapons') as string[] | null)?.length ?? 1) > 1
+      || ((this.registry.get('ownedVehicles') as string[] | null)?.length ?? 1) > 1
+      || this.registry.get('components') != null;
+  }
+
+  private continueGame() {
+    Juice.go(this, 'GameScene');
   }
 
   // ─── Azioni ───────────────────────────────────────────────────────────────────

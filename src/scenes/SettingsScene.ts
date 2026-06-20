@@ -46,16 +46,20 @@ export default class SettingsScene extends Phaser.Scene {
     });
 
     if (inGame) {
-      Ui.text(this, this.designW / 2, H / 2 - 218, '❚❚  PAUSA', { fontSize: '15px', fontStyle: 'bold', color: UI.faint }).setOrigin(0.5);
+      // Etichetta PAUSA leggibile (era UI.faint, troppo spenta) + scorciatoia ESC esplicita (U9).
+      Ui.text(this, this.designW / 2, H / 2 - 218, '❚❚  PAUSA  ·  ESC per riprendere', {
+        fontSize: '13px', fontStyle: 'bold', color: UI.blue,
+      }).setOrigin(0.5);
     }
     Ui.text(this, this.designW / 2, H / 2 - 196, 'IMPOSTAZIONI', {
       fontSize: '34px', fontStyle: 'bold', color: UI.blue,
     }).setOrigin(0.5);
 
-    this.buildVolume(H / 2 - 120);
-    this.buildScreenFx(H / 2 - 40);
-    this.buildResolution(H / 2 + 40, inGame);
-    this.buildFullscreen(H / 2 + 110);
+    this.buildVolume(H / 2 - 124);
+    this.buildScreenFx(H / 2 - 48);
+    this.buildResolution(H / 2 + 18, inGame);
+    this.buildFullscreen(H / 2 + 84);
+    this.buildColorblind(H / 2 + 150);
     this.buildBack(inGame);
 
     // L'overlay filmico proprio serve solo a scena piena (dal menu);
@@ -213,11 +217,39 @@ export default class SettingsScene extends Phaser.Scene {
     });
   }
 
+  // ─── Daltonismo (U5) ───────────────────────────────────────────────────────────
+
+  private buildColorblind(y: number) {
+    const cx = this.designW / 2;
+    Ui.text(this, cx - 230, y - 12, 'DALTONISMO', { fontSize: '15px', fontStyle: 'bold', color: UI.cyan });
+    Ui.text(this, cx - 230, y + 8, 'Barre di stato blu/giallo (no rosso↔verde)', { fontSize: '11px', color: UI.faint });
+
+    const draw = (on: boolean) => ({ fill: on ? 0x16301a : 0x222238, stroke: on ? UI.hpHigh : UI.blueLine });
+    let on = Settings.colorblind;
+    const d = draw(on);
+    const btn = this.add.rectangle(cx + 190, y + 2, 130, 38, d.fill)
+      .setStrokeStyle(2, d.stroke, 0.8)
+      .setInteractive({ useHandCursor: true });
+    const lbl = Ui.text(this, cx + 190, y + 2, on ? 'ATTIVO' : 'DISATTIVO', {
+      fontSize: '15px', fontStyle: 'bold', color: on ? UI.greenSoft : UI.blue,
+    }).setOrigin(0.5);
+
+    btn.on('pointerover', () => btn.setFillStyle(Settings.colorblind ? 0x1d3d22 : 0x2c2c48));
+    btn.on('pointerout',  () => btn.setFillStyle(Settings.colorblind ? 0x16301a : 0x222238));
+    btn.on('pointerdown', () => {
+      on = !Settings.colorblind;
+      Settings.colorblind = on;
+      const nd = draw(on);
+      btn.setFillStyle(nd.fill).setStrokeStyle(2, nd.stroke, 0.8);
+      lbl.setText(on ? 'ATTIVO' : 'DISATTIVO').setColor(on ? UI.greenSoft : UI.blue);
+    });
+  }
+
   // ─── Indietro / Riprendi ──────────────────────────────────────────────────────
 
   private buildBack(inGame: boolean) {
     const by = H - 64;
-    Ui.button(this, this.designW / 2, by, 220, 46, inGame ? '▶  RIPRENDI' : '◂  INDIETRO', {
+    Ui.button(this, this.designW / 2, by, 240, 46, inGame ? '▶  RIPRENDI  ·  ESC' : '◂  INDIETRO', {
       fill: 0x14141f, hover: 0x1d1d2e, border: UI.blueLine, color: UI.blue,
       onClick: () => this.goBack(),
     });

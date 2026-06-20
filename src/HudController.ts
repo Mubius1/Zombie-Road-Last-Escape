@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import Ui, { UI } from './Ui';
+import Settings from './Settings';
 import { WEAPONS, WEAPON_KEYS, WeaponType } from './GameData';
 import type { ComponentKey, ComponentData } from './scenes/GameScene';
 
@@ -9,6 +10,12 @@ const COMBO_COLORS = [UI.muted, UI.gold, UI.amber, UI.redText, UI.red];
 // Riga HUD della modalità debug (G).
 const GOD_HUD = '◆ GOD MODE  (G off · B boss · N fine · H ripara)';
 
+// Palette daltonico-safe (blu/giallo/arancio: distinguibili per protan/deutan, dove rosso↔verde
+// si confondono) usata per le barre di stato quando `Settings.colorblind` è attivo (U5). La % numerica
+// sulle barre resta sempre come ridondanza non cromatica.
+const CB_HP   = { low: 0xff7a2a, mid: 0xffd23a, high: 0x3a9bff };
+const CB_COMP = { zero: 0x552200, low: 0xff7a2a, mid: 0xffd23a, base: 0x3a9bff };
+
 export interface HudBuildOpts {
   missionNum: number;
   missionDist: number;
@@ -17,6 +24,8 @@ export interface HudBuildOpts {
   ownedWeapons: WeaponType[];
   currentWeapon: WeaponType;
   debugGod: boolean;
+  /** Callback per il cambio arma da click sul selettore HUD (U3). */
+  onSelectWeapon: (key: WeaponType) => void;
 }
 
 export interface HudState {
@@ -39,8 +48,11 @@ export default class HudController {
   private scene: Phaser.Scene;
   private designW: number;
   private missionDist = 1;
+  private onSelectWeapon: (key: WeaponType) => void = () => {};
+  private currentWeaponKey: WeaponType = 'mg';
 
   private healthFill!: Phaser.GameObjects.Rectangle;
+  private healthNum!: Phaser.GameObjects.Text;
   private fuelFill!: Phaser.GameObjects.Rectangle;
   private distFill!: Phaser.GameObjects.Rectangle;
   private scoreTxt!: Phaser.GameObjects.Text;
@@ -52,7 +64,7 @@ export default class HudController {
   private dashTxt!: Phaser.GameObjects.Text;
   private debugTxt!: Phaser.GameObjects.Text;
   private weaponSlots: { key: WeaponType; txt: Phaser.GameObjects.Text }[] = [];
-  private cache = { score: -1, km: -1, fuel: -1, attached: -1, combo: '', dash: '' };
+  private cache = { score: -1, km: -1, fuel: -1, health: -1, attached: -1, combo: '', dash: '' };
 
   constructor(scene: Phaser.Scene, designW: number) {
     this.scene = scene;
@@ -61,10 +73,14 @@ export default class HudController {
 
   build(o: HudBuildOpts) {
     this.missionDist = o.missionDist;
+    this.onSelectWeapon = o.onSelectWeapon;
     // I Text vengono (ri)creati a ogni build: azzera la cache così il primo update li popola.
-    this.cache = { score: -1, km: -1, fuel: -1, attached: -1, combo: '', dash: '' };
+    this.cache = { score: -1, km: -1, fuel: -1, health: -1, attached: -1, combo: '', dash: '' };
     const s = this.scene, dW = this.designW;
     const D = 20, BAR_W = 110, COMP_BAR_W = 120;
+    // Blocco di destra ancorato a dW: in 4:3 (dW=800) coincide con i vecchi 620/700; in 16:9 si
+    // sposta verso destra invece di addensarsi a sinistra (U1). Lo score/combo/percorso restano a sx.
+    const rxMiss = dW - 180, rxAtt = dW - 100;
     const panel = s.add.graphics().setDepth(D);
     panel.fillStyle(UI.black, 0.62); panel.fillRoundedRect(0,0,dW,84,{ tl:0, tr:0, bl:16, br:16 });
     panel.lineStyle(1,UI.strokeDim,0.7); panel.lineBetween(0,46,dW,46);
@@ -72,6 +88,10 @@ export default class HudController {
     Ui.text(s, 8,8,'SALUTE',{fontSize:'11px',color:UI.redText}).setDepth(D+1);
     Ui.box(s, 8+BAR_W/2,34,BAR_W,10,{ fill:UI.barRed, radius:3 }).setDepth(D+1);
     this.healthFill = s.add.rectangle(8,34,BAR_W,10,UI.hpFill).setOrigin(0,0.5).setDepth(D+2);
+    // % salute sovrapposta alla barra: ridondanza non cromatica (U5, accessibilità daltonismo).
+    this.healthNum = Ui.text(s, 8+BAR_W/2, 34, '', {
+      fontSize:'9px', color:UI.white, stroke:'#000000', strokeThickness:2,
+    }).setOrigin(0.5).setDepth(D+3);
 
     Ui.text(s, 138,8,'CARBURANTE',{fontSize:'11px',color:UI.amberSoft}).setDepth(D+1);
     Ui.box(s, 138+BAR_W/2,34,BAR_W,10,{ fill:UI.barAmber, radius:3 }).setDepth(D+1);
@@ -84,17 +104,23 @@ export default class HudController {
     this.fuelNum  = Ui.text(s, 255,28,'',{fontSize:'11px',color:UI.amberSoft}).setDepth(D+2);
 
     this.scoreTxt    = Ui.text(s, 290,6,'PUNTEGGIO: 0',{fontSize:'13px',color:UI.white}).setDepth(D+1);
-    Ui.text(s, 620,6,`MISS.${o.missionNum}`,{fontSize:'12px',color:UI.greenSoft}).setDepth(D+1);
-    this.attachedTxt = Ui.text(s, 700,6,'',{fontSize:'11px',color:'#ff8800'}).setDepth(D+1);
-    this.weaponTxt   = Ui.text(s, 620,22,'',{fontSize:'10px',color:'#ffaa44'}).setDepth(D+1);
+    Ui.text(s, rxMiss,6,`MISS.${o.missionNum}`,{fontSize:'12px',color:UI.greenSoft}).setDepth(D+1);
+    this.attachedTxt = Ui.text(s, rxAtt,6,'',{fontSize:'11px',color:'#ff8800'}).setDepth(D+1);
+    this.weaponTxt   = Ui.text(s, rxMiss,22,'',{fontSize:'10px',color:'#ffaa44'}).setDepth(D+1);
     this.comboTxt    = Ui.text(s, 470,6,'',{fontSize:'13px',fontStyle:'bold',color:UI.gold}).setDepth(D+1).setVisible(false);
     this.dashTxt     = Ui.text(s, dW-10,22,'↯ SCATTO',{fontSize:'11px',fontStyle:'bold',color:UI.greenOk}).setOrigin(1,0).setDepth(D+1);
-    // Selettore armi: una cifra-hotkey per ogni arma posseduta (la selezionata in oro)
+    // Selettore armi: una cifra-hotkey per ogni arma posseduta (selezionata in oro), cliccabile (U3).
     this.weaponSlots = [];
-    let wsx = 620;
+    let wsx = rxMiss;
     WEAPON_KEYS.forEach((wk, i) => {
       if (!o.ownedWeapons.includes(wk)) return;
       const t = Ui.text(s, wsx,34,`${i+1}`,{fontSize:'11px',fontStyle:'bold',color:UI.muted}).setDepth(D+1);
+      // Area cliccabile più ampia della singola cifra (target comodo a mouse).
+      t.setInteractive(new Phaser.Geom.Rectangle(-3, -1, 14, 16), Phaser.Geom.Rectangle.Contains);
+      if (t.input) t.input.cursor = 'pointer';
+      t.on('pointerover', () => t.setColor(UI.white));
+      t.on('pointerout',  () => t.setColor(wk === this.currentWeaponKey ? UI.gold : UI.muted));
+      t.on('pointerdown', () => this.onSelectWeapon(wk));
       this.weaponSlots.push({ key: wk, txt: t });
       wsx += 16;
     });
@@ -108,7 +134,7 @@ export default class HudController {
     Ui.box(s, 290+DIST_BAR_W/2,37,DIST_BAR_W,7,{ fill:UI.barBlue, radius:2 }).setDepth(D+1);
     this.distFill = s.add.rectangle(290,37,DIST_BAR_W,7,UI.distBar).setOrigin(0,0.5).setDepth(D+2);
     // label meta (static)
-    Ui.text(s, 408,33,`/ ${DIST_KM} km`,{fontSize:'9px',color:UI.faint}).setDepth(D+1);
+    Ui.text(s, 408,33,`/ ${DIST_KM} km`,{fontSize:'10px',color:UI.faint}).setDepth(D+1);
 
     // Survivors icons
     if (o.activeSurvivors.length > 0) {
@@ -127,22 +153,26 @@ export default class HudController {
       comp.fill = fill;
     });
 
-    Ui.text(s, dW/2,H-6,'↑↓ Muovi · SPAZIO Spara · 1-5/Q Arma · SHIFT Scatto',{fontSize:'11px',color:UI.disabled}).setOrigin(0.5,1).setDepth(D);
+    // Hint comandi: leggibile (U11). Prima era UI.disabled (#333) su pannello quasi nero → illeggibile.
+    Ui.text(s, dW/2,H-6,'↑↓ Muovi · SPAZIO Spara · 1-5/Q Arma · SHIFT Scatto',{fontSize:'11px',color:UI.faint}).setOrigin(0.5,1).setDepth(D);
     Ui.text(s, 4,H-6,'0=Debug',{fontSize:'9px',color:'#2a3a2a'}).setOrigin(0,1).setDepth(D);
     this.debugTxt = Ui.text(s, dW-6,H-6, o.debugGod ? GOD_HUD : '', {fontSize:'10px',color:'#00ff88',fontStyle:'bold'}).setOrigin(1,1).setDepth(D+5);
   }
 
   update(o: HudState) {
+    const cb = Settings.colorblind;
     // Barre: economiche (displayWidth/setFillStyle), restano per-frame.
     const hpPct = o.health / o.maxHealth;
     this.healthFill.displayWidth = Math.max(0, hpPct * 110);
-    this.healthFill.setFillStyle(hpPct < 0.3 ? UI.hpLow : hpPct < 0.6 ? UI.hpMid : UI.hpHigh);
+    this.healthFill.setFillStyle(hpPct < 0.3 ? (cb?CB_HP.low:UI.hpLow) : hpPct < 0.6 ? (cb?CB_HP.mid:UI.hpMid) : (cb?CB_HP.high:UI.hpHigh));
     this.fuelFill.displayWidth = Math.max(0, (o.fuel / o.maxFuel) * 110);
     const distPct = Math.min(1, o.distance / this.missionDist);
     this.distFill.displayWidth = Math.max(1, distPct * 110);
     this.distFill.setFillStyle(distPct > 0.8 ? 0x88ff44 : distPct > 0.5 ? 0x44aaff : 0x4466cc);
 
     // Testi: setText solo quando il valore mostrato cambia (vedi cache).
+    const hp = Math.round(hpPct * 100);
+    if (hp !== this.cache.health)        { this.healthNum.setText(`${hp}%`);                  this.cache.health = hp; }
     const fuel = Math.round(o.fuel);
     if (fuel !== this.cache.fuel)        { this.fuelNum.setText(`${fuel}%`);                  this.cache.fuel  = fuel; }
     if (o.score !== this.cache.score)    { this.scoreTxt.setText(`PUNTEGGIO: ${o.score}`);    this.cache.score = o.score; }
@@ -179,7 +209,12 @@ export default class HudController {
       if (!comp.fill) continue;
       const pct = comp.health / 100;
       comp.fill.displayWidth = Math.max(0, pct * 120);
-      comp.fill.setFillStyle(pct<=0 ? 0x440000 : pct<0.3 ? 0xff2222 : pct<0.6 ? 0xffcc00 : comp.baseColor);
+      comp.fill.setFillStyle(
+        pct<=0   ? (cb?CB_COMP.zero:0x440000) :
+        pct<0.3  ? (cb?CB_COMP.low :0xff2222) :
+        pct<0.6  ? (cb?CB_COMP.mid :0xffcc00) :
+                   (cb?CB_COMP.base:comp.baseColor),
+      );
     }
   }
 
@@ -192,6 +227,7 @@ export default class HudController {
   }
 
   private refreshWeapon(currentWeapon: WeaponType) {
+    this.currentWeaponKey = currentWeapon;
     this.weaponTxt.setText(WEAPONS[currentWeapon].name.toUpperCase());
     for (const slot of this.weaponSlots) {
       slot.txt.setColor(slot.key === currentWeapon ? UI.gold : UI.muted);

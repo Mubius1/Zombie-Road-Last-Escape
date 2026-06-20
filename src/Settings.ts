@@ -14,10 +14,12 @@ export interface SettingsData {
   resolution: number;
   /** Preferenza schermo intero (l'attivazione effettiva richiede un click — vincolo browser). */
   fullscreen: boolean;
+  /** Modalità daltonico-safe: ricolora le barre di stato (HP/componenti) con palette blu/giallo/arancio. */
+  colorblind: boolean;
 }
 
 const STORAGE_KEY = 'zombieRoad.settings.v1';
-const DEFAULTS: SettingsData = { volume: 1, screenFx: true, resolution: 0, fullscreen: false };
+const DEFAULTS: SettingsData = { volume: 1, screenFx: true, resolution: 0, fullscreen: false, colorblind: false };
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
@@ -31,6 +33,7 @@ function loadSettings(): SettingsData {
       screenFx:   typeof p.screenFx === 'boolean'  ? p.screenFx                : DEFAULTS.screenFx,
       resolution: typeof p.resolution === 'number' ? Math.max(0, p.resolution | 0) : DEFAULTS.resolution,
       fullscreen: typeof p.fullscreen === 'boolean' ? p.fullscreen             : DEFAULTS.fullscreen,
+      colorblind: typeof p.colorblind === 'boolean' ? p.colorblind             : DEFAULTS.colorblind,
     };
   } catch {
     return { ...DEFAULTS };
@@ -51,6 +54,9 @@ export default class Settings {
 
   static get fullscreen(): boolean { return this.data.fullscreen; }
   static set fullscreen(v: boolean) { this.data.fullscreen = v; this.save(); }
+
+  static get colorblind(): boolean { return this.data.colorblind; }
+  static set colorblind(v: boolean) { this.data.colorblind = v; this.save(); }
 
   private static save() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data)); } catch { /* storage non disponibile */ }
