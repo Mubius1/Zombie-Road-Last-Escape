@@ -7,6 +7,7 @@ import Settings from '../Settings';
 import Ui, { UI } from '../Ui';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { resetRunState } from '../RunState';
+import SaveData from '../SaveData';
 import { buildEntityTextures } from '../EntityTextures';
 import { buildVehicleTexture } from '../VehicleTextures';
 import HudController from '../HudController';
@@ -159,6 +160,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private soldierTimer = 0;
   private giantTimer = 0;
   private envIndex = 0;
+  private missionNumber = 1; // numero di missione corrente (per scaling NG+ e vittoria di ciclo)
 
   private hud!: HudController;
 
@@ -178,6 +180,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private debugGod = false;
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private wKey!: Phaser.Input.Keyboard.Key;
+  private sKey!: Phaser.Input.Keyboard.Key;
   private spaceKey!: Phaser.Input.Keyboard.Key;
   private shiftKey!: Phaser.Input.Keyboard.Key;
   private cycleKey!: Phaser.Input.Keyboard.Key;
@@ -204,6 +208,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.activeSurvivors   = this.registry.get('survivors')     ?? [];
     this.upgrades          = this.registry.get('upgrades')      ?? {};
     const missionNum: number = this.registry.get('missionNumber') ?? 1;
+    this.missionNumber = missionNum;
     const savedComp        = this.registry.get('components')    ?? null;
 
     const vData = VEHICLES[this.vehicleKey];
@@ -443,6 +448,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.spaceKey = this.input.keyboard!.addKey(KC.SPACE);
     this.shiftKey = this.input.keyboard!.addKey(KC.SHIFT);
     this.cycleKey = this.input.keyboard!.addKey(KC.Q);
+    this.wKey = this.input.keyboard!.addKey(KC.W); // movimento anche con W/S (G8, come da GAME_DESIGN §2)
+    this.sKey = this.input.keyboard!.addKey(KC.S);
     this.numberKeys = [KC.ONE, KC.TWO, KC.THREE, KC.FOUR, KC.FIVE]
       .map(k => this.input.keyboard!.addKey(k));
 
@@ -478,8 +485,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     const body = this.vehicle.body as Phaser.Physics.Arcade.Body;
     body.setVelocity(0,0);
     const vSpeed = this.getEffectiveVerticalSpeed();
-    if (this.cursors.up?.isDown)   body.setVelocityY(-vSpeed);
-    if (this.cursors.down?.isDown) body.setVelocityY(vSpeed);
+    if (this.cursors.up?.isDown   || this.wKey.isDown) body.setVelocityY(-vSpeed);
+    if (this.cursors.down?.isDown || this.sKey.isDown) body.setVelocityY(vSpeed);
     this.vehicle.y = Phaser.Math.Clamp(this.vehicle.y, ROAD_TOP+22, ROAD_BOTTOM-22);
     const lean = body.velocity.y > 0 ? 4 : body.velocity.y < 0 ? -4 : 0;
     this.vehicle.angle = Phaser.Math.Linear(this.vehicle.angle, lean, 0.12);
@@ -553,7 +560,22 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   }
 
   private comboMultiplier(): number {
-    return Phaser.Math.Clamp(1 + Math.floor((this.combo - 1) / 5), 1, 5);
+    // ×5 ogni 3 kill consecutivi (era ogni 5 → x5 quasi irraggiungibile, G3). Vedi BALANCE §2.
+    return Phaser.Math.Clamp(1 + Math.floor((this.combo - 1) / 3), 1, 5);
+  }
+
+  /**
+   * Moltiplicatore di difficoltà "new game+" (G2): cresce di 0.15 a ogni ciclo completo di 7 regioni
+   * (missioni 1–7 = ×1.0, 8–14 = ×1.15, …). Scala gli HP di nemici e boss così il late-game non si
+   * appiattisce quando il giocatore è ormai forte. Vedi BALANCE §5.
+   */
+  private difficultyMult(): number {
+    return 1 + 0.15 * Math.floor((this.missionNumber - 1) / 7);
+  }
+
+  /** HP di base scalati per la difficoltà NG+ (G2). */
+  private scaledHp(base: number): number {
+    return Math.max(1, Math.round(base * this.difficultyMult()));
   }
 
   /** Aggiunge punteggio da un'uccisione applicando il moltiplicatore combo. */
@@ -566,7 +588,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private updateFuel(dt: number) {
     if (this.debugGod) { this.fuel = this.maxFuel; return; }
-    if (this.boss.defeated) return; // niente consumo durante la celebrazione di vittoria (X4: nessun game over post-vittoria)
+    // Niente consumo durante il duello col boss (mondo congelato) né la celebrazione (G7 / X4):
+    // col carburante che drena su un avanzamento fermo si poteva fare game over a metà boss.
+    if (this.boss.active || this.boss.defeated) return;
     this.fuel -= this.getEffectiveFuelDrain() * dt;
     if (this.fuel <= 0) { this.fuel = 0; this.endGame('Carburante esaurito!'); }
   }
@@ -669,7 +693,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     }
     if (this.activeSurvivors.includes('soldier')) {
       this.soldierTimer += delta;
-      if (this.soldierTimer >= 3000) {
+      if (this.soldierTimer >= 1600) { // G9: cadenza quasi raddoppiata (era 3000) → contributo reale
         this.soldierTimer = 0;
         const targetY = this.getNearestZombieY();
         this.fireAutoShot(targetY);
@@ -814,7 +838,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       const startY  = fromTop ? ROAD_TOP - 30 : ROAD_BOTTOM + 30;
       const targetY = Phaser.Math.Between(ROAD_TOP + 22, ROAD_BOTTOM - 22);
       const z = this.zombies.create(this.designW + 30, startY, 'zombie_jumper') as Phaser.Physics.Arcade.Sprite;
-      z.setScale(stats.scale / OVERSAMPLE).setData('hp', stats.hp).setData('type', 'jumper');
+      z.setScale(stats.scale / OVERSAMPLE).setData('hp', this.scaledHp(stats.hp)).setData('type', 'jumper');
       z.setData('rockPhase', Math.random() * 6.28).setData('entering', true);
       z.setVelocityX(-(stats.speed + SCROLL_SPEED)).setDepth(9).setBodySize(20,28);
       z.play('walk_jumper'); z.anims.setProgress(Math.random());
@@ -828,7 +852,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     for (let i = 0; i < count; i++) {
       const y = Phaser.Math.Clamp(baseY + i*28*(Math.random()>0.5?1:-1), ROAD_TOP+22, ROAD_BOTTOM-22);
       const z = this.zombies.create(this.designW+30+i*20, y, `zombie_${type}`) as Phaser.Physics.Arcade.Sprite;
-      z.setScale(stats.scale / OVERSAMPLE).setData('hp', stats.hp).setData('type', type);
+      z.setScale(stats.scale / OVERSAMPLE).setData('hp', this.scaledHp(stats.hp)).setData('type', type);
       z.setData('rockPhase', Math.random() * 6.28);
       z.setVelocityX(-(stats.speed + SCROLL_SPEED)).setDepth(9).setBodySize(20,28);
       z.play(`walk_${type}`); z.anims.setProgress(Math.random());
@@ -837,7 +861,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private spawnGiant() {
     const z = this.zombies.create(this.designW + 60, ROAD_CENTER, 'zombie_giant') as Phaser.Physics.Arcade.Sprite;
-    z.setScale(ZOMBIE_STATS.giant.scale / OVERSAMPLE).setData('hp', ZOMBIE_STATS.giant.hp).setData('type', 'giant');
+    z.setScale(ZOMBIE_STATS.giant.scale / OVERSAMPLE).setData('hp', this.scaledHp(ZOMBIE_STATS.giant.hp)).setData('type', 'giant');
     z.setData('rockPhase', Math.random() * 6.28);
     z.setVelocityX(-(ZOMBIE_STATS.giant.speed + SCROLL_SPEED)).setDepth(9).setBodySize(38,50);
     z.play('walk_giant'); z.anims.setProgress(Math.random());
@@ -1201,12 +1225,22 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.fuelCans.setVelocityX(0);
     this.clearAttachedZombies();
 
+    // Record persistente (G5) + rilevamento fine-ciclo (G6): completare le 7 regioni è una "vittoria",
+    // poi il gioco continua in endless+ con lo scaling NG+ (G2).
+    SaveData.record(this.missionNumber, this.score);
+    const cycleComplete = this.missionNumber % 7 === 0;
+    const cycleNum = this.missionNumber / 7;
+    if (cycleComplete) Juice.flash(this, 0xffee44, 0.35, 220);
+
     const cx = this.designW/2, cy = H/2;
-    Ui.box(this, cx,cy,500,260,{ fill:UI.black, fillAlpha:0.9, radius:16, stroke:UI.greenSig, strokeAlpha:0.45 }).setDepth(30);
-    Ui.text(this, cx,cy-95,'MISSIONE COMPLETATA!',{
-      fontSize:'32px', color:UI.green, fontStyle:'bold',
-      stroke:'#006600', strokeThickness:4,
+    Ui.box(this, cx,cy,500,260,{ fill:UI.black, fillAlpha:0.9, radius:16, stroke: cycleComplete ? 0xffcc22 : UI.greenSig, strokeAlpha:0.5 }).setDepth(30);
+    Ui.text(this, cx,cy-95, cycleComplete ? `🏆 VITTORIA · Ciclo ${cycleNum}` : 'MISSIONE COMPLETATA!',{
+      fontSize: cycleComplete ? '28px' : '32px', color: cycleComplete ? UI.gold : UI.green, fontStyle:'bold',
+      stroke: cycleComplete ? '#665500' : '#006600', strokeThickness:4,
     }).setOrigin(0.5).setDepth(31);
+    if (cycleComplete) {
+      Ui.text(this, cx,cy-66,'Hai completato le 7 regioni! Continua in endless+',{fontSize:'12px',color:UI.greenSoft}).setOrigin(0.5).setDepth(31);
+    }
     Ui.text(this, cx,cy-48,`Punteggio: ${this.score}`,{fontSize:'20px',color:UI.white}).setOrigin(0.5).setDepth(31);
     Ui.text(this, cx,cy-14,`Distanza: ${Math.floor(this.distance/100)} km`,{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
     Ui.text(this, cx,cy+20,`Monete guadagnate: +${earned}`,{fontSize:'18px',color:UI.gold}).setOrigin(0.5).setDepth(31);
@@ -1235,6 +1269,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private endGame(reason: string) {
     if (!this.alive) return;
     this.alive = false;
+
+    SaveData.record(this.missionNumber, this.score); // aggiorna il record prima dell'azzeramento (G5)
 
     // Reset tutto al game over (default centralizzati in RunState).
     resetRunState(this.registry);
@@ -1275,7 +1311,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     const z = this.zombies.create(
       x, Phaser.Math.Clamp(y, ROAD_TOP + 22, ROAD_BOTTOM - 22), `zombie_${type}`
     ) as Phaser.Physics.Arcade.Sprite;
-    z.setScale(stats.scale / OVERSAMPLE).setData('hp', stats.hp).setData('type', type);
+    z.setScale(stats.scale / OVERSAMPLE).setData('hp', this.scaledHp(stats.hp)).setData('type', type);
     z.setData('rockPhase', Math.random() * 6.28);
     z.setVelocityX(-(stats.speed + SCROLL_SPEED)).setDepth(9);
     (z.body as Phaser.Physics.Arcade.Body).setSize(20, 28);

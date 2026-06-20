@@ -57,15 +57,17 @@ Riparazioni, potenziamenti, armi, veicoli (§7–§8). I **sopravvissuti sono gr
 > **Reset alla morte.** Il game over riporta `money=0`, `missionNumber=1`, veicolo/armi/sopravvissuti/potenziamenti allo stato iniziale. Non c'è valuta meta persistente (vedi [GAME_DESIGN §12](GAME_DESIGN.md#12--domande-aperte--ganci-di-roadmap)).
 
 ### Combo → moltiplicatore di punteggio
-`mult = clamp(1 + ⌊(combo − 1)/5⌋, 1, 5)`
+`mult = clamp(1 + ⌊(combo − 1)/3⌋, 1, 5)` — accorciato da `/5` a `/3` (G3): prima il ×5 chiedeva 21 kill di fila (di fatto irraggiungibile), ora 13.
 
 | Catena (kill entro 2,5 s l'una dall'altra) | Moltiplicatore |
 |---|---|
-| 1–5 | ×1 |
-| 6–10 | ×2 |
-| 11–15 | ×3 |
-| 16–20 | ×4 |
-| 21+ | ×5 (cap) |
+| 1–3 | ×1 |
+| 4–6 | ×2 |
+| 7–9 | ×3 |
+| 10–12 | ×4 |
+| 13+ | ×5 (cap) |
+
+> L'HUD mostra il moltiplicatore (`×M`) **solo quando M>1**: a combo basse mostra `COMBO N` senza il `×1` (che sembrava un bug).
 
 ---
 
@@ -146,7 +148,13 @@ Fonte: `ZOMBIE_STATS` (velocità/HP/danno/punteggio) e `SPAWN_POOL` (peso pool).
 | 15 | 980 ms |
 | 18+ | 700 ms (pavimento) |
 
-> ⚠️ **Buco noto:** oltre la missione ~18 l'intervallo iniziale è fisso a 700 ms e HP/danno nemici **non scalano** — la difficoltà si appiattisce nel ciclo ripetuto. Candidato a scaling "new game+" (vedi GAME_DESIGN §12).
+### Scaling "new game+" (G2)
+Oltre la frequenza di spawn, da fine ciclo gli **HP** di nemici e boss crescono col numero di ciclo di regioni (1 ciclo = 7 regioni):
+
+`diffMult = 1 + 0.15 · ⌊(missione − 1)/7⌋`  → missioni 1–7 ×1.0 · 8–14 ×1.15 · 15–21 ×1.30 · …
+
+- Applicato a `setData('hp', …)` di tutti gli zombi (incl. gigante e spawn boss) e a `BOSS_CONFIG[*].hp` in `BossController` (i valori-base 🔒 in §5/§6 restano invariati: lo scaling è un fattore a runtime).
+- Danno e velocità **non** scalano (leva HP-only, più leggibile). Risolve l'appiattimento del late-game.
 
 ---
 
@@ -161,7 +169,9 @@ Fonte: `BOSS_CONFIG`. Appaiono all'82%; mentre vivi congelano l'avanzamento.
 | `armored_colossus` | Colosso Corazzato | 150 | 28 | 650 |
 | `radioactive_beast` | Bestia Radioattiva | 95 | 50 | 450 |
 
-- La sconfitta dà anche **+500 punteggio** (× combo) oltre alla ricompensa in monete.
+- La sconfitta dà **due** accrediti: la **ricompensa in monete** del boss (`reward`, accreditata subito) **più** `+500 punteggio` (× combo) che a fine missione si converte in altre monete (⌊score/8⌋). Doppio accredito voluto (G10).
+- **HP scalati col ciclo** (NG+, vedi §5): `hp_effettivo = hp · diffMult`. Gli HP base in tabella restano la baseline (ciclo 1).
+- **2ª fase sotto il 40% HP** (G4): il boss accelera gli attacchi (~1.8×) con un telegrafo visivo/sonoro ("⚠ FURIA").
 - *Coerenza:* ricompensa ∝ HP (tankiness) → il Colosso paga di più perché impegna più a lungo.
 - **Hitbox** (`bodyW`/`bodyH` in `BOSS_CONFIG`) non è una leva di bilanciamento pura: è tarata in funzione di `scaleX`/`scaleY` per tenere invariata la hitbox effettiva nel mondo → è documentata e validata lato **arte** ([art bible zombi §6.7](ART_BIBLE_ZOMBIES.md)), non qui.
 
@@ -204,7 +214,7 @@ Fonte: `SHOP_ITEMS` (`ShopScene.ts`).
 |---|---|---|
 | Meccanico | +8 salute al componente peggiore | ogni 5 s |
 | Medico | +0.3 salute | al secondo (continuo) |
-| Soldato | colpo auto verso lo zombi più vicino | ogni 3 s |
+| Soldato | colpo auto verso lo zombi più vicino | ogni 1.6 s (G9: era 3 s, contributo troppo marginale) |
 | Esploratore | taniche più frequenti (5 s vs 7,5 s) | passivo |
 
 ### Letture economiche di riferimento

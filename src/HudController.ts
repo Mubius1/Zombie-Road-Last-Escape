@@ -183,7 +183,9 @@ export default class HudController {
     // Combo
     if (o.combo >= 2) {
       const m = o.comboMult;
-      const txt = `COMBO ${o.combo}  ×${m}`;
+      // Mostra "×M" solo quando moltiplica davvero (>1): a combo basse il moltiplicatore è 1 e un
+      // "×1" sembrava un bug (G3).
+      const txt = m > 1 ? `COMBO ${o.combo}  ×${m}` : `COMBO ${o.combo}`;
       if (txt !== this.cache.combo) {
         this.comboTxt.setText(txt);
         this.comboTxt.setColor(COMBO_COLORS[m - 1] ?? UI.white);

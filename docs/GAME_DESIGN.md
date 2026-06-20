@@ -43,7 +43,7 @@ Questo documento è la **fonte di verità** del *design del gioco*: cosa fa il g
 2. **Boss** all'**82%** della distanza di missione: mentre il boss è vivo l'avanzamento si congela e gli spawn ordinari si fermano — è un duello.
 3. **Missione completata** (boss sconfitto → completamento): converti il punteggio in **monete**, salvi lo stato dei componenti, passi al **Negozio**.
 4. **Negozio** (`ShopScene` — "GARAGE"): spendi le monete in riparazioni, potenziamenti, armi, veicoli; recluti **gratis** un sopravvissuto tra 3 offerti. Poi parte la missione successiva.
-5. **Loop infinito**: regioni e boss ciclano (§3). Non esiste schermata di "vittoria finale": l'obiettivo è il **punteggio/distanza massimi** prima della morte.
+5. **Loop a cicli**: regioni e boss ciclano (§3). Completare il ciclo delle **7 regioni** dà una **vittoria di ciclo** (schermata dedicata), poi si prosegue in **endless+** con difficoltà crescente (§10). L'obiettivo di lungo termine resta il **record** di missione/punteggio (salvato, §11).
 
 ---
 
@@ -153,7 +153,7 @@ Il veicolo è definito da `VEHICLES[key]` (salute/armatura/velocità/cadenza bas
 
 - **Salute** (`100 + bonus veicolo`): a 0 → *"Veicolo distrutto!"* (game over).
 - **Carburante** (`100`, +30 con upgrade serbatoio): cala di continuo (`BASE_FUEL_DRAIN`), più in fretta se il serbatoio è danneggiato; a 0 → *"Carburante esaurito!"* (game over). Si ricarica con le **taniche** (+30) che appaiono ogni 7,5 s (ogni 5 s con l'Esploratore).
-- **Punteggio / Combo**: ogni uccisione dà punti × moltiplicatore combo. La **combo** sale a ogni kill entro 2,5 s dal precedente e moltiplica fino a **×5**. Il punteggio è la valuta-sorgente: a fine missione diventa **monete** (= ⌊punteggio/8⌋).
+- **Punteggio / Combo**: ogni uccisione dà punti × moltiplicatore combo. La **combo** sale a ogni kill entro 2,5 s dal precedente e moltiplica fino a **×5** (cap a 13 kill di fila, vedi [BALANCE §2](BALANCE.md#2--economia--flusso-delle-monete)). Il punteggio è la valuta-sorgente: a fine missione diventa **monete** (= ⌊punteggio/8⌋). Il **boss** dà inoltre una **ricompensa in monete diretta** (accreditata subito) **più** +500 punteggio — due accrediti distinti a fine missione.
 - **Monete (★)**: spese solo al Negozio. **Non** sopravvivono al game over.
 
 ---
@@ -187,7 +187,7 @@ Tra le missioni, nel **GARAGE** (`ShopScene`):
 |---|---|
 | **Meccanico** | +8 salute al componente messo peggio, ogni 5 s |
 | **Medico** | rigenera 0,3 salute/s |
-| **Soldato** | colpo automatico verso lo zombi più vicino, ogni 3 s |
+| **Soldato** | colpo automatico verso lo zombi più vicino, ogni 1,6 s |
 | **Esploratore** | taniche di carburante ogni 5 s (anziché 7,5 s) |
 
 > Prezzi, costi e curva di potere in [BALANCE.md §8](BALANCE.md#8--negozio-ed-economia).
@@ -197,25 +197,26 @@ Tra le missioni, nel **GARAGE** (`ShopScene`):
 ## §10 · Condizioni di vittoria e sconfitta
 
 - **Sconfitta (game over):** salute **o** carburante a 0. La corsa termina e **tutto si azzera** — missione torna a 1, monete a 0, niente sopravvissuti/potenziamenti, di nuovo Auto Civile con sola Mitragliatrice. È una **morte permanente della corsa** (impronta roguelike).
-- **Vittoria:** **non c'è una fine**. Il gioco è endless; la "vittoria" è il **record** di punteggio/distanza. → vedi *Domande aperte* per una possibile condizione di vittoria.
+- **Vittoria (di ciclo):** completare il **ciclo delle 7 regioni** (missione 7, 14, 21, …) mostra una schermata **"🏆 VITTORIA · Ciclo N"** e un lampo dorato; poi il gioco **continua in endless+** con lo scaling NG+ (HP nemici/boss crescenti per ciclo, vedi [BALANCE §5](BALANCE.md#5--nemici)). Non è una fine secca: è un traguardo ripetibile che dà un picco e una ragione per spingersi oltre.
+- **Record persistente:** missione più lontana e punteggio di missione massimo sono salvati in `localStorage` (`SaveData`) e mostrati nel menu — sopravvivono al game over e alla chiusura del browser.
 
 ---
 
 ## §11 · Stato persistente (registry)
 
-Lo stato della corsa vive nel `registry` di Phaser (in memoria, non su disco): `missionNumber`, `money`, `vehicle`, `ownedVehicles`, `survivors`, `upgrades`, `components`, `currentWeapon`, `ownedWeapons`, `lastScore`. Il game over li resetta; **non esiste salvataggio tra sessioni** del browser.
+Lo stato della corsa vive nel `registry` di Phaser (in memoria, non su disco): `missionNumber`, `money`, `vehicle`, `ownedVehicles`, `survivors`, `upgrades`, `components`, `currentWeapon`, `ownedWeapons`, `lastScore`. Il game over li resetta.
+
+L'**unico stato che sopravvive tra le sessioni** è il **record** (`SaveData` → localStorage): `bestMission` e `bestScore`, aggiornati a fine missione e al game over, mostrati nel menu. (Le preferenze — volume, effetti, risoluzione, daltonismo — vivono separate in `Settings`.)
 
 ---
 
 ## §12 · Domande aperte / ganci di roadmap
 
-Decisioni di design non ancora prese (candidate per `ROADMAP.md`):
-
-1. **Condizione di vittoria.** Endless puro, o un traguardo (es. completare il ciclo delle 7 regioni → "Città Finale" come boss conclusivo)?
-2. **Persistenza.** Salvare il record (e magari i veicoli sbloccati) in `localStorage`?
-3. **Curva di difficoltà oltre il ciclo.** Dopo la missione 7 le regioni si ripetono: serve uno **scaling** di HP/danno nemici per il "new game+"? (oggi cresce solo la frequenza di spawn).
-4. **Costo della morte.** Reset totale è molto punitivo: valutare una valuta meta che sopravvive (sblocchi permanenti) per dare senso alle corse perse.
-5. **Differenziazione dei boss.** Oggi differiscono per statistiche; valutare **pattern d'attacco** distinti.
+1. ✅ **Condizione di vittoria** — *implementata*: vittoria al completamento del ciclo di 7 regioni, poi endless+ (vedi §10).
+2. 🟡 **Persistenza** — *parziale*: il **record** (missione/punteggio max) è salvato in `localStorage` (`SaveData`). Lo sblocco permanente di veicoli resta da valutare.
+3. ✅ **Curva di difficoltà oltre il ciclo** — *implementata*: scaling NG+ degli HP di nemici e boss per ciclo (`diffMult`, [BALANCE §5](BALANCE.md#5--nemici)). Danno/velocità ancora costanti (leva HP-only).
+4. ⬜ **Costo della morte** — *aperta*: valutare una valuta meta che sopravvive (sblocchi permanenti) oltre al record.
+5. 🟡 **Differenziazione dei boss** — *parziale*: aggiunta una **2ª fase** sotto il 40% HP (attacchi più fitti + telegrafo). Pattern d'attacco completamente distinti per tipo restano un'estensione possibile.
 
 ---
 

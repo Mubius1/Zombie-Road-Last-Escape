@@ -52,6 +52,7 @@ export default class BossController {
   private _defeated = false; // ~2.2s di celebrazione: GameScene congela mondo e danni
   private sprite: Phaser.Physics.Arcade.Sprite | null = null;
   private maxHp = 0;
+  private phase2 = false; // true sotto il 40% HP: attacchi più frequenti (G4)
   private hudObjects: Phaser.GameObjects.GameObject[] = [];
   private hudFill?: Phaser.GameObjects.Rectangle;
 
@@ -69,11 +70,14 @@ export default class BossController {
     const host = this.host;
     this._spawned = true;
     this._active = true;
+    this.phase2 = false;
 
     const missionNum: number = host.registry.get('missionNumber') ?? 1;
     const bossType = BOSS_ORDER[(missionNum - 1) % BOSS_ORDER.length];
     const cfg = BOSS_CONFIG[bossType];
-    this.maxHp = cfg.hp;
+    // Scaling NG+ (G2): gli HP del boss crescono di 0.15 a ogni ciclo di 7 regioni, come gli zombi.
+    const diff = 1 + 0.15 * Math.floor((missionNum - 1) / 7);
+    this.maxHp = Math.round(cfg.hp * diff);
 
     // Alert
     const warn = Ui.text(host, host.designW / 2, H / 2, `⚠  ${cfg.name.toUpperCase()}  ⚠`, {
@@ -95,7 +99,7 @@ export default class BossController {
     boss.setScale(cfg.scaleX / OVERSAMPLE, cfg.scaleY / OVERSAMPLE).setDepth(12);
     boss.play(`walk_${texKey}`);
     boss.setData('bossType', bossType);
-    boss.setData('hp', cfg.hp);
+    boss.setData('hp', this.maxHp);
     const t1init = bossType === 'armored_colossus' ? 3000
                  : bossType === 'giant_worm'       ? 4000
                  : bossType === 'radioactive_beast' ? 2500
@@ -127,8 +131,9 @@ export default class BossController {
       boss.x = targetX;
     }
 
-    // Comportamento per tipo
-    let t1 = (boss.getData('timer1') as number) - delta;
+    // Comportamento per tipo. In 2ª fase (G4) il timer si scarica più in fretta → attacchi più
+    // frequenti, senza toccare i valori di reset di ogni caso.
+    let t1 = (boss.getData('timer1') as number) - delta * (this.phase2 ? 1.8 : 1);
     boss.setData('timer1', t1);
 
     switch (bossType) {
@@ -170,13 +175,30 @@ export default class BossController {
 
     boss.y = Phaser.Math.Clamp(boss.y, ROAD_TOP + 40, ROAD_BOTTOM - 40);
 
-    // Aggiorna barra HP
+    // 2ª fase sotto il 40% HP (G4): telegrafo + attacchi più fitti (vedi drain sopra).
     const hp = boss.getData('hp') as number;
+    if (!this.phase2 && hp > 0 && hp <= this.maxHp * 0.4) this.enterPhase2(boss);
+
+    // Aggiorna barra HP
     if (this.hudFill) {
       this.hudFill.displayWidth = Math.max(0, (hp / this.maxHp) * 440);
       const pct = hp / this.maxHp;
       this.hudFill.setFillStyle(pct < 0.25 ? 0xff2200 : pct < 0.55 ? 0xff8800 : 0xcc0000);
     }
+  }
+
+  /** Ingresso in 2ª fase (G4): telegrafo visivo/sonoro; gli attacchi accelerano (vedi `update`). */
+  private enterPhase2(boss: Phaser.Physics.Arcade.Sprite) {
+    this.phase2 = true;
+    const host = this.host;
+    host.cameras.main.shake(260, 0.012);
+    host.sfx?.playExplosion();
+    boss.setTintFill(0xff3030);
+    host.time.delayedCall(180, () => { if (boss.active) boss.clearTint(); });
+    const t = Ui.text(host, boss.x, boss.y - 60, '⚠ FURIA', {
+      fontSize: '20px', color: '#ff4422', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(28);
+    host.tweens.add({ targets: t, alpha: 0, y: t.y - 30, duration: 1100, onComplete: () => t.destroy() });
   }
 
   private fireProjectile(x: number, fromY: number) {

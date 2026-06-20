@@ -4,6 +4,7 @@ import Ui, { UI } from '../Ui';
 import { buildVehicleTexture } from '../VehicleTextures';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { resetRunState } from '../RunState';
+import SaveData from '../SaveData';
 
 const H = 600;
 
@@ -133,6 +134,14 @@ export default class MenuScene extends Phaser.Scene {
       fontSize: '22px', fontStyle: 'italic', color: '#7a8a55',
     }).setOrigin(0.5).setDepth(4).setAlpha(0);
     this.tweens.add({ targets: sub, alpha: 1, y: 200, duration: 500, delay: 450, ease: 'Power2' });
+
+    // Record persistente (G5): mostrato solo se è stata giocata almeno una corsa.
+    if (SaveData.bestMission > 0) {
+      Ui.text(this, this.designW / 2, 234,
+        `RECORD  ·  Missione max ${SaveData.bestMission}  ·  Punteggio max ${SaveData.bestScore}`,
+        { fontSize: '12px', color: UI.goldDim },
+      ).setOrigin(0.5).setDepth(4);
+    }
   }
 
   // ─── Pulsanti ───────────────────────────────────────────────────────────────────

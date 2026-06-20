@@ -22,7 +22,7 @@ export interface SurvivorData {
 export const SURVIVORS: SurvivorData[] = [
   { key: 'mechanic', name: 'Meccanico',   ability: 'Ripara 8hp al comp. peggiore ogni 5s', color: '#44aaff' },
   { key: 'medic',    name: 'Medico',      ability: 'Rigenera 0.3 salute al secondo',        color: '#ff6666' },
-  { key: 'soldier',  name: 'Soldato',     ability: 'Torretta auto ogni 3 secondi',          color: '#ffcc44' },
+  { key: 'soldier',  name: 'Soldato',     ability: 'Torretta auto ogni 1.6 secondi',        color: '#ffcc44' },
   { key: 'explorer', name: 'Esploratore', ability: 'Taniche appaiono ogni 5s (vs 7.5s)',    color: '#44ff88' },
 ];
 

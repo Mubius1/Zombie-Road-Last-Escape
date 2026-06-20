@@ -67,7 +67,23 @@
 
 Resta aperto in UI/UX solo **U2** (controlli touch/pointer — big bet). `npm run build` verde (47 token UI ancora validati: la palette daltonico-safe vive in `HudController`, non nei token `UI`).
 
-**Ancora aperti (principali):** QW1 sparo automatico (decisione di design); big bet *difficoltà late-game*, *object pooling*, *touch/pointer (U2)*, *fasi boss*, *meta-progressione + CI*; finding di game-design (G1–G10), performance (P1/P3–P6), audio (AU2–AU7), arte/VFX (V3–V7), architettura (A3–A8), bilanciamento (B3–B7), tooling (T6).
+**Round 5 — Game design (9 finding, G2–G10; resta solo G1)**
+
+| Finding | Intervento | File |
+|---|---|---|
+| **G2** | Scaling NG+: HP di nemici e boss × `1 + 0.15·⌊(missione−1)/7⌋` (cresce a ogni ciclo di 7 regioni). I valori-base 🔒 restano invariati (fattore a runtime) | `GameScene.ts`, `BossController.ts`, BALANCE §5/§6 |
+| **G3** | Combo: `×5` ogni **3** kill (era 5) → raggiungibile; HUD nasconde `×1` | `GameScene.ts`, `HudController.ts`, BALANCE §2 |
+| **G4** | Boss: **2ª fase** sotto il 40% HP — attacchi ~1.8× più frequenti + telegrafo "⚠ FURIA" | `BossController.ts` |
+| **G5** | **Record persistente** (`SaveData` → localStorage): missione/punteggio max, mostrati nel menu | nuovo `src/SaveData.ts`, `GameScene.ts`, `MenuScene.ts` |
+| **G6** | **Vittoria di ciclo**: completare le 7 regioni → schermata "🏆 VITTORIA · Ciclo N" + lampo, poi endless+ | `GameScene.ts`, GAME_DESIGN §10 |
+| **G7** | Niente consumo carburante durante il duello col boss (mondo congelato) | `GameScene.ts` |
+| **G8** | Movimento anche con **W/S** (come da GAME_DESIGN §2) | `GameScene.ts` |
+| **G9** | Soldato: cadenza torretta 3 s → **1,6 s** | `GameScene.ts`, `GameData.ts`, doc |
+| **G10** | Documentata la doppia ricompensa boss (monete diretta + 500 punti) | GAME_DESIGN §7, BALANCE §6 |
+
+Resta aperto in game-design solo **G1** (sparo automatico — decisione di design). `npm run build` verde (valori-base di bilanciamento invariati: scaling e cadenze sono fattori/prose, non token 🔒).
+
+**Ancora aperti (principali):** **G1** sparo automatico (decisione); big bet *object pooling (P1)*, *touch/pointer (U2)*; finding di performance (P3–P6), audio (AU2–AU7), arte/VFX (V3–V7), architettura (A3–A8), bilanciamento (B3–B7), tooling (T5–T6).
 
 > ⚠️ **Le posizioni `file:riga` nelle sezioni sottostanti sono quelle dell'audit originale**: dopo gli interventi i numeri di riga sono cambiati. Per lo stato per-finding fare riferimento a questa sezione (gli ID — `A2`, `X4`, …— restano stabili).
 
@@ -91,7 +107,7 @@ A questo si aggiunge **igiene del repository da finalizzare** (artefatti `.js` c
 |---|---|---|---|
 | Architettura & qualità del codice | discreto | 8 | A2 · **A1 ✅** (texture+HUD+boss estratti) |
 | Performance & rendering | discreto | 6 | 1 (P2) |
-| Game design & progressione | discreto | 10 | — |
+| Game design & progressione | discreto | 10 | 9 (G2–G10) · resta G1 (decisione) |
 | Bilanciamento & economia | discreto | 7 | 2 (B1, B2) |
 | Audio procedurale | buono | 7 | 1 (AU1) |
 | Arte procedurale & VFX / game-feel | buono | 7 | 2 (V1, V2) |
