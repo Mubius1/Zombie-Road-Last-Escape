@@ -154,7 +154,7 @@ export default class HudController {
     });
 
     // Hint comandi: leggibile (U11). Prima era UI.disabled (#333) su pannello quasi nero → illeggibile.
-    Ui.text(s, dW/2,H-6,'↑↓ Muovi · SPAZIO Spara · 1-5/Q Arma · SHIFT Scatto',{fontSize:'11px',color:UI.faint}).setOrigin(0.5,1).setDepth(D);
+    Ui.text(s, dW/2,H-6,'↑↓/WS Muovi · SPAZIO Spara · 1-5/Q Arma · SHIFT Scatto',{fontSize:'11px',color:UI.faint}).setOrigin(0.5,1).setDepth(D);
     Ui.text(s, 4,H-6,'0=Debug',{fontSize:'9px',color:'#2a3a2a'}).setOrigin(0,1).setDepth(D);
     this.debugTxt = Ui.text(s, dW-6,H-6, o.debugGod ? GOD_HUD : '', {fontSize:'10px',color:'#00ff88',fontStyle:'bold'}).setOrigin(1,1).setDepth(D+5);
   }
@@ -168,7 +168,8 @@ export default class HudController {
     this.fuelFill.displayWidth = Math.max(0, (o.fuel / o.maxFuel) * 110);
     const distPct = Math.min(1, o.distance / this.missionDist);
     this.distFill.displayWidth = Math.max(1, distPct * 110);
-    this.distFill.setFillStyle(distPct > 0.8 ? 0x88ff44 : distPct > 0.5 ? 0x44aaff : 0x4466cc);
+    // In daltonismo evita il verde a fine percorso (rosso↔verde): usa giallo CB-safe (REG6).
+    this.distFill.setFillStyle(distPct > 0.8 ? (cb ? 0xffd23a : 0x88ff44) : distPct > 0.5 ? 0x44aaff : 0x4466cc);
 
     // Testi: setText solo quando il valore mostrato cambia (vedi cache).
     const hp = Math.round(hpPct * 100);

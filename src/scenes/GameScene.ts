@@ -301,9 +301,23 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       if (!this.alive && Phaser.Input.Keyboard.JustDown(this.spaceKey)) Juice.fadeAndRun(this, () => this.scene.restart());
       return;
     }
+    if (this.frozen) return;            // hit-stop: tutto fermo, grana di pellicola inclusa (REG3)
     Juice.jitterGrain(this.grain);
-    if (this.frozen) return;
     const dt = delta / 1000;
+
+    // Celebrazione di vittoria del boss (~2.2s, boss.defeated): mondo CONGELATO → solo visuale, niente
+    // movimento/spawn/danni/avanzamento. Risolve due regressioni: (REG1) la distanza a fine duello è già
+    // oltre MISSION_DIST, quindi senza questo ritorno updateDistance chiamerebbe subito
+    // triggerMissionComplete() tagliando la schermata "BOSS SCONFITTO"; (REG2) gli zombi residui non si
+    // muovono né si agganciano più sopra l'overlay. La fine missione resta gestita dal delayedCall di kill().
+    if (this.boss.defeated) {
+      this.updateStripes(dt);
+      this.environment?.update(dt, this.vehicle.x, this.vehicle.y);
+      this.cleanOffScreen();
+      this.updateHUD();
+      return;
+    }
+
     this.updateVehicle(dt);
     this.updateFiring(time);
     this.updateWeaponSwitch();
@@ -1066,6 +1080,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       if (Phaser.Math.Distance.Between(rx, ry, az.sprite.x, az.sprite.y) <= AOE) {
         az.hp -= dmg;
         if (az.hp <= 0) {
+          this.addKillScore(5); // come checkBulletsVsAttached: uccidere un aggrappato dà punti/combo (REG8)
           this.spawnHitParticles(az.sprite.x, az.sprite.y);
           az.sprite.destroy();
           this.attachedZombies.splice(i, 1);

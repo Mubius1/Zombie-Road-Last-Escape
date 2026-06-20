@@ -32,7 +32,13 @@
       "Bash(cd \"c:/Users/manda/Documents/progetto della domenica\" && rm -f /tmp/GameScene.bak.ts && echo \"=== riferimenti ai metodi texture nei doc ===\" && grep -rn \"buildEntityTextures\\\\|buildVehicleTexture\\\\|GameScene.buildEntity\\\\|GameScene.buildVehicle\" CLAUDE.md docs/*.md 2>/dev/null)",
       "Bash(echo \"=== tsc exit: $? ===\")",
       "Bash(cp src/scenes/GameScene.ts /tmp/GS.bak.ts)",
-      "Bash(sed -i '1285,1396d;1408,1622d' src/scenes/GameScene.ts)"
+      "Bash(sed -i '1285,1396d;1408,1622d' src/scenes/GameScene.ts)",
+      "Bash(echo \"---ART EXIT $?---\")",
+      "Bash(echo \"---BAL EXIT $?---\")",
+      "Bash(echo \"---AUD EXIT $?---\")",
+      "Bash(echo \"---TSC EXIT $?---\")",
+      "Bash(cd \"c:/Users/manda/.claude/projects/c--Users-manda-Documents-progetto-della-domenica/af98259e-5aee-45ff-8b01-80779acdeee2/subagents/workflows/wf_be5932ac-e5e\" 2>/dev/null && echo \"=== file agenti ===\" && ls -1 2>/dev/null | head -50 && echo \"\" && echo \"=== n. transcript agenti ===\" && ls -1 *.jsonl 2>/dev/null | wc -l || echo \"\\(cartella non ancora popolata o percorso diverso\\)\")",
+      "Read(//c/Users/manda/.claude/projects/c--Users-manda-Documents-progetto-della-domenica/af98259e-5aee-45ff-8b01-80779acdeee2/subagents/workflows/wf_be5932ac-e5e/**)"
     ],
     "additionalDirectories": [
       "\\tmp"

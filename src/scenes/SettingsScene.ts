@@ -41,7 +41,7 @@ export default class SettingsScene extends Phaser.Scene {
 
     // In pausa: fondo semi-trasparente così si intravede la partita congelata.
     this.add.rectangle(this.designW / 2, H / 2, this.designW, H, UI.bg, inGame ? 0.8 : 1);
-    Ui.panel(this, this.designW / 2, H / 2, 540, 480, {
+    Ui.panel(this, this.designW / 2, H / 2, 540, 500, {
       fill: UI.panel, fillAlpha: inGame ? 0.96 : 1, stroke: UI.stroke, strokeWidth: 2,
     });
 
@@ -248,14 +248,14 @@ export default class SettingsScene extends Phaser.Scene {
   // ─── Indietro / Riprendi ──────────────────────────────────────────────────────
 
   private buildBack(inGame: boolean) {
-    const by = H - 64;
+    const by = H / 2 + 210; // dentro il box 540×500 (REG5: prima a H-64 sbordava sotto il pannello)
     Ui.button(this, this.designW / 2, by, 240, 46, inGame ? '▶  RIPRENDI  ·  ESC' : '◂  INDIETRO', {
       fill: 0x14141f, hover: 0x1d1d2e, border: UI.blueLine, color: UI.blue,
       onClick: () => this.goBack(),
     });
 
     if (inGame) {
-      const exit = Ui.text(this, this.designW / 2, H - 26, 'Esci al menu principale', { fontSize: '12px', color: '#886677' })
+      const exit = Ui.text(this, this.designW / 2, H / 2 + 242, 'Esci al menu principale', { fontSize: '12px', color: '#886677' })
         .setOrigin(0.5).setInteractive({ useHandCursor: true });
       exit.on('pointerover', () => exit.setColor(UI.redSoft));
       exit.on('pointerout',  () => exit.setColor('#886677'));

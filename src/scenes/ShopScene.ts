@@ -183,7 +183,7 @@ export default class ShopScene extends Phaser.Scene {
       const bgColor  = selected ? 0x1a1200 : owned ? 0x0e0e0e : 0x080808;
 
       const bg = Ui.box(this, wx + 40, py + 46, 82, 72, { fill: bgColor, radius: 7, stroke: UI.stroke, strokeAlpha: 0.5 })
-        .setInteractive(owned || canBuy);
+        .setInteractive(true);
 
       // Anteprima reale: il proiettile dell'arma (razzo dedicato; bullet tinto per le altre)
       const projKey = key === 'rockets' ? 'rocket' : 'bullet';
@@ -207,6 +207,8 @@ export default class ShopScene extends Phaser.Scene {
           bg.on('pointerover',  () => bg.setFillStyle(0x1a1000));
           bg.on('pointerout',   () => bg.setFillStyle(bgColor));
           bg.on('pointerdown',  () => this.buyWeapon(key));
+        } else {
+          bg.on('pointerdown',  () => this.denyPurchase()); // feedback "monete insufficienti" anche sulle armi (REG7)
         }
       }
     });
@@ -272,7 +274,7 @@ export default class ShopScene extends Phaser.Scene {
       const bg = Ui.box(this, vx + 50, py + 66, 106, 96, {
         fill: bgColor, radius: 8,
         stroke: selected ? UI.greenSig : UI.stroke, strokeAlpha: selected ? 0.9 : 0.5,
-      }).setInteractive(owned || canBuy);
+      }).setInteractive(true);
 
       // Anteprima reale: lo sprite del veicolo (sbiadito se non posseduto)
       this.add.image(vx + 50, py + 30, `vehicle_${key}`).setScale(0.7 / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
@@ -297,6 +299,8 @@ export default class ShopScene extends Phaser.Scene {
           bg.on('pointerover',  () => bg.setFillStyle(0x141420));
           bg.on('pointerout',   () => bg.setFillStyle(bgColor));
           bg.on('pointerdown',  () => this.buyVehicle(key));
+        } else {
+          bg.on('pointerdown',  () => this.denyPurchase()); // feedback "monete insufficienti" anche sui veicoli (REG7)
         }
       }
     });

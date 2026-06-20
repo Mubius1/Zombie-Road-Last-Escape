@@ -89,6 +89,39 @@ Resta aperto in game-design solo **G1** (sparo automatico — decisione di desig
 
 ---
 
+## Re-audit (2026-06-17) — stato attuale & cosa manca
+
+Secondo passaggio multi-agente (84 agenti) sul **codice attuale**, dopo i 5 round, per cercare **regressioni** dei refactor + ri-verificare gli aperti + nuovi problemi. **74 finding confermati: 1 regressione + 4 incoerenze da refactor · 15 nuovi · 50 aperti storici · 6 verificati già risolti.** Verdetto: gioco in **buono stato** (lifecycle solido, 9 bug storici chiusi, meccaniche R5 corrette, validatori+tsc verdi); ciò che manca è **maturità**, non stabilità.
+
+**Round 6 — Regressioni dai refactor (8 fix, tutti applicati, build verde)**
+
+| ID | Problema | Fix |
+|---|---|---|
+| **REG1** (alto) | La celebrazione "BOSS SCONFITTO" veniva **tagliata**: a fine duello distance≥MISSION_DIST e `updateDistance` chiamava subito `triggerMissionComplete`, sovrascrivendo i 2,2s. | `update()` ora **congela il mondo** quando `boss.defeated` (return anticipato, solo visuale) → `updateDistance` non gira più in celebrazione. |
+| **REG2** (medio) | Mondo non davvero congelato: zombi residui si muovevano/agganciavano sopra l'overlay. | Stesso freeze di REG1. |
+| **REG3** (basso) | `jitterGrain` girava durante l'hit-stop (grana che vibra a mondo fermo). | Spostato **dopo** `if (this.frozen) return`. |
+| **REG4** (basso) | Hint comandi HUD non citava W/S (aggiunti in R5). | `'↑↓/WS Muovi · …'`. |
+| **REG5** (basso) | Pulsante pannello Impostazioni **sbordava** dopo la 5ª riga (daltonismo). | Box 540×**500** + pulsanti rientrati. |
+| **REG6** (basso) | Barra HP boss e barra percorso ignoravano il toggle daltonismo. | Entrambe ora CB-aware. |
+| **REG7** (basso) | Deny-feedback acquisto solo sui Potenziamenti, non su Armi/Veicoli. | `denyPurchase()` esteso a tutte le card. |
+| **REG8** (basso) | Razzi che uccidono uno zombi **aggrappato** non davano punteggio/combo. | `addKillScore(5)` come `checkBulletsVsAttached`. |
+
+Inoltre allineati `CLAUDE.md` e `ARCHITETTURA.md` ai refactor (citavano `spawnBoss`/`updateBoss` rimossi; mancava `validate:balance`/`validate:audio` e i nuovi file).
+
+**🟠 Difetto di efficacia (NON una regressione, ma alto) — ancora da decidere:** lo scaling NG+ (G2) è **quasi inerte**: `Math.round(1×1.15)=1` → i nemici da 1 HP (~60% del pool) non scalano fino al ciclo 6, e danno/velocità non scalano affatto. **B4 è risolto solo formalmente.** Va deciso assieme al trade-off del **Veicolo Sperimentale** (B3, dominante su tutti gli assi) come pacchetto di ribilanciamento late-game.
+
+**Cosa manca (big bet, prioritizzati dal re-audit):**
+1. **Object pooling** (P1) — proiettili/particelle/detriti senza pool: churn GC nei momenti caldi.
+2. **Ribilanciamento late-game** — NG+ più ripido (ceil/0.25 + leva danno) + trade-off Sperimentale.
+3. **CI + test + ESLint** (T5) — nessuna rete contro regressioni di logica (proprio come REG1).
+4. **Tipizzare registry + dati zombi/boss** (A3/A4) e **rompere l'import circolare** GameScene↔BossController (spostando `BOSS_CONFIG`/`ROAD_*`/`ENVIRONMENTS` in un modulo dati neutro).
+5. **`SoundManager.dispose()`** (no master orfani a ogni restart, AU7) + eventi audio mancanti (AU2–AU6).
+6. **Modello di input** — G1 (auto-fire vs SPACE) + U2 (touch/pointer).
+
+**Aperti storici confermati (non regressioni):** A3–A8, P3/P5/P6, AU2–AU7, V4–V7, B3/B5/B6/B7, T5, G1, U2. **Verificati già risolti/conformi:** V3 (scia baked, ok per art bible), T6 (WATCHED completa), + tutte le meccaniche R5.
+
+---
+
 ## Verdetto complessivo
 
 "Zombie Road: Last Escape" è un progetto solido e sorprendentemente maturo per un titolo 100% procedurale: arte, audio e toolkit di juice sono di livello alto e coerenti con le proprie art bible. Le fondamenta tecniche sono buone — servizi condivisi ben separati, TypeScript strict, tre validatori anti-deriva agganciati a build e dev, documentazione architetturale eccellente.

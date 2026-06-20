@@ -3,6 +3,7 @@ import Ui, { UI } from './Ui';
 import Juice from './Juice';
 import { WEAPONS } from './GameData';
 import { OVERSAMPLE } from './Config';
+import Settings from './Settings';
 import SoundManager from './SoundManager';
 import Environment from './Environment';
 import {
@@ -179,11 +180,13 @@ export default class BossController {
     const hp = boss.getData('hp') as number;
     if (!this.phase2 && hp > 0 && hp <= this.maxHp * 0.4) this.enterPhase2(boss);
 
-    // Aggiorna barra HP
+    // Aggiorna barra HP (rispetta il toggle daltonismo come le barre dell'HUD principale — REG6).
     if (this.hudFill) {
       this.hudFill.displayWidth = Math.max(0, (hp / this.maxHp) * 440);
       const pct = hp / this.maxHp;
-      this.hudFill.setFillStyle(pct < 0.25 ? 0xff2200 : pct < 0.55 ? 0xff8800 : 0xcc0000);
+      this.hudFill.setFillStyle(Settings.colorblind
+        ? (pct < 0.25 ? 0xff7a2a : pct < 0.55 ? 0xffd23a : 0x3a9bff)
+        : (pct < 0.25 ? 0xff2200 : pct < 0.55 ? 0xff8800 : 0xcc0000));
     }
   }
 

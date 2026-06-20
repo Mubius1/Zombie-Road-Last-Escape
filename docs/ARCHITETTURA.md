@@ -52,7 +52,14 @@ main.ts ─ avvia →  game.ts ─ configura Phaser, registra le scene
 | [`SoundManager.ts`](../src/SoundManager.ts) | audio procedurale (vedi art bible audio) | nodi motore + master |
 | **scenes/** | `MenuScene` · `GameScene` · `ShopScene` · `SettingsScene` · `DebugScene` | stato di scena |
 
-`GameScene.ts` resta il file più grande, ma l'**authoring delle texture procedurali è stato estratto** per coesione in [`EntityTextures.ts`](../src/EntityTextures.ts) (nemici, boss, oggetti) e [`VehicleTextures.ts`](../src/VehicleTextures.ts) (veicolo) — funzioni pure su `scene.textures`, importate da `GameScene`/`ShopScene`/`DebugScene`/`MenuScene`. In `GameScene` restano `buildWorld`, `buildHUD`/`updateHUD`, spawn nemici/pickup, `fireWeapon`, `spawnBoss`/`updateBoss`, `missionComplete`/`gameOver` e l'**`hitStop`** (qui e non in `Juice`, perché deve mettere in pausa il proprio `update()`). Per i punti precisi vedi la *Mappa del codice* in [`CLAUDE.md`](../CLAUDE.md).
+`GameScene.ts` resta il file più grande ma è stato **decomposto** per coesione in più moduli:
+- **Texture procedurali** → [`EntityTextures.ts`](../src/EntityTextures.ts) (nemici, boss, oggetti) e [`VehicleTextures.ts`](../src/VehicleTextures.ts) (veicolo): funzioni pure su `scene.textures`, importate da `GameScene`/`ShopScene`/`DebugScene`/`MenuScene`.
+- **HUD** → [`HudController.ts`](../src/HudController.ts): una "vista" che riceve lo stato (`build`/`update`) e aggiorna i display object (barre, % salute, combo, scatto, selettore armi, componenti, debug); non conosce la logica di gioco.
+- **Sottosistema boss** → [`BossController.ts`](../src/BossController.ts): possiede stato e gruppi fisici del boss (spawn, attacchi per tipo, 2ª fase, barra HP, morte VFX) e dialoga con la scena tramite l'interfaccia **`BossHost`** (i membri di gameplay che il boss usa sono esposti pubblici su `GameScene`).
+- **Stato run/record** → [`RunState.ts`](../src/RunState.ts) (`resetRunState` sul registry) e [`SaveData.ts`](../src/SaveData.ts) (record persistente in localStorage).
+
+In `GameScene` restano l'orchestrazione del game-loop, `buildWorld`, spawn nemici/pickup, `fireWeapon`, combo/scatto/carburante/sopravvissuti, `triggerMissionComplete`/`endGame`, i dati di dominio (`ZOMBIE_STATS`/`ZOMBIE_MOTION`/`BOSS_CONFIG`/`SPAWN_POOL`, letti dai validatori) e l'**`hitStop`** (qui e non in `Juice`, perché deve mettere in pausa il proprio `update()`). Per i punti precisi vedi la *Mappa del codice* in [`CLAUDE.md`](../CLAUDE.md).
+> ⚠️ Debito noto (re-audit): `BossController` importa da `GameScene` anche valori (`BOSS_CONFIG`/`ROAD_*`) → ciclo di moduli a livello di valori, oggi innocuo perché usati solo a runtime. Da rompere spostando i dati di dominio in un modulo neutro.
 
 ---
 
