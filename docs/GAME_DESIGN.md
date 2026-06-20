@@ -212,6 +212,8 @@ L'**unico stato che sopravvive tra le sessioni** è il **record** (`SaveData` �
 
 ## §12 · Domande aperte / ganci di roadmap
 
+> 🗺️ Il piano per affrontare rigiocabilità e game-feel (profondità del core loop, scelte di run, distintività di boss/regioni, meta-progressione) vive in [`ROADMAP_RIGIOCABILITA.md`](ROADMAP_RIGIOCABILITA.md). Le voci qui sotto sono indicizzate lì (§12.2/§12.4 → Track D, §12.5 → Track C).
+
 1. ✅ **Condizione di vittoria** — *implementata*: vittoria al completamento del ciclo di 7 regioni, poi endless+ (vedi §10).
 2. 🟡 **Persistenza** — *parziale*: il **record** (missione/punteggio max) è salvato in `localStorage` (`SaveData`). Lo sblocco permanente di veicoli resta da valutare.
 3. ✅ **Curva di difficoltà oltre il ciclo** — *implementata*: scaling NG+ degli HP di nemici e boss per ciclo (`diffMult`, [BALANCE §5](BALANCE.md#5--nemici)). Danno/velocità ancora costanti (leva HP-only).
