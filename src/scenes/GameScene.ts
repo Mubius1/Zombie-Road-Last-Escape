@@ -12,6 +12,7 @@ import { buildEntityTextures } from '../EntityTextures';
 import { buildVehicleTexture } from '../VehicleTextures';
 import HudController from '../HudController';
 import BossController, { BossHost } from '../BossController';
+import { t } from '../i18n';
 
 // Spazio di design: l'altezza è fissa (H), la larghezza varia col formato (designW,
 // più ampia in 16:9). La camera in zoom adatta tutto alla risoluzione nativa — vedi Config.ts.
@@ -45,10 +46,10 @@ export interface BossConfig {
 // IDENTICA al precedente riuso del Gigante → bilanciamento invariato. `tint` non colora più
 // lo sprite (palette cotta nella texture): è l'accento emissivo "firma" usato nei VFX (morte).
 export const BOSS_CONFIG: Record<BossType, BossConfig> = {
-  mega_mutant:       { name: 'Mega Mutante',      hp: 80,  speed: 55, scaleX: 2.4, scaleY: 2.6, tint: 0xff4030, bodyW: 56,  bodyH: 71, reward: 400 },
-  giant_worm:        { name: 'Verme Gigante',      hp: 110, speed: 40, scaleX: 2.0, scaleY: 2.0, tint: 0xff7722, bodyW: 152, bodyH: 34, reward: 500 },
-  armored_colossus:  { name: 'Colosso Corazzato',  hp: 150, speed: 28, scaleX: 2.5, scaleY: 2.8, tint: 0xffcc22, bodyW: 62,  bodyH: 80, reward: 650 },
-  radioactive_beast: { name: 'Bestia Radioattiva', hp: 95,  speed: 50, scaleX: 2.2, scaleY: 2.3, tint: 0x7dff4a, bodyW: 59,  bodyH: 66, reward: 450 },
+  mega_mutant:       { name: 'boss.mega_mutant.name',       hp: 80,  speed: 55, scaleX: 2.4, scaleY: 2.6, tint: 0xff4030, bodyW: 56,  bodyH: 71, reward: 400 },
+  giant_worm:        { name: 'boss.giant_worm.name',        hp: 110, speed: 40, scaleX: 2.0, scaleY: 2.0, tint: 0xff7722, bodyW: 152, bodyH: 34, reward: 500 },
+  armored_colossus:  { name: 'boss.armored_colossus.name',  hp: 150, speed: 28, scaleX: 2.5, scaleY: 2.8, tint: 0xffcc22, bodyW: 62,  bodyH: 80, reward: 650 },
+  radioactive_beast: { name: 'boss.radioactive_beast.name', hp: 95,  speed: 50, scaleX: 2.2, scaleY: 2.3, tint: 0x7dff4a, bodyW: 59,  bodyH: 66, reward: 450 },
 };
 
 export const BOSS_ORDER: BossType[] = ['mega_mutant', 'giant_worm', 'armored_colossus', 'radioactive_beast'];
@@ -66,13 +67,13 @@ interface EnvConfig {
 }
 
 const ENVIRONMENTS: EnvConfig[] = [
-  { name: 'Città Distrutta',        bgColor: 0x12121e, skyColor: 0x16161e, groundColor: 0x1a1610, roadColor: 0x2a2a2a, lineColor: 0xddcc00, shoulderColor: 0x1e1e22, grade: 0x8fa6c8, gradeAlpha: 0.42, emissive: 0xffcc33, hazeColor: 0x2a2a3a },
-  { name: 'Autostrada Abbandonata', bgColor: 0x14120e, skyColor: 0x1c180e, groundColor: 0x141208, roadColor: 0x323028, lineColor: 0xaaaa44, shoulderColor: 0x201e16, grade: 0xc8bc86, gradeAlpha: 0.40, emissive: 0xccbb55, hazeColor: 0x33301f },
-  { name: 'Deserto',                bgColor: 0x1e1006, skyColor: 0x2e1a08, groundColor: 0x1e1408, roadColor: 0x4a3a1a, lineColor: 0xddaa00, shoulderColor: 0x2a2010, grade: 0xffba60, gradeAlpha: 0.48, emissive: 0xffb24a, hazeColor: 0x4a2c12 },
-  { name: 'Foresta Infestata',      bgColor: 0x040c04, skyColor: 0x040c04, groundColor: 0x020802, roadColor: 0x141c10, lineColor: 0x66cc22, shoulderColor: 0x0a100a, grade: 0x74c084, gradeAlpha: 0.46, emissive: 0x6cff3a, hazeColor: 0x0c2410 },
-  { name: 'Zona Industriale',       bgColor: 0x0e0a08, skyColor: 0x120e0a, groundColor: 0x0c0806, roadColor: 0x1c1a18, lineColor: 0xff6600, shoulderColor: 0x181410, grade: 0xc89a5a, gradeAlpha: 0.44, emissive: 0xff7722, hazeColor: 0x2a1810 },
-  { name: 'Base Militare',          bgColor: 0x080e06, skyColor: 0x0c1008, groundColor: 0x080e06, roadColor: 0x202818, lineColor: 0x88bb44, shoulderColor: 0x101608, grade: 0x9ab074, gradeAlpha: 0.42, emissive: 0x99cc55, hazeColor: 0x162012 },
-  { name: 'Città Finale',           bgColor: 0x0c0612, skyColor: 0x100618, groundColor: 0x0c0612, roadColor: 0x180c22, lineColor: 0xcc44ff, shoulderColor: 0x140a1a, grade: 0xb074d8, gradeAlpha: 0.48, emissive: 0xcc44ff, hazeColor: 0x240a36 },
+  { name: 'region.city',        bgColor: 0x12121e, skyColor: 0x16161e, groundColor: 0x1a1610, roadColor: 0x2a2a2a, lineColor: 0xddcc00, shoulderColor: 0x1e1e22, grade: 0x8fa6c8, gradeAlpha: 0.42, emissive: 0xffcc33, hazeColor: 0x2a2a3a },
+  { name: 'region.highway',     bgColor: 0x14120e, skyColor: 0x1c180e, groundColor: 0x141208, roadColor: 0x323028, lineColor: 0xaaaa44, shoulderColor: 0x201e16, grade: 0xc8bc86, gradeAlpha: 0.40, emissive: 0xccbb55, hazeColor: 0x33301f },
+  { name: 'region.desert',      bgColor: 0x1e1006, skyColor: 0x2e1a08, groundColor: 0x1e1408, roadColor: 0x4a3a1a, lineColor: 0xddaa00, shoulderColor: 0x2a2010, grade: 0xffba60, gradeAlpha: 0.48, emissive: 0xffb24a, hazeColor: 0x4a2c12 },
+  { name: 'region.forest',      bgColor: 0x040c04, skyColor: 0x040c04, groundColor: 0x020802, roadColor: 0x141c10, lineColor: 0x66cc22, shoulderColor: 0x0a100a, grade: 0x74c084, gradeAlpha: 0.46, emissive: 0x6cff3a, hazeColor: 0x0c2410 },
+  { name: 'region.industrial',  bgColor: 0x0e0a08, skyColor: 0x120e0a, groundColor: 0x0c0806, roadColor: 0x1c1a18, lineColor: 0xff6600, shoulderColor: 0x181410, grade: 0xc89a5a, gradeAlpha: 0.44, emissive: 0xff7722, hazeColor: 0x2a1810 },
+  { name: 'region.military',    bgColor: 0x080e06, skyColor: 0x0c1008, groundColor: 0x080e06, roadColor: 0x202818, lineColor: 0x88bb44, shoulderColor: 0x101608, grade: 0x9ab074, gradeAlpha: 0.42, emissive: 0x99cc55, hazeColor: 0x162012 },
+  { name: 'region.finalCity',   bgColor: 0x0c0612, skyColor: 0x100618, groundColor: 0x0c0612, roadColor: 0x180c22, lineColor: 0xcc44ff, shoulderColor: 0x140a1a, grade: 0xb074d8, gradeAlpha: 0.48, emissive: 0xcc44ff, hazeColor: 0x240a36 },
 ];
 
 export type ZombieType = 'common' | 'runner' | 'armored' | 'jumper' | 'giant' | 'toxic';
@@ -242,11 +243,12 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     const def = { engine: 100, wheels: 100, tank: 100, turret: 100, armor: 100 };
     const c = savedComp ?? def;
     this.components = {
-      engine: { health: c.engine, label: 'MOTORE',  baseColor: 0x44cc44 },
-      wheels: { health: c.wheels, label: 'RUOTE',   baseColor: 0x44aa88 },
-      tank:   { health: c.tank,   label: 'SERBAT.', baseColor: 0xff8800 },
-      turret: { health: c.turret, label: 'TORR.',   baseColor: 0x8899ff },
-      armor:  { health: c.armor,  label: 'CORAZZA', baseColor: 0x6688bb },
+      // label = chiave i18n (risolta dall'HUD): così un re-build dopo il cambio lingua la ri-traduce.
+      engine: { health: c.engine, label: 'comp.engine', baseColor: 0x44cc44 },
+      wheels: { health: c.wheels, label: 'comp.wheels', baseColor: 0x44aa88 },
+      tank:   { health: c.tank,   label: 'comp.tank',   baseColor: 0xff8800 },
+      turret: { health: c.turret, label: 'comp.turret', baseColor: 0x8899ff },
+      armor:  { health: c.armor,  label: 'comp.armor',  baseColor: 0x6688bb },
     };
 
     this.buildTextures();
@@ -390,7 +392,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       .setDepth(16);
 
     // Banner nome ambiente (scompare dopo 2.5s)
-    const envLabel = Ui.text(this, this.designW / 2, ROAD_TOP - 28, env.name.toUpperCase(), {
+    const envLabel = Ui.text(this, this.designW / 2, ROAD_TOP - 28, t(env.name).toUpperCase(), {
       fontSize: '16px', color: UI.white, fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(18).setAlpha(0);
@@ -445,15 +447,33 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private buildHUD(missionNum: number) {
     this.hud = new HudController(this, this.designW);
-    this.hud.build({
+    this.hud.build(this.hudOpts(missionNum));
+  }
+
+  /** Opzioni di costruzione dell'HUD dallo stato corrente (riusate da build e re-build lingua). */
+  private hudOpts(missionNum: number) {
+    return {
       missionNum, missionDist: MISSION_DIST,
       components: this.components,
       activeSurvivors: this.activeSurvivors,
       ownedWeapons: this.ownedWeapons,
       currentWeapon: this.currentWeapon,
       debugGod: this.debugGod,
-      onSelectWeapon: (k) => this.selectWeapon(k), // selettore HUD cliccabile (U3)
-    });
+      onSelectWeapon: (k: WeaponType) => this.selectWeapon(k), // selettore HUD cliccabile (U3)
+    };
+  }
+
+  /**
+   * Ridisegna l'HUD nella lingua corrente. Chiamato da SettingsScene quando si cambia lingua
+   * mentre la partita è in pausa: l'HUD vive in questa scena (congelata sotto l'overlay) e non
+   * verrebbe altrimenti ri-tradotto. `build()` ripulisce gli oggetti vecchi; `updateHUD()` ripopola
+   * subito i valori (in pausa l'update per-frame non gira).
+   */
+  refreshLanguage() {
+    if (!this.hud) return;
+    this.hud.build(this.hudOpts(this.missionNumber));
+    this.updateHUD();
+    if (this.boss.spawned && this.boss.active) this.boss.refreshLanguage();
   }
 
   private buildInput() {
@@ -606,7 +626,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // col carburante che drena su un avanzamento fermo si poteva fare game over a metà boss.
     if (this.boss.active || this.boss.defeated) return;
     this.fuel -= this.getEffectiveFuelDrain() * dt;
-    if (this.fuel <= 0) { this.fuel = 0; this.endGame('Carburante esaurito!'); }
+    if (this.fuel <= 0) { this.fuel = 0; this.endGame(t('game.over.fuel')); }
   }
 
   private updateDistance(dt: number) {
@@ -879,7 +899,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     z.setData('rockPhase', Math.random() * 6.28);
     z.setVelocityX(-(ZOMBIE_STATS.giant.speed + SCROLL_SPEED)).setDepth(9).setBodySize(38,50);
     z.play('walk_giant'); z.anims.setProgress(Math.random());
-    const warn = Ui.text(this, this.designW - 60, H/2, '⚠ GIGANTE!', {
+    const warn = Ui.text(this, this.designW - 60, H/2, t('game.giantWarn'), {
       fontSize: '22px', color: '#ff4400', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(25);
@@ -1163,7 +1183,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (this.debugGod || this.boss.defeated) return; // invulnerabile durante la celebrazione di vittoria
     const comp = this.components[key];
     comp.health = Math.max(0, comp.health - amount);
-    if (key === 'engine' && comp.health <= 0) this.endGame('Motore distrutto!');
+    if (key === 'engine' && comp.health <= 0) this.endGame(t('game.over.engine'));
   }
 
   dealDamage(amount: number) {
@@ -1175,7 +1195,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     const dealt = Math.round(amount * mult);
     this.health = Math.max(0, this.health - dealt);
     this.hud.flashHealthBar();
-    if (this.health <= 0) this.endGame('Veicolo distrutto!');
+    if (this.health <= 0) this.endGame(t('game.over.vehicle'));
     else this.flashVehicleDamage(dealt); // se è game over, ci pensa endGame a tingere il veicolo
   }
 
@@ -1249,18 +1269,18 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
     const cx = this.designW/2, cy = H/2;
     Ui.box(this, cx,cy,500,260,{ fill:UI.black, fillAlpha:0.9, radius:16, stroke: cycleComplete ? 0xffcc22 : UI.greenSig, strokeAlpha:0.5 }).setDepth(30);
-    Ui.text(this, cx,cy-95, cycleComplete ? `🏆 VITTORIA · Ciclo ${cycleNum}` : 'MISSIONE COMPLETATA!',{
+    Ui.text(this, cx,cy-95, cycleComplete ? t('game.victoryCycle', { n: cycleNum }) : t('game.missionComplete'),{
       fontSize: cycleComplete ? '28px' : '32px', color: cycleComplete ? UI.gold : UI.green, fontStyle:'bold',
       stroke: cycleComplete ? '#665500' : '#006600', strokeThickness:4,
     }).setOrigin(0.5).setDepth(31);
     if (cycleComplete) {
-      Ui.text(this, cx,cy-66,'Hai completato le 7 regioni! Continua in endless+',{fontSize:'12px',color:UI.greenSoft}).setOrigin(0.5).setDepth(31);
+      Ui.text(this, cx,cy-66,t('game.allRegions'),{fontSize:'12px',color:UI.greenSoft}).setOrigin(0.5).setDepth(31);
     }
-    Ui.text(this, cx,cy-48,`Punteggio: ${this.score}`,{fontSize:'20px',color:UI.white}).setOrigin(0.5).setDepth(31);
-    Ui.text(this, cx,cy-14,`Distanza: ${Math.floor(this.distance/100)} km`,{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
-    Ui.text(this, cx,cy+20,`Monete guadagnate: +${earned}`,{fontSize:'18px',color:UI.gold}).setOrigin(0.5).setDepth(31);
-    Ui.text(this, cx,cy+55,`Totale: ${(this.registry.get('money') ?? 0)}`,{fontSize:'15px',color:UI.goldDim}).setOrigin(0.5).setDepth(31);
-    Ui.text(this, cx,cy+82,'[ SPAZIO ] per il negozio',{fontSize:'13px',color:UI.faint}).setOrigin(0.5).setDepth(31);
+    Ui.text(this, cx,cy-48,t('game.scoreLine', { n: this.score }),{fontSize:'20px',color:UI.white}).setOrigin(0.5).setDepth(31);
+    Ui.text(this, cx,cy-14,t('game.distanceLine', { n: Math.floor(this.distance/100) }),{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
+    Ui.text(this, cx,cy+20,t('game.coinsEarned', { n: earned }),{fontSize:'18px',color:UI.gold}).setOrigin(0.5).setDepth(31);
+    Ui.text(this, cx,cy+55,t('game.coinsTotal', { n: (this.registry.get('money') ?? 0) }),{fontSize:'15px',color:UI.goldDim}).setOrigin(0.5).setDepth(31);
+    Ui.text(this, cx,cy+82,t('game.toShop'),{fontSize:'13px',color:UI.faint}).setOrigin(0.5).setDepth(31);
     this.addMenuReturn(cx, cy+108);
 
     this.time.delayedCall(600, () => {
@@ -1271,12 +1291,12 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   /** Voce cliccabile "Torna al menu" per le schermate di fine partita. */
   private addMenuReturn(x: number, y: number) {
-    const t = Ui.text(this, x, y, '[ M ]  Torna al menu', {
+    const link = Ui.text(this, x, y, t('game.toMenu'), {
       fontSize: '13px', color: '#7788aa',
     }).setOrigin(0.5).setDepth(31).setInteractive({ useHandCursor: true });
-    t.on('pointerover', () => t.setColor('#aaccff'));
-    t.on('pointerout',  () => t.setColor('#7788aa'));
-    t.on('pointerdown', () => Juice.go(this, 'MenuScene'));
+    link.on('pointerover', () => link.setColor('#aaccff'));
+    link.on('pointerout',  () => link.setColor('#7788aa'));
+    link.on('pointerdown', () => Juice.go(this, 'MenuScene'));
   }
 
   // ─── Game over ───────────────────────────────────────────────────────────────
@@ -1304,16 +1324,16 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.time.delayedCall(700, () => {
       const cx = this.designW/2, cy = H/2;
       Ui.box(this, cx,cy,440,260,{ fill:UI.black, fillAlpha:0.88, radius:16, stroke:UI.redCrit, strokeAlpha:0.55 }).setDepth(30);
-      Ui.text(this, cx,cy-80,'GAME OVER',{
+      Ui.text(this, cx,cy-80,t('game.gameOver'),{
         fontSize:'50px', color:'#ff3333', fontStyle:'bold',
         stroke:'#880000', strokeThickness:5,
       }).setOrigin(0.5).setDepth(31);
       Ui.text(this, cx,cy-28,reason,{fontSize:'16px',color:UI.redSoft}).setOrigin(0.5).setDepth(31);
-      Ui.text(this, cx,cy+10,`Punteggio: ${this.score}`,{fontSize:'22px',color:UI.white}).setOrigin(0.5).setDepth(31);
-      Ui.text(this, cx,cy+42,`Distanza: ${Math.floor(this.distance/100)} km`,{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
+      Ui.text(this, cx,cy+10,t('game.scoreLine', { n: this.score }),{fontSize:'22px',color:UI.white}).setOrigin(0.5).setDepth(31);
+      Ui.text(this, cx,cy+42,t('game.distanceLine', { n: Math.floor(this.distance/100) }),{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
       // Comunica che il game over azzera tutto il progresso (prima era silenzioso — U8).
-      Ui.text(this, cx,cy+68,'Progressione azzerata — si riparte dalla Missione 1',{fontSize:'12px',color:UI.amberSoft}).setOrigin(0.5).setDepth(31);
-      Ui.text(this, cx,cy+92,'[ SPAZIO ] per ricominciare',{fontSize:'14px',color:UI.faint}).setOrigin(0.5).setDepth(31);
+      Ui.text(this, cx,cy+68,t('game.progressReset'),{fontSize:'12px',color:UI.amberSoft}).setOrigin(0.5).setDepth(31);
+      Ui.text(this, cx,cy+92,t('game.restart'),{fontSize:'14px',color:UI.faint}).setOrigin(0.5).setDepth(31);
       this.addMenuReturn(cx, cy+116);
       this.input.keyboard?.once('keydown-M', () => Juice.go(this, 'MenuScene'));
     });

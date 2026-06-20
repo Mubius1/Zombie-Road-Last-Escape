@@ -34,6 +34,15 @@ const vehicleTex = readFileSync(join(root, 'src/VehicleTextures.ts'), 'utf8');
 const bibleZ   = readFileSync(join(root, 'docs/ART_BIBLE_ZOMBIES.md'), 'utf8');
 const bibleO   = readFileSync(join(root, 'docs/ART_BIBLE_OGGETTI.md'), 'utf8');
 const bibleI   = readFileSync(join(root, 'docs/ART_BIBLE_INTERFACCE.md'), 'utf8');
+// i18n: dopo l'estrazione delle stringhe, i `name` in GameData sono CHIAVI (es. 'vehicle.pickup.name').
+// La fonte di verità dei NOMI ITALIANI è il dizionario canonico src/locales/it.ts → risolviamo lì
+// per confrontare il nome mostrato con quello scritto nell'art bible.
+const itLocale = readFileSync(join(root, 'src/locales/it.ts'), 'utf8');
+const I18N_IT = Object.fromEntries(
+  [...itLocale.matchAll(/'([\w.]+)'\s*:\s*'([^']*)'/g)].map(m => [m[1], m[2]]),
+);
+// Risolve una chiave i18n nel nome italiano canonico; se non è una chiave nota, la restituisce com'è.
+const resolveName = (s) => I18N_IT[s] ?? s;
 
 const errors = [];
 const EPS = 1e-6;
@@ -232,7 +241,7 @@ for (const key of VEHICLE_KEYS) {
   const [bName, bPrice, bColorCell] = cells;
   const bColor = cellHex(bColorCell);
 
-  if (bName !== codeName)            errors.push(`[veicolo:${key}] nome: codice "${codeName}" ≠ bible "${bName}"`);
+  if (bName !== resolveName(codeName)) errors.push(`[veicolo:${key}] nome: codice "${resolveName(codeName)}" (chiave ${codeName}) ≠ bible "${bName}"`);
   if (cellNum(bPrice) !== codePrice) errors.push(`[veicolo:${key}] prezzo: codice ${codePrice} ≠ bible ${bPrice}`);
   if (bColor !== codeColor)          errors.push(`[veicolo:${key}] colore: codice #${codeColor.toString(16).padStart(6,'0')} ≠ bible ${bColorCell}`);
 }
@@ -263,7 +272,7 @@ for (const key of WEAPON_KEYS) {
   if (!cells || cells.length < 7) { errors.push(`Art Bible §4.3: riga arma "${key}" non trovata o malformata.`); continue; }
   const [bName, bPrice, bCd, bDmg, bSpd, bColorCell, bRange] = cells;
 
-  if (bName !== c.name)                errors.push(`[arma:${key}] nome: codice "${c.name}" ≠ bible "${bName}"`);
+  if (bName !== resolveName(c.name))   errors.push(`[arma:${key}] nome: codice "${resolveName(c.name)}" (chiave ${c.name}) ≠ bible "${bName}"`);
   if (cellNum(bPrice) !== c.price)     errors.push(`[arma:${key}] prezzo: codice ${c.price} ≠ bible ${bPrice}`);
   if (cellNum(bCd) !== c.cooldown)     errors.push(`[arma:${key}] cooldown: codice ${c.cooldown} ≠ bible ${bCd}`);
   if (cellNum(bDmg) !== c.damage)      errors.push(`[arma:${key}] danno: codice ${c.damage} ≠ bible ${bDmg}`);

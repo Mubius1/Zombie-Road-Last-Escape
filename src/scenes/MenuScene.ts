@@ -5,6 +5,7 @@ import { buildVehicleTexture } from '../VehicleTextures';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { resetRunState } from '../RunState';
 import SaveData from '../SaveData';
+import { t } from '../i18n';
 
 const H = 600;
 
@@ -29,7 +30,7 @@ export default class MenuScene extends Phaser.Scene {
     this.buildTitle();
     this.buildButtons();
 
-    Ui.text(this, this.designW / 2, 552, 'Premi  INVIO  per iniziare  ·  clic per scegliere', {
+    Ui.text(this, this.designW / 2, 552, t('menu.hint'), {
       fontSize: '12px', color: UI.ghost,
     }).setOrigin(0.5).setDepth(10);
 
@@ -138,7 +139,7 @@ export default class MenuScene extends Phaser.Scene {
     // Record persistente (G5): mostrato solo se è stata giocata almeno una corsa.
     if (SaveData.bestMission > 0) {
       Ui.text(this, this.designW / 2, 234,
-        `RECORD  ·  Missione max ${SaveData.bestMission}  ·  Punteggio max ${SaveData.bestScore}`,
+        t('menu.record', { mission: SaveData.bestMission, score: SaveData.bestScore }),
         { fontSize: '12px', color: UI.goldDim },
       ).setOrigin(0.5).setDepth(4);
     }
@@ -154,26 +155,26 @@ export default class MenuScene extends Phaser.Scene {
     if (prog) {
       // C'è una corsa in corso (uscita al menu dalla pausa): "Continua" è l'azione primaria (verde),
       // NUOVA PARTITA è demota a secondaria con avviso che azzera tutto (U12).
-      btns.push(Ui.button(this, cx, 312, 340, 54, 'CONTINUA', {
+      btns.push(Ui.button(this, cx, 312, 340, 54, t('menu.continue'), {
         fill: 0x13260f, hover: 0x1f3a17, border: UI.greenSig, color: UI.green,
         fontSize: '24px', scaleOnHover: 1.04, onClick: () => this.continueGame(),
       }));
-      btns.push(Ui.button(this, cx, 378, 340, 50, 'NUOVA PARTITA', {
+      btns.push(Ui.button(this, cx, 378, 340, 50, t('menu.newGame'), {
         fill: 0x101826, hover: 0x1a2740, border: UI.blueLine, color: UI.blue,
         fontSize: '20px', scaleOnHover: 1.04, onClick: () => this.newGame(),
       }));
-      Ui.text(this, cx, 408, 'azzera il progresso attuale', { fontSize: '11px', color: UI.faint })
+      Ui.text(this, cx, 408, t('menu.newGameWarn'), { fontSize: '11px', color: UI.faint })
         .setOrigin(0.5).setDepth(11);
-      btns.push(Ui.button(this, cx, 446, 340, 50, 'IMPOSTAZIONI', {
+      btns.push(Ui.button(this, cx, 446, 340, 50, t('common.settings'), {
         fill: 0x101826, hover: 0x1a2740, border: UI.blueLine, color: UI.blue,
         fontSize: '20px', scaleOnHover: 1.04, onClick: () => this.openSettings(),
       }));
     } else {
-      btns.push(Ui.button(this, cx, 330, 340, 58, 'NUOVA PARTITA', {
+      btns.push(Ui.button(this, cx, 330, 340, 58, t('menu.newGame'), {
         fill: 0x13260f, hover: 0x1f3a17, border: UI.greenSig, color: UI.green,
         fontSize: '24px', scaleOnHover: 1.04, onClick: () => this.newGame(),
       }));
-      btns.push(Ui.button(this, cx, 402, 340, 58, 'IMPOSTAZIONI', {
+      btns.push(Ui.button(this, cx, 402, 340, 58, t('common.settings'), {
         fill: 0x101826, hover: 0x1a2740, border: UI.blueLine, color: UI.blue,
         fontSize: '24px', scaleOnHover: 1.04, onClick: () => this.openSettings(),
       }));

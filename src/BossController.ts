@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import Ui, { UI } from './Ui';
 import Juice from './Juice';
 import { WEAPONS } from './GameData';
+import { t } from './i18n';
 import { OVERSAMPLE } from './Config';
 import Settings from './Settings';
 import SoundManager from './SoundManager';
@@ -56,6 +57,8 @@ export default class BossController {
   private phase2 = false; // true sotto il 40% HP: attacchi più frequenti (G4)
   private hudObjects: Phaser.GameObjects.GameObject[] = [];
   private hudFill?: Phaser.GameObjects.Rectangle;
+  private hudLabel?: Phaser.GameObjects.Text; // etichetta col nome boss (ri-traducibile)
+  private hudNameKey = '';                     // chiave i18n del nome boss corrente
 
   constructor(host: BossHost) {
     this.host = host;
@@ -81,7 +84,7 @@ export default class BossController {
     this.maxHp = Math.round(cfg.hp * diff);
 
     // Alert
-    const warn = Ui.text(host, host.designW / 2, H / 2, `⚠  ${cfg.name.toUpperCase()}  ⚠`, {
+    const warn = Ui.text(host, host.designW / 2, H / 2, t('boss.warn', { name: t(cfg.name).toUpperCase() }), {
       fontSize: '28px', color: '#ff4400', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 5,
     }).setOrigin(0.5).setDepth(28).setAlpha(0);
@@ -198,10 +201,10 @@ export default class BossController {
     host.sfx?.playExplosion();
     boss.setTintFill(0xff3030);
     host.time.delayedCall(180, () => { if (boss.active) boss.clearTint(); });
-    const t = Ui.text(host, boss.x, boss.y - 60, '⚠ FURIA', {
+    const fury = Ui.text(host, boss.x, boss.y - 60, t('boss.fury'), {
       fontSize: '20px', color: '#ff4422', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(28);
-    host.tweens.add({ targets: t, alpha: 0, y: t.y - 30, duration: 1100, onComplete: () => t.destroy() });
+    host.tweens.add({ targets: fury, alpha: 0, y: fury.y - 30, duration: 1100, onComplete: () => fury.destroy() });
   }
 
   private fireProjectile(x: number, fromY: number) {
@@ -291,7 +294,7 @@ export default class BossController {
     host.registry.set('money', (host.registry.get('money') ?? 0) + earned);
     this.hideHud();
 
-    const vt = Ui.text(host, host.designW / 2, H / 2 - 10, `BOSS SCONFITTO!  +${earned} monete`, {
+    const vt = Ui.text(host, host.designW / 2, H / 2 - 10, t('boss.defeated', { n: earned }), {
       fontSize: '24px', color: '#ffee00', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 5,
     }).setOrigin(0.5).setDepth(28);
@@ -405,14 +408,21 @@ export default class BossController {
     const cx = host.designW / 2, barW = 440, y = 96;
     const bg    = host.add.rectangle(cx, y, barW + 8, 20, UI.black, 0.85).setDepth(22).setAlpha(0);
     const fill  = host.add.rectangle(cx - barW / 2, y, barW, 14, UI.redCrit).setOrigin(0, 0.5).setDepth(23).setAlpha(0);
-    const label = Ui.text(host, cx, y - 14, name.toUpperCase(), {
+    const label = Ui.text(host, cx, y - 14, t(name).toUpperCase(), {
       fontSize: '13px', color: UI.red, fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(23).setAlpha(0);
 
     this.hudObjects = [bg, fill, label];
     this.hudFill = fill;
+    this.hudLabel = label;
+    this.hudNameKey = name;
     host.tweens.add({ targets: this.hudObjects, alpha: 1, duration: 400 });
+  }
+
+  /** Ri-traduce l'etichetta della barra HP del boss (cambio lingua a partita in pausa). */
+  refreshLanguage() {
+    this.hudLabel?.setText(t(this.hudNameKey).toUpperCase());
   }
 
   private hideHud() {

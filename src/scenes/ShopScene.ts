@@ -7,19 +7,21 @@ import Settings from '../Settings';
 import SoundManager from '../SoundManager';
 import Ui, { UI, MENU_VIGNETTE } from '../Ui';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
+import { t } from '../i18n';
 
 const H = 600;
 
+// `label`/`desc` sono CHIAVI i18n (risolte con t() al render). `key`/`cost` restano dati.
 interface ShopItem {
   key: string; label: string; cost: number; desc: string; oneTime: boolean;
 }
 
 const SHOP_ITEMS: ShopItem[] = [
-  { key: 'repair',   label: 'Ripara tutto',      cost:  80, desc: 'Tutti i componenti tornano al 100%', oneTime: false },
-  { key: 'armor',    label: 'Corazza rinforzata', cost: 150, desc: 'Danno ricevuto ridotto (-20%)',      oneTime: true  },
-  { key: 'engine',   label: 'Motore potenziato',  cost: 120, desc: 'Velocità verticale +15%',           oneTime: true  },
-  { key: 'turret',   label: 'Torretta migliorata',cost: 100, desc: 'Cadenza di fuoco +25%',             oneTime: true  },
-  { key: 'fuelTank', label: 'Serbatoio extra',    cost:  80, desc: 'Carburante massimo +30',            oneTime: true  },
+  { key: 'repair',   label: 'item.repair.label',   cost:  80, desc: 'item.repair.desc',   oneTime: false },
+  { key: 'armor',    label: 'item.armor.label',    cost: 150, desc: 'item.armor.desc',    oneTime: true  },
+  { key: 'engine',   label: 'item.engine.label',   cost: 120, desc: 'item.engine.desc',   oneTime: true  },
+  { key: 'turret',   label: 'item.turret.label',   cost: 100, desc: 'item.turret.desc',   oneTime: true  },
+  { key: 'fuelTank', label: 'item.fuelTank.label', cost:  80, desc: 'item.fuelTank.desc', oneTime: true  },
 ];
 
 export default class ShopScene extends Phaser.Scene {
@@ -108,15 +110,15 @@ export default class ShopScene extends Phaser.Scene {
     bg.fillRect(0, 0, this.designW, H);
     this.add.rectangle(this.designW/2, 32, this.designW, 64, UI.panelAlt);
 
-    Ui.text(this, this.designW/2, 8, `GARAGE  —  Fine Missione ${this.missionNum - 1}`, {
+    Ui.text(this, this.designW/2, 8, t('shop.title', { n: this.missionNum - 1 }), {
       fontSize: '20px', color: UI.greenSoft, fontStyle: 'bold',
     }).setOrigin(0.5, 0);
 
-    this.moneyText = Ui.text(this, this.designW - 12, 8, `★ ${this.money} monete`, {
+    this.moneyText = Ui.text(this, this.designW - 12, 8, t('shop.money', { n: this.money }), {
       fontSize: '18px', color: UI.gold,
     }).setOrigin(1, 0);
 
-    Ui.text(this, this.designW/2, 46, `Missione successiva: ${this.missionNum}`, {
+    Ui.text(this, this.designW/2, 46, t('shop.nextMission', { n: this.missionNum }), {
       fontSize: '12px', color: UI.faint,
     }).setOrigin(0.5, 0);
 
@@ -137,7 +139,7 @@ export default class ShopScene extends Phaser.Scene {
 
   private drawUpgradesPanel() {
     const px = 14 + this.ox, py = 76;
-    Ui.text(this, px, py, 'POTENZIAMENTI', { fontSize: '13px', color: UI.blueInfo, fontStyle: 'bold' });
+    Ui.text(this, px, py, t('shop.upgrades'), { fontSize: '13px', color: UI.blueInfo, fontStyle: 'bold' });
 
     SHOP_ITEMS.forEach((item, i) => {
       const iy = py + 22 + i * 48;
@@ -155,8 +157,8 @@ export default class ShopScene extends Phaser.Scene {
       }
 
       const lc = bought ? UI.greenDim : canAfford ? UI.text : '#554444';
-      Ui.text(this, px + 6, iy + 6,  item.label, { fontSize: '13px', color: lc, fontStyle: 'bold' });
-      Ui.text(this, px + 6, iy + 24, item.desc,  { fontSize: '10px', color: UI.faint });
+      Ui.text(this, px + 6, iy + 6,  t(item.label), { fontSize: '13px', color: lc, fontStyle: 'bold' });
+      Ui.text(this, px + 6, iy + 24, t(item.desc),  { fontSize: '10px', color: UI.faint });
       if (bought) {
         Ui.text(this, px + 432, iy + 15, '✓', { fontSize: '13px', color: UI.greenDim }).setOrigin(1, 0.5);
       } else if (canAfford) {
@@ -164,7 +166,7 @@ export default class ShopScene extends Phaser.Scene {
       } else {
         // Marker esplicito di "non acquistabile" + quanto manca (U6).
         Ui.text(this, px + 432, iy + 9,  `🔒 ★${item.cost}`,            { fontSize: '12px', color: '#aa5555' }).setOrigin(1, 0.5);
-        Ui.text(this, px + 432, iy + 26, `manca ${item.cost - this.money}★`, { fontSize: '10px', color: '#996644' }).setOrigin(1, 0.5);
+        Ui.text(this, px + 432, iy + 26, t('shop.missing', { n: item.cost - this.money }), { fontSize: '10px', color: '#996644' }).setOrigin(1, 0.5);
       }
     });
   }
@@ -172,7 +174,7 @@ export default class ShopScene extends Phaser.Scene {
   private drawWeaponsPanel() {
     const px = 14 + this.ox, py = 322;
     this.drawDivider(py - 4);
-    Ui.text(this, px, py, 'ARMI', { fontSize: '13px', color: '#ff9944', fontStyle: 'bold' });
+    Ui.text(this, px, py, t('shop.weapons'), { fontSize: '13px', color: '#ff9944', fontStyle: 'bold' });
 
     WEAPON_KEYS.forEach((key, i) => {
       const w        = WEAPONS[key];
@@ -190,10 +192,10 @@ export default class ShopScene extends Phaser.Scene {
       // bullet/rocket sono texture sovracampionate (OS_G) → scala ÷OVERSAMPLE.
       this.add.image(wx + 40, py + 22, projKey)
         .setTint(w.color).setScale((key === 'rockets' ? 1.7 : 2.4) / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
-      Ui.text(this, wx + 40, py + 32, w.name, { fontSize: '10px', color: owned ? UI.text : '#444444', wordWrap: { width: 78 }, align: 'center' }).setOrigin(0.5, 0);
+      Ui.text(this, wx + 40, py + 32, t(w.name), { fontSize: '10px', color: owned ? UI.text : '#444444', wordWrap: { width: 78 }, align: 'center' }).setOrigin(0.5, 0);
 
       if (owned) {
-        Ui.text(this, wx + 40, py + 68, selected ? '● ATTIVA' : 'Usa',
+        Ui.text(this, wx + 40, py + 68, selected ? t('shop.activeWeapon') : t('shop.use'),
           { fontSize: '10px', color: selected ? UI.goldDim : UI.blueUse }).setOrigin(0.5);
         if (!selected) {
           bg.on('pointerover',  () => bg.setFillStyle(0x1a1400));
@@ -202,7 +204,7 @@ export default class ShopScene extends Phaser.Scene {
         }
       } else {
         Ui.text(this, wx + 40, py + 56, `★${w.price}`, { fontSize: '11px', color: canBuy ? UI.gold : '#443333' }).setOrigin(0.5);
-        Ui.text(this, wx + 40, py + 70, canBuy ? 'COMPRA' : '🔒', { fontSize: '11px', color: canBuy ? UI.amber : UI.disabled }).setOrigin(0.5);
+        Ui.text(this, wx + 40, py + 70, canBuy ? t('shop.buy') : '🔒', { fontSize: '11px', color: canBuy ? UI.amber : UI.disabled }).setOrigin(0.5);
         if (canBuy) {
           bg.on('pointerover',  () => bg.setFillStyle(0x1a1000));
           bg.on('pointerout',   () => bg.setFillStyle(bgColor));
@@ -214,7 +216,7 @@ export default class ShopScene extends Phaser.Scene {
     });
 
     // Descrizione arma attiva
-    Ui.text(this, px, py + 92, `▸ ${WEAPONS[this.currentWeapon].desc}`,
+    Ui.text(this, px, py + 92, t('shop.weaponDesc', { desc: t(WEAPONS[this.currentWeapon].desc) }),
       { fontSize: '11px', color: '#888866' });
   }
 
@@ -222,20 +224,20 @@ export default class ShopScene extends Phaser.Scene {
 
   private drawSurvivorsPanel() {
     const px = 490 + this.ox, py = 76;
-    Ui.text(this, px, py, 'SOPRAVVISSUTI', { fontSize: '13px', color: UI.goldDim, fontStyle: 'bold' });
+    Ui.text(this, px, py, t('shop.survivors'), { fontSize: '13px', color: UI.goldDim, fontStyle: 'bold' });
 
     // Recruited list
     if (this.survivors.length > 0) {
-      Ui.text(this, px, py + 22, 'Nel veicolo:', { fontSize: '11px', color: '#777755' });
+      Ui.text(this, px, py + 22, t('shop.inVehicle'), { fontSize: '11px', color: '#777755' });
       this.survivors.forEach((key, i) => {
         const s = SURVIVORS.find(sv => sv.key === key);
-        if (s) Ui.text(this, px + 6, py + 36 + i * 16, `• ${s.name}`, { fontSize: '12px', color: s.color });
+        if (s) Ui.text(this, px + 6, py + 36 + i * 16, t('shop.survivorName', { name: t(s.name) }), { fontSize: '12px', color: s.color });
       });
     }
 
     // Offered survivors
     const rY = py + 24 + Math.max(this.survivors.length, 0) * 16 + 24;
-    Ui.text(this, px, rY, this.offeredSurvivors.length > 0 ? 'Recluta (scegli 1):' : 'Nessuno disponibile',
+    Ui.text(this, px, rY, this.offeredSurvivors.length > 0 ? t('shop.recruit') : t('shop.noneAvailable'),
       { fontSize: '11px', color: '#777755' });
 
     this.offeredSurvivors.forEach((s, i) => {
@@ -250,9 +252,9 @@ export default class ShopScene extends Phaser.Scene {
         bg.on('pointerdown', () => this.recruitSurvivor(s.key));
       }
 
-      Ui.text(this, px + 6, iy + 8,  s.name,    { fontSize: '14px', color: s.color, fontStyle: 'bold' });
-      Ui.text(this, px + 6, iy + 28, s.ability, { fontSize: '10px', color: '#666655' });
-      Ui.text(this, px + 6, iy + 46, alreadyIn ? 'GIÀ RECLUTATO' : 'GRATIS',
+      Ui.text(this, px + 6, iy + 8,  t(s.name),    { fontSize: '14px', color: s.color, fontStyle: 'bold' });
+      Ui.text(this, px + 6, iy + 28, t(s.ability, s.abilityParams), { fontSize: '10px', color: '#666655' });
+      Ui.text(this, px + 6, iy + 46, alreadyIn ? t('shop.recruited') : t('shop.free'),
         { fontSize: '11px', color: alreadyIn ? UI.greenDim : UI.greenOk });
     });
   }
@@ -261,7 +263,7 @@ export default class ShopScene extends Phaser.Scene {
 
   private drawVehiclesPanel() {
     const py = 428;
-    Ui.text(this, 14 + this.ox, py, 'VEICOLI', { fontSize: '13px', color: UI.blueBright, fontStyle: 'bold' });
+    Ui.text(this, 14 + this.ox, py, t('shop.vehicles'), { fontSize: '13px', color: UI.blueBright, fontStyle: 'bold' });
 
     VEHICLE_KEYS.forEach((key, i) => {
       const v = VEHICLES[key];
@@ -278,12 +280,12 @@ export default class ShopScene extends Phaser.Scene {
 
       // Anteprima reale: lo sprite del veicolo (sbiadito se non posseduto)
       this.add.image(vx + 50, py + 30, `vehicle_${key}`).setScale(0.7 / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
-      Ui.text(this, vx + 50, py + 50, v.name, {
+      Ui.text(this, vx + 50, py + 50, t(v.name), {
         fontSize: '10px', color: owned ? UI.text : '#444444', wordWrap: { width: 100 }, align: 'center',
       }).setOrigin(0.5, 0);
 
       if (owned) {
-        Ui.text(this, vx + 50, py + 82, selected ? '● ATTIVO' : 'Usa',
+        Ui.text(this, vx + 50, py + 82, selected ? t('shop.activeVehicle') : t('shop.use'),
           { fontSize: '10px', color: selected ? UI.green : UI.blueUse }).setOrigin(0.5);
         if (!selected) {
           bg.on('pointerover',  () => bg.setFillStyle(0x14142a));
@@ -293,7 +295,7 @@ export default class ShopScene extends Phaser.Scene {
       } else {
         Ui.text(this, vx + 50, py + 74, `★ ${v.price}`,
           { fontSize: '11px', color: canBuy ? UI.gold : '#444444' }).setOrigin(0.5);
-        Ui.text(this, vx + 50, py + 92, canBuy ? 'COMPRA' : 'BLOCCATO',
+        Ui.text(this, vx + 50, py + 92, canBuy ? t('shop.buy') : t('shop.locked'),
           { fontSize: '10px', color: canBuy ? UI.amber : UI.disabled }).setOrigin(0.5);
         if (canBuy) {
           bg.on('pointerover',  () => bg.setFillStyle(0x141420));
@@ -309,7 +311,7 @@ export default class ShopScene extends Phaser.Scene {
   // ─── Continue button ─────────────────────────────────────────────────────────
 
   private drawContinueButton() {
-    Ui.button(this, this.designW/2, H - 28, 240, 44, 'CONTINUA  ▶', {
+    Ui.button(this, this.designW/2, H - 28, 240, 44, t('shop.continue'), {
       fill: 0x1a3a1a, hover: 0x224422, color: UI.green,
       onClick: () => this.continueGame(),
     });
@@ -373,7 +375,7 @@ export default class ShopScene extends Phaser.Scene {
   /** Feedback positivo all'acquisto (U7): suono + "pop" del contatore monete, poi ri-disegna. */
   private afterPurchase() {
     ShopScene.sfx?.playFuelPickup();
-    this.moneyText.setText(`★ ${this.money} monete`);
+    this.moneyText.setText(t('shop.money', { n: this.money }));
     this.tweens.killTweensOf(this.moneyText);
     this.moneyText.setScale(1.25);
     this.tweens.add({ targets: this.moneyText, scale: 1, duration: 180 });

@@ -170,8 +170,21 @@ Letture difensive ovunque: `this.registry.get('money') ?? 0`. **Reset partita** 
 | `screenFx` | true | overlay filmico on/off (`Juice.addOverlay`) |
 | `resolution` | 0 | indice in `RESOLUTIONS` (0 = 800×600) — letto da `game.ts` all'avvio |
 | `fullscreen` | false | preferenza schermo intero (attivazione effettiva richiede un click — vincolo browser) |
+| `colorblind` | false | barre di stato in palette daltonico-safe |
+| `language` | `it`* | lingua dei testi (i18n) — *al primo avvio prova la lingua del browser, poi `it` |
 
-> **Regola mentale:** se è *stato di gioco* (quanti soldi ho, che arma uso) → **`registry`**. Se è *preferenza dell'utente* (volume, risoluzione) → **`Settings`**. Non mescolarli.
+> **Regola mentale:** se è *stato di gioco* (quanti soldi ho, che arma uso) → **`registry`**. Se è *preferenza dell'utente* (volume, risoluzione, lingua) → **`Settings`**. Non mescolarli.
+
+### 6.3 Internazionalizzazione (i18n)
+
+[`i18n.ts`](../src/i18n.ts) espone `t('chiave', params?)`: cerca la chiave nel dizionario della lingua corrente (`Settings.language`), con **fallback su italiano** e infine sulla chiave stessa. I dizionari sono `src/locales/<lang>.ts` (`it · en · es · fr · de · pt`); **`it` è canonico** (contiene ogni chiave).
+
+- **Nessun letterale UI nel codice:** ogni testo passa da `t()`. I dati con testo (`GameData.VEHICLES/WEAPONS/SURVIVORS`, `BOSS_CONFIG`, `ENVIRONMENTS`, `SHOP_ITEMS`, gallerie debug) memorizzano **chiavi**, risolte al render.
+- **Numeri di gameplay nelle stringhe** → iniettati via params (`t('hud.score', { n })`), mai duplicati a mano (singola fonte di verità, niente drift con BALANCE).
+- **Cambio lingua a caldo:** Phaser non ri-traduce gli oggetti già creati → `SettingsScene.cycleLanguage()` fa `scene.restart()` dell'overlay. Se il cambio avviene **in pausa** (`fromKey === 'GameScene'`), chiama anche `GameScene.refreshLanguage()`: l'HUD vive nella scena congelata sotto e va ricostruito a parte (`HudController.build()` traccia i suoi oggetti in `objects` e li distrugge prima di ridisegnare).
+- **Validatori:** `validate-art-bible.mjs` risolve i `name` di GameData attraverso `it.ts` per confrontarli con i nomi italiani delle art bible → la fonte di verità dei nomi italiani è ora `it.ts`.
+
+Guida completa ("aggiungere una lingua / una chiave", insidie font/layout) in [`I18N.md`](I18N.md).
 
 ---
 

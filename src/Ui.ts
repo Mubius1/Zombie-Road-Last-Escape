@@ -176,6 +176,7 @@ export class RoundRect {
   setDepth(d: number): this { this.gfx.setDepth(d); return this; }
   setAlpha(a: number): this { this.gfx.setAlpha(a); return this; }
   setOrigin(): this { return this; } // sempre centrato: no-op per compatibilità con Rectangle
+  destroy(): void { this.gfx.destroy(); } // distrugge il Graphics sottostante (per ricostruzioni, es. cambio lingua)
 }
 
 export default class Ui {

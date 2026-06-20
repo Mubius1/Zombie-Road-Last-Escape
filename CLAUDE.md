@@ -43,7 +43,7 @@ Se cambi una **regola di gioco** (core loop, game over, ruoli) aggiorna `GAME_DE
 
 - **Nome:** Zombie Road: Last Escape
 - **Genere:** arcade survival top-down (la strada scorre verso sinistra, il veicolo si muove su/giù).
-- **Stack:** Phaser 3.90 + TypeScript + Vite. UI in **italiano**.
+- **Stack:** Phaser 3.90 + TypeScript + Vite. UI **internazionalizzata** (it · en · es · fr · de · pt); l'italiano è la locale di default e canonica. Vedi [`docs/I18N.md`](docs/I18N.md).
 - **Grafica:** **100% procedurale** (Graphics API → `generateTexture`). **Nessun PNG / nessun asset esterno.**
 - **Audio:** **100% procedurale** (Web Audio API) in `src/SoundManager.ts`. Direzione sonora in [`docs/ART_BIBLE_AUDIO.md`](docs/ART_BIBLE_AUDIO.md).
 - **Risoluzione & scaling:** il gioco è **simulato in spazio di design 800×600** e la camera di ogni scena va in **zoom** per riempire la risoluzione nativa scelta dal giocatore (menu Impostazioni → `Config.RESOLUTIONS`, preset 4:3 e 16:9, + schermo intero). Vedi **Risoluzione & scaling** sotto.
@@ -68,7 +68,8 @@ Se cambi una **regola di gioco** (core loop, game over, ruoli) aggiorna `GAME_DE
 | Scena di gioco principale | `src/scenes/GameScene.ts` |
 | Negozio tra le missioni | `src/scenes/ShopScene.ts` |
 | Modalità debug / galleria modelli | `src/scenes/DebugScene.ts` |
-| Dati condivisi (veicoli, armi, sopravvissuti) | `src/GameData.ts` |
+| Dati condivisi (veicoli, armi, sopravvissuti) | `src/GameData.ts` (i campi `name`/`desc`/`ability` sono **chiavi i18n**) |
+| Testi / internazionalizzazione | `src/i18n.ts` → `t()` · dizionari in `src/locales/<lang>.ts` (vedi [`docs/I18N.md`](docs/I18N.md)) |
 | Audio procedurale | `src/SoundManager.ts` |
 | Texture & animazioni nemici/boss/oggetti | `src/EntityTextures.ts` → `buildEntityTextures()` |
 | Texture veicolo | `src/VehicleTextures.ts` → `buildVehicleTexture()` |
@@ -95,6 +96,6 @@ Tutto vive in uno **spazio di design alto 600** (`DESIGN_H`); larghezza di rifer
 
 - Mantieni lo stile/idioma del codice circostante (TypeScript stretto, niente PNG, niente dipendenze nuove senza motivo).
 - **Sorgenti solo `.ts`: mai un `.js` in `src/`.** Transpila Vite; `tsc` è in `noEmit` (solo type-check). Un `.js` ombra accanto a un `.ts` verrebbe caricato da Vite al posto del sorgente → codice stantio silenzioso. `src/**/*.js` è in `.gitignore`: non rimuovere i guard. Dettaglio in [`docs/ARCHITETTURA.md`](docs/ARCHITETTURA.md) §1.
-- UI e testi rivolti al giocatore: **in italiano**.
+- UI e testi rivolti al giocatore: **mai letterali nel codice** → sempre `t('chiave')` (vedi [`docs/I18N.md`](docs/I18N.md)). L'italiano (`src/locales/it.ts`) è la locale **canonica**: ogni nuova stringa nasce lì, poi si traduce nelle altre. I numeri di gameplay nelle stringhe vanno passati via params (`t('k', { n })`), non scritti a mano.
 - Gli effetti "vivi" (rotazione, respiro, VFX) sono **solo visivi**: non devono alterare hitbox o bilanciamento.
 - Quando aggiungi un nemico/boss/evento, parti dalla **scheda-template** in fondo all'art bible (§10).
