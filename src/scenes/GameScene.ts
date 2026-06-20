@@ -635,7 +635,6 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   }
 
   private activateOverdrive(time: number) {
-    this.overdrive = 0;
     this.overdriveActiveUntil = time + OVERDRIVE_DURATION;
 
     // Onda d'urto: sbalza via gli aggrappati (come lo scatto) e danneggia i nemici davanti al veicolo.
@@ -659,6 +658,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         this.addKillScore(ZOMBIE_STATS[zt].score);
         this.killBurst(zt, z.x, z.y);
         if (zt === 'toxic') this.spawnToxicCloud(z.x, z.y);
+        if (zt === 'charger') this.tweens.killTweensOf(z);
         z.destroy();
       } else {
         z.setData('hp', hp);
@@ -666,6 +666,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         this.time.delayedCall(80, () => { if (z?.active) z.clearTint(); });
       }
     }
+    // Azzera la barra DOPO l'onda d'urto: le kill via addKillScore qui sopra la ricaricavano appena spesa.
+    this.overdrive = 0;
 
     // Alone additivo che accompagna il veicolo per tutta la durata (mosso in updateOverdrive).
     this.overdriveGlow = this.add.image(this.vehicle.x, this.vehicle.y, 'fx_light')
@@ -744,6 +746,10 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.distance += SCROLL_SPEED * dt;
     if (!this.boss.spawned && this.distance >= MISSION_DIST * BOSS_TRIGGER) {
       this.boss.spawn();
+      // Ambient sospeso nel duello (coerente con fuel/spawn): via hazard e proiettili residui, niente malus olio.
+      this.hazards.clear(true, true);
+      this.spitProjectiles.clear(true, true);
+      this.oilUntil = 0;
     }
     if (this.boss.active) return;
     if (this.distance >= MISSION_DIST) this.triggerMissionComplete();
@@ -953,7 +959,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   /** Caricatore (A2): avvicinamento lento → impennata di telegrafo → carica orizzontale sulla corsia. */
   private updateChargerMotion(z: Phaser.Physics.Arcade.Sprite, time: number) {
-    if (z.getData('entering')) return;
+    if (z.getData('entering') || this.boss.active) return; // niente nuove cariche durante il duello col boss
     const body = z.body as Phaser.Physics.Arcade.Body;
     const state = (z.getData('chargeState') as string) ?? 'approach';
     if (state === 'approach') {
@@ -980,7 +986,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   /** Sputatore (A2): spara un proiettile di bile verso il veicolo a cadenza fissa (solo se davanti e on-screen). */
   private updateSpitterMotion(z: Phaser.Physics.Arcade.Sprite, _time: number, delta: number) {
-    if (z.getData('entering')) return;
+    if (z.getData('entering') || this.boss.active) return; // niente nuovi sputi durante il duello col boss
     let ft = ((z.getData('fireTimer') as number) ?? SPITTER_FIRE_INTERVAL) - delta;
     if (ft <= 0 && z.x < this.designW && z.x > this.vehicle.x + 80) {
       ft = SPITTER_FIRE_INTERVAL;
@@ -1127,7 +1133,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   }
 
   private onHazardHit(h: Phaser.Physics.Arcade.Sprite) {
-    if (!h.active || this.boss.defeated) return;
+    if (!h.active || this.boss.active || this.boss.defeated || this.missionDone || !this.alive) return;
     const kind = h.getData('kind') as string;
     const hx = h.x, hy = h.y;
     h.destroy();
@@ -1240,11 +1246,17 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       this.sfx?.playZombieKill();
       if (type === 'toxic') this.spawnToxicCloud(zombie.x, zombie.y);
       if (type === 'giant') this.cameras.main.shake(200, 0.012); // il burst gore del gigante è già più ricco (n=10)
+      if (type === 'charger') this.tweens.killTweensOf(zombie); // niente tween di telegrafo orfano (A2)
       zombie.destroy();
     } else {
       zombie.setData('hp', hp);
       zombie.setTint(0xffffff);
-      this.time.delayedCall(80, () => { if (zombie?.active) zombie.clearTint(); });
+      this.time.delayedCall(80, () => {
+        if (!zombie?.active) return;
+        // Non cancellare la tinta gialla di telegrafo del Caricatore: è il segnale di carica imminente (A2).
+        if (zombie.getData('type') === 'charger' && zombie.getData('chargeState') === 'telegraph') zombie.setTint(0xffcc44);
+        else zombie.clearTint();
+      });
     }
   }
 
@@ -1252,13 +1264,14 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (!zombie.active) return;
     const type = zombie.getData('type') as ZombieType;
 
-    // Sovraccarico (A3): il veicolo è un ariete → il contatto uccide senza danneggiare i componenti.
+    // Sovraccarico (A3): il veicolo è un ariete → il contatto uccide senza danneggiare i componenti
+    // (e senza nube auto-inflitta speronando un tossico: l'ariete plana pulito).
     if (this.overdriveOn()) {
       this.addKillScore(ZOMBIE_STATS[type].score);
       this.killBurst(type, zombie.x, zombie.y);
-      if (type === 'toxic') this.spawnToxicCloud(zombie.x, zombie.y);
       if (type === 'giant') { this.cameras.main.shake(180, 0.01); this.hitStop(40); this.sfx?.playExplosion(); }
       else this.sfx?.playZombieKill();
+      if (type === 'charger') this.tweens.killTweensOf(zombie);
       this.environment?.addDecal('blood', zombie.x, zombie.y);
       zombie.destroy();
       return;
@@ -1470,14 +1483,14 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   // ─── Component damage system ─────────────────────────────────────────────────
 
   damageComponent(key: ComponentKey, amount: number) {
-    if (this.debugGod || this.boss.defeated) return; // invulnerabile durante la celebrazione di vittoria
+    if (this.debugGod || this.boss.defeated || this.missionDone || !this.alive) return; // invulnerabile a fine run / celebrazione vittoria
     const comp = this.components[key];
     comp.health = Math.max(0, comp.health - amount);
     if (key === 'engine' && comp.health <= 0) this.endGame(t('game.over.engine'));
   }
 
   dealDamage(amount: number) {
-    if (this.debugGod || this.boss.defeated) return; // invulnerabile durante la celebrazione di vittoria (X4)
+    if (this.debugGod || this.boss.defeated || this.missionDone || !this.alive) return; // invulnerabile a fine run / celebrazione vittoria (X4)
     const armorPct = this.components.armor.health / 100;
     const bonus = this.vehicleArmorBonus / 100;
     const base  = armorPct<=0 ? 2.5 : armorPct<0.3 ? 1.8 : armorPct<0.6 ? 1.3 : 1.0;
@@ -1552,7 +1565,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
     this.sfx?.playMissionComplete();
     this.sfx?.stopEngine();
-    this.zombies.setVelocityX(0);
+    this.zombies.setVelocityX(0); this.zombies.setVelocityY(0); // anche Y per il Caricatore in carica (A2)
     this.fuelCans.setVelocityX(0);
     this.spitProjectiles.setVelocityX(0); this.spitProjectiles.setVelocityY(0);
     this.hazards.setVelocityX(0);
@@ -1612,7 +1625,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.sfx?.stopEngine();
     this.vehicle.setTint(0xff2200);
     this.cameras.main.shake(500, 0.018);
-    this.zombies.setVelocityX(0);
+    this.zombies.setVelocityX(0); this.zombies.setVelocityY(0); // anche Y: il Caricatore in carica ha velocityY persistente (A2)
     this.bullets.setVelocityX(0);
     this.fuelCans.setVelocityX(0);
     this.boss.projectiles.setVelocityX(0); // niente proiettili boss sospesi sopra l'overlay (X9)
