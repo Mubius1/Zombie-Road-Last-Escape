@@ -541,6 +541,58 @@ export function buildEntityTextures(scene: Phaser.Scene) {
     g.generateTexture('zombie_charger',102,46); AF('zombie_charger',34,46,3); g.destroy();
   }
 
+  // ── ZOMBIE SPITTER · "La Bocca" (30×46 × 3) — artiglieria tossica (A2) ──────
+  // Corpo cinereo magro + GOLA-SACCA verde gonfia di bile e bocca all'insù: lancia
+  // proiettili tossici sulla corsia del veicolo. Costringe a non restare fermi.
+  {
+    const g = OS_G(90,46);
+    const sk=0x6e6e5a, skHi=0x8e8e74, skSh=0x44443a, skDeep=0x2a2a22;
+    const sac=0x4fb83a, sacHi=0x7dff4a, sacD=0x2c7a22, vein=0x9dff5a;
+    const bone=0xd9cba6, eye=0x9dff5a, blood=0x5a3030, rag=0x3a3a30;
+    for (let f = 0; f < 3; f++) {
+      const ox = f * 30, ph = f - 1; const X = (x: number) => ox + x;
+      g.fillStyle(0x33ff33,0.06); g.fillCircle(X(16),22,18);            // alone tossico
+      g.fillStyle(0x002200,0.4);  g.fillEllipse(X(15),44,24,6);
+      // gambe magre (passo)
+      g.fillStyle(0x16140e); g.fillEllipse(X(10-ph),42,8,5); g.fillEllipse(X(20+ph),42,8,5);
+      g.fillStyle(skSh); g.fillRoundedRect(X(8-ph),30,6,13,3); g.fillRoundedRect(X(18+ph),30,6,13,3);
+      g.fillStyle(sk);   g.fillRoundedRect(X(9-ph),31,4,10,2); g.fillRoundedRect(X(19+ph),31,4,10,2);
+      // braccia penzolanti
+      const aY=22+ph;
+      g.fillStyle(skSh); g.fillRoundedRect(X(2),aY,6,12,2); g.fillStyle(sk); g.fillRoundedRect(X(2),aY,4,10,2);
+      g.fillStyle(skSh); g.fillRoundedRect(X(23),aY-ph,6,11,2); g.fillStyle(sk); g.fillCircle(X(25),aY+9,3);
+      // torso magro incurvato
+      g.fillStyle(skDeep); g.fillEllipse(X(15),22,18,18);
+      g.fillStyle(skSh);   g.fillEllipse(X(15),22,15,15);
+      g.fillStyle(sk);     g.fillEllipse(X(13),20,10,10);
+      g.fillStyle(skHi);   g.fillEllipse(X(11),17,5,5);
+      g.fillStyle(rag);    g.fillEllipse(X(16),26,11,8);                // stracci
+      g.fillStyle(blood,0.6); g.fillEllipse(X(18),24,4,3);
+      g.fillStyle(skSh); [18,21,24].forEach(y=>g.fillRect(X(9),y,9,1)); // costole
+      // ── GOLA-SACCA enorme gonfia di bile (gancio) ──
+      g.fillStyle(sacD);  g.fillEllipse(X(13),12,16,13);
+      g.fillStyle(sac);   g.fillEllipse(X(13),12,13,11);
+      g.fillStyle(sacHi,0.6); g.fillEllipse(X(11),10,7,6);
+      g.fillStyle(vein,0.7); g.fillRect(X(7),12,12,1); g.fillRect(X(13),6,1,12);
+      g.fillStyle(0xeaffd6); g.fillCircle(X(10),9,1.6);
+      g.fillStyle(sacD); g.fillCircle(X(16),14,2.4); g.fillStyle(sacHi); g.fillCircle(X(16),14,1.2);
+      // ── TESTA piccola tirata indietro + BOCCA all'insù (la canna) ──
+      g.fillStyle(skDeep); g.fillRoundedRect(X(16),6,7,6,2);            // collo teso
+      g.fillStyle(skSh); g.fillEllipse(X(21),7,11,9);
+      g.fillStyle(sk);   g.fillEllipse(X(21),6,8,7);
+      g.fillStyle(skHi); g.fillEllipse(X(23),3,4,3);
+      g.fillStyle(0x0c1a06); g.fillEllipse(X(19),6,4,3); g.fillEllipse(X(24),6,3.5,3);
+      g.fillStyle(eye); g.fillEllipse(X(19),6,2.2,1.8); g.fillEllipse(X(24),6,2,1.6);
+      g.fillStyle(0xeaffd6); g.fillCircle(X(18),5,0.9);
+      // bocca spalancata verso l'alto-sx con bava verde
+      g.fillStyle(0x0a1604); g.fillEllipse(X(16),10,7,5);
+      g.fillStyle(sac,0.8);  g.fillEllipse(X(16),10,5,3);
+      g.fillStyle(bone); [13,16,19].forEach(x=>g.fillTriangle(X(x),8,X(x+2),8,X(x+1),11));
+      g.fillStyle(vein,0.7); g.fillEllipse(X(14),13,2,4);              // bava che cola
+    }
+    g.generateTexture('zombie_spitter',90,46); AF('zombie_spitter',30,46,3); g.destroy();
+  }
+
   // ════════════════════════════════════════════════════════════════════════
   // BOSS — texture dedicate (silhouette propria per ciascuno). Vedi §6.7 della
   // Art Bible zombi. Gameplay/hitbox restano in BOSS_CONFIG (bodyW/bodyH).
@@ -993,6 +1045,7 @@ export function buildEntityTextures(scene: Phaser.Scene) {
   walk('toxic', 4);
   walk('giant', 3.5);
   walk('charger', 4.5); // bruto pesante che incorna
+  walk('spitter', 3.5); // artigliere lento e curvo
 
   // Animazioni boss: stesso ciclo a 3 frame ma su texture dedicate (boss_<tipo>).
   const bwalk = (texKey: string, rate: number) => {

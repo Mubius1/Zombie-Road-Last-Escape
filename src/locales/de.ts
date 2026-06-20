@@ -180,6 +180,7 @@ const de: Record<string, string> = {
   'zombie.toxic': 'Giftig',
   'zombie.giant': 'Riese',
   'zombie.charger': 'Stürmer',
+  'zombie.spitter': 'Speier',
 
   'obj.bullet': 'Projektil',
   'obj.rocket': 'Rakete',

@@ -46,6 +46,9 @@ const OVERDRIVE_CHARGE_COMBO = 2; // carica aggiuntiva = questo × moltiplicator
 const CHARGER_TRIGGER_X = 360;    // distanza dal veicolo a cui scatta il telegrafo
 const CHARGER_TELEGRAPH = 700;    // ms di impennata prima della carica
 const CHARGER_CHARGE_SPEED = 420; // velocità della carica (oltre lo scorrimento del mondo)
+// ── Sputatore (A2): nemico a distanza, lancia bile sulla corsia del veicolo. Vedi BALANCE §5. ──
+const SPITTER_FIRE_INTERVAL = 2000;   // ms tra uno sputo e l'altro
+const SPITTER_PROJECTILE_SPEED = 260; // velocità del proiettile tossico (lento → schivabile)
 
 interface EnvConfig {
   name: string;
@@ -84,6 +87,7 @@ const ZOMBIE_STATS: Record<ZombieType, ZombieStats> = {
   giant:   { speed: 30,  hp: 12, scale: 2.2,  damage: 35, score: 80 },
   toxic:   { speed: 55,  hp: 2,  scale: 1.1,  damage: 10, score: 25 },
   charger: { speed: 60,  hp: 3,  scale: 1.1,  damage: 30, score: 40 },
+  spitter: { speed: 40,  hp: 2,  scale: 1.0,  damage: 12, score: 30 },
 };
 
 // Personalità di movimento per tipo.
@@ -103,6 +107,7 @@ const ZOMBIE_MOTION: Record<ZombieType, ZombieMotion> = {
   giant:   { amp: 0.04, spd: 2.0,  lean:  0.00, pow: 1.6,  stomp: 1.8, wob: 0.03, home: 0,  turn: 0,    fx: true,  fxEvery: 360 },
   toxic:   { amp: 0.13, spd: 2.2,  lean:  0.00, pow: 1.0,  stomp: 0,   wob: 0.05, home: 16, turn: 0.05, fx: true,  fxEvery: 220 },
   charger: { amp: 0.05, spd: 3.0,  lean:  0.00, pow: 1.4,  stomp: 1.0, wob: 0,    home: 0,  turn: 0,    fx: false, fxEvery: 0   },
+  spitter: { amp: 0.06, spd: 2.4,  lean:  0.00, pow: 1.0,  stomp: 0,   wob: 0.04, home: 0,  turn: 0,    fx: false, fxEvery: 0   },
 };
 
 const SPAWN_POOL: ZombieType[] = [
@@ -112,6 +117,7 @@ const SPAWN_POOL: ZombieType[] = [
   'jumper',
   'toxic', 'toxic',
   'charger',
+  'spitter',
 ];
 
 const ATTACH_SLOTS: Array<{ dx: number; dy: number; comp: ComponentKey }> = [
@@ -129,6 +135,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private bullets!: Phaser.Physics.Arcade.Group;
   private fuelCans!: Phaser.Physics.Arcade.Group;
   toxicClouds!: Phaser.Physics.Arcade.Group;
+  private spitProjectiles!: Phaser.Physics.Arcade.Group; // proiettili dello Sputatore (A2)
 
   private attachedZombies: AttachedZombie[] = [];
   private components!: Record<ComponentKey, ComponentData>;
@@ -427,6 +434,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.rockets         = this.physics.add.group();
     this.fuelCans        = this.physics.add.group();
     this.toxicClouds     = this.physics.add.group();
+    this.spitProjectiles = this.physics.add.group();
     // I gruppi del boss (corpo + proiettili) sono creati dal BossController in create().
   }
 
@@ -439,6 +447,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       (_v,f) => this.onCollectFuel(f as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.vehicle, this.toxicClouds,
       (_v,c) => this.onVehicleHitCloud(c as Phaser.Physics.Arcade.Sprite));
+    this.physics.add.overlap(this.vehicle, this.spitProjectiles,
+      (_v,p) => this.onSpitHitVehicle(p as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.rockets, this.zombies,
       (r,z) => this.onRocketHitZombie(r as Phaser.Physics.Arcade.Sprite, z as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.bullets, this.boss.group,
@@ -851,6 +861,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     clean(this.zombies,    -100, this.designW+100);
     clean(this.fuelCans,   -80,  this.designW+80);
     clean(this.toxicClouds,-80,  this.designW+80);
+    clean(this.spitProjectiles, -40, this.designW+60);
     clean(this.rockets,         -20,  this.designW+60);
     clean(this.boss.projectiles, -80,  this.designW+80);
     // Bullets respect per-projectile maxX (lanciafiamme ha range breve)
@@ -922,6 +933,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
       // Caricatore (A2): logica di carica (avvicinamento → telegrafo → scatto sulla corsia).
       if (type === 'charger') this.updateChargerMotion(z, time);
+      // Sputatore (A2): artiglieria tossica — spara bile sulla corsia a intervalli.
+      if (type === 'spitter') this.updateSpitterMotion(z, time, delta);
     }
   }
 
@@ -950,6 +963,39 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     } else {
       z.y = Phaser.Math.Clamp(z.y, ROAD_TOP + 12, ROAD_BOTTOM - 12);
     }
+  }
+
+  /** Sputatore (A2): spara un proiettile di bile verso il veicolo a cadenza fissa (solo se davanti e on-screen). */
+  private updateSpitterMotion(z: Phaser.Physics.Arcade.Sprite, _time: number, delta: number) {
+    if (z.getData('entering')) return;
+    let ft = ((z.getData('fireTimer') as number) ?? SPITTER_FIRE_INTERVAL) - delta;
+    if (ft <= 0 && z.x < this.designW && z.x > this.vehicle.x + 80) {
+      ft = SPITTER_FIRE_INTERVAL;
+      this.spitterFire(z);
+    }
+    z.setData('fireTimer', ft);
+  }
+
+  private spitterFire(z: Phaser.Physics.Arcade.Sprite) {
+    const p = this.spitProjectiles.create(z.x - 8, z.y - 4, 'toxic_cloud') as Phaser.Physics.Arcade.Sprite;
+    p.setScale(0.5).setDepth(8).setTint(0x9dff5a);
+    const dx = this.vehicle.x - p.x, dy = this.vehicle.y - p.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const body = p.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity((dx / len) * SPITTER_PROJECTILE_SPEED, (dy / len) * SPITTER_PROJECTILE_SPEED);
+    body.setSize(36, 36);                       // texture 50 × scala 0.5 → hitbox effettiva ~18px
+    this.spawnHitParticles(z.x - 8, z.y);
+    this.sfx?.playToxicSizzle();
+  }
+
+  private onSpitHitVehicle(p: Phaser.Physics.Arcade.Sprite) {
+    if (!p.active) return;
+    p.destroy();
+    this.dealDamage(this.scaledDamage('spitter'));
+    this.damageComponent('armor', 6);
+    this.sfx?.playImpact();
+    this.vehicle.setTint(0x66ff66);
+    this.time.delayedCall(120, () => { if (this.vehicle?.active && this.alive) this.vehicle.clearTint(); });
   }
 
   // Emette particelle che si auto-distruggono in base al tipo (vapore, melma, scia, polvere)
@@ -1232,6 +1278,15 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         this.environment?.addDecal('blood', zombie.x, zombie.y);
         break;
 
+      case 'spitter':
+        zombie.destroy();
+        this.spawnToxicCloud(zombie.x, zombie.y);
+        this.dealDamage(this.scaledDamage('spitter'));
+        this.damageComponent('armor', 8);
+        this.sfx?.playImpact();
+        this.environment?.addDecal('blood', zombie.x, zombie.y);
+        break;
+
       default: // common
         if (this.attachedZombies.length < ATTACH_SLOTS.length) {
           this.attachZombie(zombie, false);
@@ -1438,6 +1493,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.sfx?.stopEngine();
     this.zombies.setVelocityX(0);
     this.fuelCans.setVelocityX(0);
+    this.spitProjectiles.setVelocityX(0); this.spitProjectiles.setVelocityY(0);
     this.clearAttachedZombies();
 
     // Record persistente (G5) + rilevamento fine-ciclo (G6): completare le 7 regioni è una "vittoria",
@@ -1499,6 +1555,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.fuelCans.setVelocityX(0);
     this.boss.projectiles.setVelocityX(0); // niente proiettili boss sospesi sopra l'overlay (X9)
     this.boss.group.setVelocityX(0);
+    this.spitProjectiles.setVelocityX(0); this.spitProjectiles.setVelocityY(0);
     this.clearAttachedZombies(); // niente sprite/timer orfani sul veicolo congelato (X3)
 
     this.time.delayedCall(700, () => {
@@ -1566,6 +1623,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       toxic:   [0x6cff3a, 0x2cbb2a],
       armored: [0x9aa7b5, 0x5f6b78],
       charger: [0xb31818, 0x540c0a],
+      spitter: [0x6cff3a, 0x2cbb2a],
     };
     const [c1, c2] = palette[type];
     const n = type === 'giant' ? 10 : Phaser.Math.Between(4, 6);

@@ -113,7 +113,7 @@ Tutto vive in uno **spazio di design alto 600** (vedi [CLAUDE.md → Risoluzione
 ## §5 · Nemici
 
 ### Roster zombi
-7 tipi ordinari (`ZOMBIE_STATS` / `ZOMBIE_MOTION`). Identità di movimento e VFX nell'[art bible zombi](ART_BIBLE_ZOMBIES.md); numeri in [BALANCE.md §5](BALANCE.md#5--nemici).
+8 tipi ordinari (`ZOMBIE_STATS` / `ZOMBIE_MOTION`). Identità di movimento e VFX nell'[art bible zombi](ART_BIBLE_ZOMBIES.md); numeri in [BALANCE.md §5](BALANCE.md#5--nemici).
 
 | Tipo | Ruolo di design |
 |---|---|
@@ -124,8 +124,9 @@ Tutto vive in uno **spazio di design alto 600** (vedi [CLAUDE.md → Risoluzione
 | **Tossico** | lascia una nube velenosa quando muore |
 | **Gigante** | mini-boss errante (12 HP), spawn temporizzato |
 | **Caricatore** | bruto che si impenna (telegrafo) e poi **carica** sulla tua corsia: va schivato o attraversato con lo Scatto — primo nemico "a risposta" (A2) |
+| **Sputatore** | artiglieria tossica a distanza: lancia bile sulla tua corsia, ti costringe a non restare fermo (A2) |
 
-**Pool di spawn ordinario** (peso per frequenza): Comune ×4 · Corridore ×2 · Tossico ×2 · Corazzato ×1 · Saltatore ×1 · Caricatore ×1. Il Gigante è fuori pool (timer dedicato).
+**Pool di spawn ordinario** (peso per frequenza): Comune ×4 · Corridore ×2 · Tossico ×2 · Corazzato ×1 · Saltatore ×1 · Caricatore ×1 · Sputatore ×1. Il Gigante è fuori pool (timer dedicato).
 
 ### Aggancio agli slot del veicolo
 Gli zombi che raggiungono il veicolo si **aggrappano** a uno dei 6 slot-componente (`ATTACH_SLOTS`). Da agganciati:

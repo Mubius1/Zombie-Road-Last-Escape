@@ -158,7 +158,7 @@ for (const key of VEHICLE_KEYS) {
 // ════════════════════════════════════════════════════════════════════════════
 // §5 — NEMICI (statistiche + peso pool)
 // ════════════════════════════════════════════════════════════════════════════
-const ZOMBIE_KEYS = ['common', 'runner', 'armored', 'jumper', 'toxic', 'giant', 'charger'];
+const ZOMBIE_KEYS = ['common', 'runner', 'armored', 'jumper', 'toxic', 'giant', 'charger', 'spitter'];
 const statsSrc = sliceObject(code, 'const ZOMBIE_STATS');
 checkCoverage('nemici', recordKeys(statsSrc), ZOMBIE_KEYS);
 // SPAWN_POOL: salta l'annotazione di tipo (`ZombieType[]`) cercando l'array dopo '='.

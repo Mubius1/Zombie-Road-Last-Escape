@@ -140,9 +140,11 @@ Fonte: `ZOMBIE_STATS` (velocità/HP/danno/punteggio) e `SPAWN_POOL` (peso pool).
 | `toxic` | Tossico | 55 | 2 | 10 | 25 | 2 |
 | `giant` | Gigante | 30 | 12 | 35 | 80 | — |
 | `charger` | Caricatore | 60 | 3 | 30 | 40 | 1 |
+| `spitter` | Sputatore | 40 | 2 | 12 | 30 | 1 |
 
-- **Peso pool** = occorrenze in `SPAWN_POOL` (11 voci totali): Comune ~36% · Corridore ~18% · Tossico ~18% · Corazzato ~9% · Saltatore ~9% · Caricatore ~9%. Il **Gigante** è fuori pool (timer 22 s) → peso `—` (non validato).
+- **Peso pool** = occorrenze in `SPAWN_POOL` (12 voci totali): Comune ~33% · Corridore ~17% · Tossico ~17% · Corazzato ~8% · Saltatore ~8% · Caricatore ~8% · Sputatore ~8%. Il **Gigante** è fuori pool (timer 22 s) → peso `—` (non validato).
 - **Caricatore (A2):** la colonna *Velocità* (60) è la velocità di **avvicinamento**. A `CHARGER_TRIGGER_X` (360 u) dal veicolo si **impenna** per `CHARGER_TELEGRAPH` (700 ms, telegrafo), poi **carica** orizzontalmente a `CHARGER_CHARGE_SPEED` (420, oltre lo scroll) puntando la corsia del veicolo: va schivato o attraversato con lo Scatto. Le tre costanti di carica sono *derivate/da tarare*, non validate a numero.
+- **Sputatore (A2):** nemico a **distanza**. Avanza lento (40) e ogni `SPITTER_FIRE_INTERVAL` (2000 ms) lancia un proiettile di bile verso la posizione corrente del veicolo a `SPITTER_PROJECTILE_SPEED` (260, schivabile): la colonna *Danno* (12) è il danno del proiettile (e del contatto). Costringe a non restare fermi in corsia. Le due costanti sono *derivate/da tarare*, non validate.
 - Il **Tossico** rilascia una nube velenosa alla morte; il danno tabellato è quello da contatto.
 - *Rapporto rischio/ricompensa:* punteggio ∝ pericolosità (HP×danno), così la combo premia l'aggressività verso i bersagli grossi.
 - Il **danno** in tabella è il valore nominale: passa sempre dalla mitigazione corazza (§4).

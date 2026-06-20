@@ -180,6 +180,7 @@ Costruzioni riutilizzabili (solo primitive). Il *sottile* va **cotto nei 3 frame
 | giant | 0.04 | 2.0 | 0.00 | **1.6** | **1.8** | 0.03 | 0 | 0 | polvere | 360 |
 | toxic | 0.13 | 2.2 | 0.00 | 1.0 | 0 | **0.05** | 16 | 0.05 | vapore | 220 |
 | charger | 0.05 | 3.0 | 0.00 | **1.4** | **1.0** | 0 | 0 | 0 | — | — |
+| spitter | 0.06 | 2.4 | 0.00 | 1.0 | 0 | **0.04** | 0 | 0 | — | — |
 
 ---
 
@@ -291,6 +292,20 @@ Costruzioni riutilizzabili (solo primitive). Il *sottile* va **cotto nei 3 frame
 **VFX (cotti):** corna/creste ossee su gobba e fronte, squarcio sul fianco con muscolo e costola, chiazze livide sulle gambe, bava di sangue dalla mascella zannuta. **Telegrafo (dinamico):** quando entra in raggio si **impenna** (tinta gialla `#ffcc44` + pulsazione di scala) per ~0,7 s, poi **scatta** orizzontale sulla corsia del veicolo (particelle + impatto sonoro).
 
 **Motion:** pesante (`pow 1.4`, `stomp 1.0`), **nessun inseguimento continuo** (`home 0`): avanza lento finché non **carica**. Logica in `updateChargerMotion` (stati approach → telegraph → charging). Numeri di carica in [BALANCE §5](BALANCE.md#5--nemici-).
+
+---
+
+### 6.6 ter · SPUTATORE — *"La Bocca"* · 30×46 · `scale 1.0`
+**Concept:** non ti raggiunge: ti **bersaglia**. Un corpo magro con una gola-sacca gonfia di bile che vomita proiettili tossici sulla tua corsia. Secondo nemico "a risposta" (A2): ti obbliga a **non restare fermo**.
+
+**Palette:**
+`carne cinerea #6e6e5a` · luce `#8e8e74` · ombra `#44443a` · profondo `#2a2a22` · **sacca tossica #4fb83a / luce #7dff4a / scuro #2c7a22** · vene `#9dff5a` · osso `#d9cba6` · stracci `#3a3a30` · **occhi verdi #9dff5a**.
+
+**Silhouette:** **magro e curvo**, dominato dalla **gola-sacca** verde sovradimensionata e dalla **bocca rivolta all'insù** (la canna). Lettura immediata: "quello spara".
+
+**VFX (cotti):** sacca con bolle e nucleo luminoso, vene emissive, bava verde dalla bocca, alone tossico. **Proiettile (dinamico):** glob di bile (texture `toxic_cloud` ridotta, tinta `#9dff5a`) lanciato verso il veicolo, preceduto da particelle e `playToxicSizzle`; all'impatto → danno + tinta verde sul mezzo.
+
+**Motion:** lento (`spd 2.4`), **respiro della sacca** (`wob 0.04`), nessun inseguimento (`home 0`). Cadenza di fuoco in `updateSpitterMotion` / `spitterFire`. Numeri in [BALANCE §5](BALANCE.md#5--nemici-).
 
 ---
 
