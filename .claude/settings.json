@@ -40,7 +40,14 @@
       "Bash(cd \"c:/Users/manda/.claude/projects/c--Users-manda-Documents-progetto-della-domenica/af98259e-5aee-45ff-8b01-80779acdeee2/subagents/workflows/wf_be5932ac-e5e\" 2>/dev/null && echo \"=== file agenti ===\" && ls -1 2>/dev/null | head -50 && echo \"\" && echo \"=== n. transcript agenti ===\" && ls -1 *.jsonl 2>/dev/null | wc -l || echo \"\\(cartella non ancora popolata o percorso diverso\\)\")",
       "Read(//c/Users/manda/.claude/projects/c--Users-manda-Documents-progetto-della-domenica/af98259e-5aee-45ff-8b01-80779acdeee2/subagents/workflows/wf_be5932ac-e5e/**)",
       "Bash(cd \"/c/Users/manda/Documents/progetto della domenica\" && find . -name \"*.md\" -type f | head -20)",
-      "Read(//c/c/Users/manda/Documents/**)"
+      "Read(//c/c/Users/manda/Documents/**)",
+      "Bash(node scripts/validate-i18n.mjs)",
+      "Bash(ls package-lock.json npm-shrinkwrap.json yarn.lock pnpm-lock.yaml .github)",
+      "Bash(ls -d .github/workflows)",
+      "PowerShell(git -C \"c:\\\\Users\\\\manda\\\\Documents\\\\progetto della domenica\" stash list)",
+      "PowerShell(git -C \"c:\\\\Users\\\\manda\\\\Documents\\\\progetto della domenica\" status --short)",
+      "PowerShell(npx tsc --noEmit 2>&1)",
+      "PowerShell(npm run validate:art 2>&1)"
     ],
     "additionalDirectories": [
       "\\tmp"

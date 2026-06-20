@@ -7,6 +7,7 @@ import Settings from '../Settings';
 import SoundManager from '../SoundManager';
 import Ui, { UI, MENU_VIGNETTE } from '../Ui';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
+import { getRun, setRun } from '../RunState';
 import { t } from '../i18n';
 
 const H = 600;
@@ -57,14 +58,14 @@ export default class ShopScene extends Phaser.Scene {
     this.designW = setupCamera(this).designW;
     this.ox = (this.designW - DESIGN_W) / 2;
 
-    this.money          = this.registry.get('money')         ?? 0;
-    this.upgrades       = { ...(this.registry.get('upgrades') ?? {}) };
-    this.currentVehicle = this.registry.get('vehicle')       ?? 'civilian_car';
-    this.ownedVehicles  = this.registry.get('ownedVehicles')  ?? ['civilian_car'];
-    this.survivors      = this.registry.get('survivors')      ?? [];
-    this.missionNum     = this.registry.get('missionNumber')  ?? 2;
-    this.currentWeapon  = this.registry.get('currentWeapon')  ?? 'mg';
-    this.ownedWeapons   = this.registry.get('ownedWeapons')   ?? ['mg'];
+    this.money          = getRun(this.registry, 'money')         ?? 0;
+    this.upgrades       = { ...(getRun(this.registry, 'upgrades') ?? {}) };
+    this.currentVehicle = getRun(this.registry, 'vehicle')       ?? 'civilian_car';
+    this.ownedVehicles  = getRun(this.registry, 'ownedVehicles')  ?? ['civilian_car'];
+    this.survivors      = getRun(this.registry, 'survivors')      ?? [];
+    this.missionNum     = getRun(this.registry, 'missionNumber')  ?? 2;
+    this.currentWeapon  = getRun(this.registry, 'currentWeapon')  ?? 'mg';
+    this.ownedWeapons   = getRun(this.registry, 'ownedWeapons')   ?? ['mg'];
 
     const available = SURVIVORS.filter(s => !this.survivors.includes(s.key));
     this.offeredSurvivors = Phaser.Utils.Array.Shuffle([...available]).slice(0, 3) as SurvivorData[];
@@ -322,26 +323,26 @@ export default class ShopScene extends Phaser.Scene {
   private buyItem(item: ShopItem) {
     if (this.money < item.cost) return;
     this.money -= item.cost;
-    this.registry.set('money', this.money);
+    setRun(this.registry, 'money', this.money);
 
     if (item.key === 'repair') {
-      this.registry.set('components', { engine: 100, wheels: 100, tank: 100, turret: 100, armor: 100 });
+      setRun(this.registry, 'components', { engine: 100, wheels: 100, tank: 100, turret: 100, armor: 100 });
     } else {
       (this.upgrades as Record<string,boolean>)[item.key] = true;
-      this.registry.set('upgrades', { ...this.upgrades });
+      setRun(this.registry, 'upgrades', { ...this.upgrades });
     }
     this.afterPurchase();
   }
 
   private recruitSurvivor(key: string) {
     if (this.survivors.includes(key)) return;
-    this.registry.set('survivors', [...this.survivors, key]);
+    setRun(this.registry, 'survivors', [...this.survivors, key]);
     ShopScene.sfx?.playFuelPickup();
     this.time.delayedCall(150, () => this.refresh());
   }
 
   private selectVehicle(key: string) {
-    this.registry.set('vehicle', key);
+    setRun(this.registry, 'vehicle', key);
     this.refresh();
   }
 
@@ -350,14 +351,14 @@ export default class ShopScene extends Phaser.Scene {
     if (this.money < v.price || this.ownedVehicles.includes(key)) return;
     this.money -= v.price;
     const newOwned = [...this.ownedVehicles, key];
-    this.registry.set('money', this.money);
-    this.registry.set('ownedVehicles', newOwned);
-    this.registry.set('vehicle', key);
+    setRun(this.registry, 'money', this.money);
+    setRun(this.registry, 'ownedVehicles', newOwned);
+    setRun(this.registry, 'vehicle', key);
     this.afterPurchase();
   }
 
   private selectWeapon(key: WeaponType) {
-    this.registry.set('currentWeapon', key);
+    setRun(this.registry, 'currentWeapon', key);
     this.refresh();
   }
 
@@ -366,9 +367,9 @@ export default class ShopScene extends Phaser.Scene {
     if (this.money < w.price || this.ownedWeapons.includes(key)) return;
     this.money -= w.price;
     const newOwned = [...this.ownedWeapons, key];
-    this.registry.set('money', this.money);
-    this.registry.set('ownedWeapons', newOwned);
-    this.registry.set('currentWeapon', key);
+    setRun(this.registry, 'money', this.money);
+    setRun(this.registry, 'ownedWeapons', newOwned);
+    setRun(this.registry, 'currentWeapon', key);
     this.afterPurchase();
   }
 

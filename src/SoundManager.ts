@@ -5,6 +5,7 @@ export default class SoundManager {
   private ctx: AudioContext;
   private master: GainNode;
   private limiter: DynamicsCompressorNode;
+  private noiseBuffer: AudioBuffer; // rumore bianco generato UNA volta e condiviso (AU4)
   private engineOsc?: OscillatorNode;
   private engineOsc2?: OscillatorNode;
   private engineGain?: GainNode;
@@ -28,6 +29,17 @@ export default class SoundManager {
     this.limiter.release.value = 0.1;     // s
     this.master.connect(this.limiter);
     this.limiter.connect(ctx.destination);
+
+    // Rumore bianco condiviso: prima ogni sparo allocava+riempiva un nuovo AudioBuffer (AU4). 2s coprono
+    // il loop del motore e ogni one-shot (i chiamanti riusano il buffer e gestiscono start/stop).
+    this.noiseBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 2), ctx.sampleRate);
+    const nd = this.noiseBuffer.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  }
+
+  /** Se il browser ha sospeso il contesto (tab in background, risparmio energetico mobile), riprendilo (AU6). */
+  private resumeIfSuspended() {
+    if (this.ctx.state === 'suspended') void this.ctx.resume();
   }
 
   /** Imposta il volume utente (0..1), scalato sul livello master di riferimento. */
@@ -264,10 +276,40 @@ export default class SoundManager {
     }
   }
 
+  /** Stinger di apparizione boss: tono grave minaccioso che sale — telegrafo (AU5). Vedi §5. */
+  playBossWarn() {
+    const t0 = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator(); osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(55, t0);
+    osc.frequency.exponentialRampToValueAtTime(110, t0 + 0.5);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.001, t0);
+    g.gain.linearRampToValueAtTime(0.5, t0 + 0.08);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.6);
+    osc.connect(g); g.connect(this.master);
+    osc.start(t0); osc.stop(t0 + 0.62);
+  }
+
+  /** Allarme carburante basso: due bip brevi acuti, sotto l'azione (AU5). Vedi §5. */
+  playLowFuel() {
+    [0, 0.18].forEach((dt) => {
+      const t = this.ctx.currentTime + dt;
+      const osc = this.ctx.createOscillator(); osc.type = 'sine';
+      osc.frequency.value = 880;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.linearRampToValueAtTime(0.2, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      osc.connect(g); g.connect(this.master);
+      osc.start(t); osc.stop(t + 0.14);
+    });
+  }
+
   // ─── Engine loop ─────────────────────────────────────────────────────────────
 
   startEngine() {
     if (this.engineOsc) return;
+    this.resumeIfSuspended();
     const t = this.ctx.currentTime;
 
     // ── Bus TONALE: due sawtooth gravi leggermente detunati = "blocco motore" che ringhia.
@@ -347,6 +389,10 @@ export default class SoundManager {
     if (!this.engineGain || !this.engineOsc) return;
     const stopAt = this.ctx.currentTime + 1.2;
     this.engineGain.gain.setTargetAtTime(0.001, this.ctx.currentTime, 0.3);
+    // Scollega la vecchia catena motore quando gli oscillatori finiscono: a pause/riprese ripetute
+    // evita di accumulare nodi orfani sul master (AU2, parte di leak).
+    const oldGain = this.engineGain;
+    this.engineOsc.onended = () => { try { oldGain.disconnect(); } catch { /* già scollegato */ } };
     this.engineOsc.stop(stopAt);
     this.engineOsc2?.stop(stopAt);
     this.engineLfo?.stop(stopAt);
@@ -359,16 +405,26 @@ export default class SoundManager {
     this.engineLowpass = undefined;
   }
 
+  /**
+   * Smonta il manager: ferma il motore e **scollega master+limiter** da `destination`. Da chiamare allo
+   * SHUTDOWN della scena: senza, ogni restart di GameScene (e ogni anteprima di SettingsScene) lascerebbe
+   * una catena master+limiter appesa al context condiviso di Phaser (AU7).
+   * (NB: definito DOPO stopEngine così `validate-audio` slicia il metodo giusto — la sua regex cerca la
+   * prima occorrenza di 'stopEngine()' nel file.)
+   */
+  dispose() {
+    this.stopEngine();
+    try { this.master.disconnect(); } catch { /* già scollegato */ }
+    try { this.limiter.disconnect(); } catch { /* già scollegato */ }
+  }
+
   // ─── Utility ─────────────────────────────────────────────────────────────────
 
-  private noise(duration: number): AudioBufferSourceNode {
-    const sr   = this.ctx.sampleRate;
-    const size = Math.ceil(sr * duration);
-    const buf  = this.ctx.createBuffer(1, size, sr);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
+  private noise(_duration?: number): AudioBufferSourceNode {
+    // Riusa il buffer condiviso (AU4): nessuna allocazione/riempimento per chiamata. Il chiamante
+    // gestisce start()/stop() per la durata effettiva; per il loop motore imposta `.loop = true`.
     const src = this.ctx.createBufferSource();
-    src.buffer = buf;
+    src.buffer = this.noiseBuffer;
     return src;
   }
 }

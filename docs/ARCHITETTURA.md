@@ -56,10 +56,11 @@ main.ts ─ avvia →  game.ts ─ configura Phaser, registra le scene
 - **Texture procedurali** → [`EntityTextures.ts`](../src/EntityTextures.ts) (nemici, boss, oggetti) e [`VehicleTextures.ts`](../src/VehicleTextures.ts) (veicolo): funzioni pure su `scene.textures`, importate da `GameScene`/`ShopScene`/`DebugScene`/`MenuScene`.
 - **HUD** → [`HudController.ts`](../src/HudController.ts): una "vista" che riceve lo stato (`build`/`update`) e aggiorna i display object (barre, % salute, combo, scatto, selettore armi, componenti, debug); non conosce la logica di gioco.
 - **Sottosistema boss** → [`BossController.ts`](../src/BossController.ts): possiede stato e gruppi fisici del boss (spawn, attacchi per tipo, 2ª fase, barra HP, morte VFX) e dialoga con la scena tramite l'interfaccia **`BossHost`** (i membri di gameplay che il boss usa sono esposti pubblici su `GameScene`).
-- **Stato run/record** → [`RunState.ts`](../src/RunState.ts) (`resetRunState` sul registry) e [`SaveData.ts`](../src/SaveData.ts) (record persistente in localStorage).
+- **Dati di dominio neutri** → [`World.ts`](../src/World.ts): `BOSS_CONFIG`/`BOSS_ORDER`, geometria strada (`ROAD_*`) e i tipi condivisi (`ZombieType`/`ComponentKey`/`BossType`/`BossConfig`). Modulo senza import → importabile per valore sia da `GameScene` sia da `BossController` **senza ciclo** (A4).
+- **Stato run/record** → [`RunState.ts`](../src/RunState.ts) (contratto tipizzato `RunData` + `getRun`/`setRun` + `resetRunState` sul registry) e [`SaveData.ts`](../src/SaveData.ts) (record persistente in localStorage).
 
-In `GameScene` restano l'orchestrazione del game-loop, `buildWorld`, spawn nemici/pickup, `fireWeapon`, combo/scatto/carburante/sopravvissuti, `triggerMissionComplete`/`endGame`, i dati di dominio (`ZOMBIE_STATS`/`ZOMBIE_MOTION`/`BOSS_CONFIG`/`SPAWN_POOL`, letti dai validatori) e l'**`hitStop`** (qui e non in `Juice`, perché deve mettere in pausa il proprio `update()`). Per i punti precisi vedi la *Mappa del codice* in [`CLAUDE.md`](../CLAUDE.md).
-> ⚠️ Debito noto (re-audit): `BossController` importa da `GameScene` anche valori (`BOSS_CONFIG`/`ROAD_*`) → ciclo di moduli a livello di valori, oggi innocuo perché usati solo a runtime. Da rompere spostando i dati di dominio in un modulo neutro.
+In `GameScene` restano l'orchestrazione del game-loop, `buildWorld`, spawn nemici/pickup, `fireWeapon`, combo/scatto/carburante/sopravvissuti, `triggerMissionComplete`/`endGame`, i dati nemici (`ZOMBIE_STATS`/`ZOMBIE_MOTION`/`SPAWN_POOL`, letti dai validatori; i dati boss e la geometria strada stanno in `World.ts`) e l'**`hitStop`** (qui e non in `Juice`, perché deve mettere in pausa il proprio `update()`). Per i punti precisi vedi la *Mappa del codice* in [`CLAUDE.md`](../CLAUDE.md).
+> ✅ Ciclo di moduli risolto (A4): `BossController` non importa più `GameScene` — i dati condivisi vivono in `World.ts`. I validatori art/balance leggono `BOSS_CONFIG` da `World.ts`.
 
 ---
 
@@ -145,6 +146,8 @@ Le scene **non si passano oggetti direttamente**. Esistono due canali, con scopi
 
 La `DataManager` globale di Phaser (`this.registry`, condivisa tra tutte le scene). È il "save game" volatile della run: `GameScene` lo legge in `create()`, `ShopScene` lo modifica con gli acquisti, `GameScene` lo riscrive a fine missione.
 
+> **Accesso tipizzato (A3).** Il registry di Phaser è `any`. Le chiavi/tipi qui sotto sono il contratto `RunData` in [`RunState.ts`](../src/RunState.ts); leggi/scrivi sempre con `getRun(registry, 'chiave')` / `setRun(registry, 'chiave', valore)` (non `registry.get/set` grezzi) → refusi di chiave e valori del tipo sbagliato diventano errori di compilazione.
+
 | Chiave | Tipo | Significato | Scritta da |
 |---|---|---|---|
 | `money` | number | valuta corrente | Game (a fine missione), Shop (acquisti), Debug |
@@ -158,7 +161,7 @@ La `DataManager` globale di Phaser (`this.registry`, condivisa tra tutte le scen
 | `components` | {engine,wheels,tank,turret,armor}\|null | salute componenti riportata tra missioni | Game (fine missione), Shop (riparazione → 100) |
 | `lastScore` | number | punteggio ultima missione | Game |
 
-Letture difensive ovunque: `this.registry.get('money') ?? 0`. **Reset partita** (nuova run / game over → menu) = riscrivere tutte le chiavi ai default (`money 0`, `vehicle 'civilian_car'`, `weapon 'mg'`, ecc.) — vedi `GameScene` (sezioni reset) e `DebugScene.reset`.
+Letture difensive ovunque: `getRun(this.registry, 'money') ?? 0` (ritorna `undefined` se la chiave non c'è ancora). **Reset partita** (nuova run / game over → menu) = `resetRunState(registry)`, che riscrive tutte le chiavi ai default in un solo punto (`money 0`, `vehicle 'civilian_car'`, `weapon 'mg'`, ecc.) — chiamato da `GameScene`, `MenuScene.newGame` e `DebugScene.startFresh`.
 
 ### 6.2 `Settings` — preferenze persistenti (localStorage, cross-run)
 

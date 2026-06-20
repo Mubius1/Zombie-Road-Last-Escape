@@ -153,7 +153,7 @@ Costruzioni riutilizzabili (solo primitive). Il *sottile* va **cotto nei 3 frame
 **Implementazioni attuali** (`emitZombieFx` / `emitSparks`):
 - Tossico → vapore verde `#4cff3a` che sale + goccia melma `#2cbb2a`.
 - Corridore → afterimage tint `#ff7744`, alpha 0.26.
-- Gigante → polvere ai piedi `#6a5a44`.
+- Gigante → polvere pesante a **due strati** (zolla `#4a3d2c` + foschia `#6a5a44`) calciata da **entrambi i piedi** e trascinata indietro; a rotazione una **goccia di sangue** `#6e1410` dalla ferita ventrale **o** una **pulsazione emissiva** degli occhi (alone additivo `#ff3018`).
 - Corazzato → scintille `#fff2a0` ad ogni colpo incassato.
 
 ---
@@ -260,14 +260,18 @@ Costruzioni riutilizzabili (solo primitive). Il *sottile* va **cotto nei 3 frame
 ---
 
 ### 6.6 GIGANTE — *"L'Innesto"* · 48×66 · `scale 2.2` · **base dei boss**
-**Concept:** non è uno zombi, sono **più cadaveri cuciti insieme** — un esperimento.
+**Concept:** non è uno zombi, sono **più cadaveri cuciti insieme** — un esperimento. Ogni pezzo viene da un corpo diverso e si vede: tono, materia e morte non combaciano.
 
 **Palette:**
-`carne bruno-violacea #5a3a2e` · luce `#7d5240` · ombra `#38241c` · **chiazze livide #4a3a52** · **braccio innestato #5a5a3a / #7d7d50 / #2a2a18** (colore diverso) · **suture #1e140e + punti #8a7a60** · osso `#d9c8a0` · sangue `#6e2a26` · occhi `#ff2a10`.
+*Ospite* — carne necrotica `#5a3a2e` · luce `#7d5240` · mezzo `#6a4636` · ombra `#38241c` · **bordo d'ombra #231009** · **chiazze livide #4a3a52 / #32243f**.
+*Arto innestato* (cadavere diverso, verde-oliva malato) — `#5a5a3a` · luce `#7d7d50` · mezzo `#66663f` · ombra `#2a2a18` · profondo `#16160b`.
+*Suture* — cucitura `#180f08` + **punti #9a896a / luce #c2b186**.
+*Anatomia* — osso `#d9c8a0` / ombra `#9c8c66` · muscolo vivo `#7a2a24 / #a83a2e` · viscere `#3a1410` · sangue `#6e2a26 / #360d07`.
+*Emissivo (unico)* — occhi `#ff2a10`, specular caldo `#ffb59a`, **bloom finto cotto #ff3018**.
 
-**Silhouette:** **torreggiante, top-heavy** — **gobba** (spalla destra rialzata sopra la testa piccola) + **braccio destro innestato sovradimensionato** di colore diverso. Triangolo largo-in-alto = bruto istantaneo.
+**Silhouette:** **torreggiante, top-heavy e asimmetrica** — quattro ganci di "innesto": **(1) gobba** (spalla destra rialzata sopra la testa piccola) con **cranio vestigiale cucito** che ne rompe il profilo a destra; **(2) braccio destro sovradimensionato** di un altro corpo (tono oliva, artigli ossei); **(3) gamba sinistra innestata** di colore diverso con tibia esposta; **(4) ventre squarciato** che apre la gabbia toracica. Triangolo largo-in-alto = bruto istantaneo.
 
-**VFX (cotti):** suture/punti sul torso e alla spalla innestata, pancia squarciata con gabbia toracica, chiazze livide. **(dinamico)** polvere ai piedi.
+**VFX (cotti):** rete di **suture/punti** su collo, torso, spalla e inguine innestati; **cranio vestigiale** dagli occhi spenti nella gobba; **gabbia toracica** con muscolo vivo, viscere pendenti e sangue colato; **vertebre** che affiorano dalla gobba; chiazze livide nella metà bassa; **bloom rosso** cotto dietro gli occhi infossati. **(dinamico)** polvere pesante a due strati da entrambi i piedi + goccia di sangue ventrale / pulsazione emissiva degli occhi (vedi §4). **Morte:** alone rosso emissivo + schegge d'osso e sangue più grandi (oltre al gore base, `killBurst`).
 
 **Motion:** peso massimo (`pow 1.6`, `spd 2`), **tonfo marcato** + **respiro** (`wob 0.03`). Va dritto, inarrestabile.
 

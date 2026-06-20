@@ -15,7 +15,7 @@ export const VEHICLES: Record<string, VehicleData> = {
   military_suv:   { name: 'vehicle.military_suv.name',   price: 1200, color: 0x4a5c2a, healthBonus:  60, armorBonus: 25, speedMult: 1.1,  fireMult: 1.2 },
   armored_truck:  { name: 'vehicle.armored_truck.name',  price: 2000, color: 0x3a3a3a, healthBonus:  80, armorBonus: 35, speedMult: 0.85, fireMult: 1.0 },
   heavy_military: { name: 'vehicle.heavy_military.name', price: 3000, color: 0x2a3a2a, healthBonus: 100, armorBonus: 45, speedMult: 0.8,  fireMult: 1.3 },
-  experimental:   { name: 'vehicle.experimental.name',   price: 5000, color: 0x220044, healthBonus: 120, armorBonus: 50, speedMult: 1.2,  fireMult: 1.5 },
+  experimental:   { name: 'vehicle.experimental.name',   price: 5000, color: 0x220044, healthBonus:  60, armorBonus: 20, speedMult: 1.2,  fireMult: 1.5 },
 };
 
 export const VEHICLE_KEYS = Object.keys(VEHICLES);

@@ -83,11 +83,12 @@ Fonte: `VEHICLES` (`GameData.ts`). Prezzo e colore sono già validati dall'art b
 | `military_suv` | SUV Militare | 60 | 25 | 1.1 | 1.2 |
 | `armored_truck` | Camion Corazzato | 80 | 35 | 0.85 | 1.0 |
 | `heavy_military` | Mezzo Pesante | 100 | 45 | 0.8 | 1.3 |
-| `experimental` | Veicolo Sperimentale | 120 | 50 | 1.2 | 1.5 |
+| `experimental` | Veicolo Sperimentale | 60 | 20 | 1.2 | 1.5 |
 
 - **Salute totale** del mezzo = `100 + (+Salute)` → da 100 (Auto Civile) a 220 (Sperimentale). **+Armatura** entra nella mitigazione danni (§4 corazza).
 - **×Cadenza** (`fireMult`) si moltiplica con l'upgrade Torretta (×1.25); **×Velocità** (`speedMult`) con l'upgrade Motore (×1.15).
 - *Tensione di design:* i mezzi più corazzati (Camion, Pesante) sono **più lenti** → trade-off tra incassare e schivare.
+- *Sperimentale = "glass cannon" (B3):* resta il re di **velocità (1.2)** e **cadenza (1.5)** ma con salute/armatura **ridimensionate** (60/20, sotto SUV/Camion/Pesante) → non è più dominante su tutti gli assi: è una scelta aggressiva ad alto rischio, non un upgrade assoluto. Più punitivo con lo scaling NG+ (§5).
 
 ---
 
@@ -148,13 +149,15 @@ Fonte: `ZOMBIE_STATS` (velocità/HP/danno/punteggio) e `SPAWN_POOL` (peso pool).
 | 15 | 980 ms |
 | 18+ | 700 ms (pavimento) |
 
-### Scaling "new game+" (G2)
-Oltre la frequenza di spawn, da fine ciclo gli **HP** di nemici e boss crescono col numero di ciclo di regioni (1 ciclo = 7 regioni):
+### Scaling "new game+" (G2 · rafforzato in B4)
+Oltre la frequenza di spawn, da fine ciclo crescono **HP e danno** di nemici e boss col numero di ciclo di regioni (1 ciclo = 7 regioni):
 
-`diffMult = 1 + 0.15 · ⌊(missione − 1)/7⌋`  → missioni 1–7 ×1.0 · 8–14 ×1.15 · 15–21 ×1.30 · …
+`diffMult = 1 + 0.2 · ⌊(missione − 1)/7⌋`  → missioni 1–7 ×1.0 · 8–14 ×1.2 · 15–21 ×1.4 · …
 
-- Applicato a `setData('hp', …)` di tutti gli zombi (incl. gigante e spawn boss) e a `BOSS_CONFIG[*].hp` in `BossController` (i valori-base 🔒 in §5/§6 restano invariati: lo scaling è un fattore a runtime).
-- Danno e velocità **non** scalano (leva HP-only, più leggibile). Risolve l'appiattimento del late-game.
+- **HP** = `Math.ceil(base · diffMult)` su tutti gli zombi (incl. gigante e spawn boss); **boss** = `round(hp · diffMult)`. Il `ceil` è deliberato: con `round`, `round(1×1.2)=1` lasciava invariati i nemici da 1 HP (comune/corridore, ~60% del pool) → lo scaling era di fatto inerte (B4). Ora anche loro salgono (1→2 al 2° ciclo).
+- **Danno da contatto** dei nemici = `round(danno · diffMult)` (prima il danno non scalava affatto).
+- I valori-base 🔒 in §5/§6 restano invariati: lo scaling è un fattore a runtime (la formula vive in `GameScene.difficultyMult` e, in sync, in `BossController`).
+- *Da tarare a playtest:* passo 0.2 e curva sono un punto di partenza, non un valore validato.
 
 ---
 

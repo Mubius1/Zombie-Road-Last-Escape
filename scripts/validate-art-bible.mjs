@@ -24,11 +24,12 @@ import { dirname, join } from 'node:path';
 
 const root     = join(dirname(fileURLToPath(import.meta.url)), '..');
 const code     = readFileSync(join(root, 'src/scenes/GameScene.ts'), 'utf8');
+const world    = readFileSync(join(root, 'src/World.ts'), 'utf8'); // BOSS_CONFIG (scaleX/scaleY/bodyW/bodyH) vive qui (A4)
 const gameData = readFileSync(join(root, 'src/GameData.ts'), 'utf8');
 const uiSrc    = readFileSync(join(root, 'src/Ui.ts'), 'utf8');
 // Authoring texture estratto da GameScene (decomposizione): le dimensioni-firma di nemici/boss/
-// oggetti (AF/generateTexture) vivono qui; quelle del veicolo in VehicleTextures.ts. I DATI
-// (ZOMBIE_STATS/ZOMBIE_MOTION/BOSS_CONFIG) restano in GameScene.ts → continuano a leggersi da `code`.
+// oggetti (AF/generateTexture) vivono qui; quelle del veicolo in VehicleTextures.ts. I DATI di nemici
+// (ZOMBIE_STATS/ZOMBIE_MOTION) restano in GameScene.ts (→ `code`); BOSS_CONFIG è in World.ts (→ `world`).
 const entityTex  = readFileSync(join(root, 'src/EntityTextures.ts'), 'utf8');
 const vehicleTex = readFileSync(join(root, 'src/VehicleTextures.ts'), 'utf8');
 const bibleZ   = readFileSync(join(root, 'docs/ART_BIBLE_ZOMBIES.md'), 'utf8');
@@ -177,7 +178,7 @@ const floatField = (body, key, field) => {
   if (!m) throw new Error(`Campo numerico "${field}" non trovato per "${key}"`);
   return parseFloat(m[1]);
 };
-const bossSrc = sliceObject(code, 'const BOSS_CONFIG');
+const bossSrc = sliceObject(world, 'const BOSS_CONFIG'); // A4: BOSS_CONFIG spostato in src/World.ts
 
 for (const t of BOSS_TYPES) {
   const key = `boss_${t}`;

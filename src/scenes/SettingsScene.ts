@@ -69,6 +69,10 @@ export default class SettingsScene extends Phaser.Scene {
     // in pausa quello del gioco è già sotto.
     Juice.fadeIn(this);
     if (!inGame && Settings.screenFx) this.grain = Juice.addOverlay(this, 18, MENU_VIGNETTE);
+
+    // L'anteprima audio è per-istanza: a ogni restart (toggle fx/risoluzione/lingua) va smontata,
+    // altrimenti lascia un master+limiter appeso al context condiviso (AU7).
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.preview?.dispose());
   }
 
   update() {

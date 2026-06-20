@@ -3,7 +3,7 @@ import Juice from '../Juice';
 import Ui, { UI } from '../Ui';
 import { buildVehicleTexture } from '../VehicleTextures';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
-import { resetRunState } from '../RunState';
+import { resetRunState, getRun } from '../RunState';
 import SaveData from '../SaveData';
 import { t } from '../i18n';
 
@@ -184,14 +184,14 @@ export default class MenuScene extends Phaser.Scene {
 
   /** Una corsa è in corso se il registry ha stato oltre i default (es. uscita al menu dalla pausa). */
   private hasProgress(): boolean {
-    const mn = this.registry.get('missionNumber');
+    const mn = getRun(this.registry, 'missionNumber');
     if (typeof mn !== 'number') return false;
     return mn > 1
-      || (this.registry.get('money') ?? 0) > 0
-      || ((this.registry.get('survivors') as string[] | null)?.length ?? 0) > 0
-      || ((this.registry.get('ownedWeapons') as string[] | null)?.length ?? 1) > 1
-      || ((this.registry.get('ownedVehicles') as string[] | null)?.length ?? 1) > 1
-      || this.registry.get('components') != null;
+      || (getRun(this.registry, 'money') ?? 0) > 0
+      || (getRun(this.registry, 'survivors')?.length ?? 0) > 0
+      || (getRun(this.registry, 'ownedWeapons')?.length ?? 1) > 1
+      || (getRun(this.registry, 'ownedVehicles')?.length ?? 1) > 1
+      || getRun(this.registry, 'components') != null;
   }
 
   private continueGame() {

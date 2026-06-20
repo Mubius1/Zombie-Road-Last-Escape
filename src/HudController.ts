@@ -3,7 +3,8 @@ import Ui, { UI } from './Ui';
 import Settings from './Settings';
 import { WEAPONS, WEAPON_KEYS, WeaponType } from './GameData';
 import { t } from './i18n';
-import type { ComponentKey, ComponentData } from './scenes/GameScene';
+import type { ComponentKey } from './World';
+import type { ComponentData } from './scenes/GameScene';
 
 const H = 600;
 // Colore del moltiplicatore combo per livello (×1..×5) — toni funzionali UI.

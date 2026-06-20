@@ -15,13 +15,16 @@ const VALIDATORS = [
   { name: 'art',     script: join(here, 'validate-art-bible.mjs') },
   { name: 'balance', script: join(here, 'validate-balance.mjs') },
   { name: 'audio',   script: join(here, 'validate-audio.mjs') },
+  { name: 'i18n',    script: join(here, 'validate-i18n.mjs') },
 ];
 
 // File che, cambiando, possono disallineare codice ↔ documenti.
 const WATCHED = [
-  'src/GameData.ts', 'src/Ui.ts', 'src/SoundManager.ts',
+  'src/GameData.ts', 'src/World.ts', 'src/Ui.ts', 'src/SoundManager.ts', // World.ts: BOSS_CONFIG (validate:art/balance)
   'src/scenes/GameScene.ts', 'src/scenes/ShopScene.ts',
   'src/EntityTextures.ts', 'src/VehicleTextures.ts', // dimensioni-firma texture (validate:art)
+  'src/locales/it.ts', 'src/locales/en.ts', 'src/locales/es.ts', // parità chiavi i18n (validate:i18n)
+  'src/locales/fr.ts', 'src/locales/de.ts', 'src/locales/pt.ts',
   'docs/ART_BIBLE_ZOMBIES.md', 'docs/ART_BIBLE_OGGETTI.md', 'docs/ART_BIBLE_INTERFACCE.md',
   'docs/ART_BIBLE_AUDIO.md', 'docs/BALANCE.md',
 ].map(p => resolve(root, p));

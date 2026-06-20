@@ -6,18 +6,21 @@ import Environment from '../Environment';
 import Settings from '../Settings';
 import Ui, { UI } from '../Ui';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
-import { resetRunState } from '../RunState';
+import { resetRunState, getRun, setRun } from '../RunState';
 import SaveData from '../SaveData';
 import { buildEntityTextures } from '../EntityTextures';
 import { buildVehicleTexture } from '../VehicleTextures';
 import HudController from '../HudController';
 import BossController, { BossHost } from '../BossController';
 import { t } from '../i18n';
+import {
+  ROAD_TOP, ROAD_BOTTOM, ROAD_CENTER, BOSS_CONFIG, BOSS_ORDER,
+} from '../World';
+import type { BossType, ZombieType, ComponentKey } from '../World';
 
 // Spazio di design: l'altezza è fissa (H), la larghezza varia col formato (designW,
 // più ampia in 16:9). La camera in zoom adatta tutto alla risoluzione nativa — vedi Config.ts.
 const H = 600;
-export const ROAD_TOP = 155, ROAD_BOTTOM = 445, ROAD_CENTER = 300;
 const VEHICLE_X = 150;
 const SCROLL_SPEED = 240;
 const BASE_FUEL_DRAIN = 2.2;
@@ -32,27 +35,6 @@ const BOSS_TRIGGER = 0.82; // % missione a cui appare il boss
 const COMBO_WINDOW = 2500;  // ms: finestra per mantenere la catena di uccisioni
 const DASH_COOLDOWN = 5000; // ms: ricarica dello scatto anti-aggancio
 const DASH_GRACE = 350;     // ms: dopo lo scatto nessun nuovo zombi si aggrappa
-
-export type BossType = 'mega_mutant' | 'giant_worm' | 'armored_colossus' | 'radioactive_beast';
-
-export interface BossConfig {
-  name: string; hp: number; speed: number; scaleX: number; scaleY: number;
-  tint: number; bodyW: number; bodyH: number; reward: number;
-}
-
-// Ogni boss ha la propria texture `boss_<tipo>` (vedi buildEntityTextures + Art Bible §6.7).
-// scaleX/scaleY adattano la cornice dedicata; bodyW/bodyH sono ricalcolati così che la
-// HITBOX effettiva nel mondo (bodyW·scaleX/OVERSAMPLE × bodyH·scaleY/OVERSAMPLE) resti
-// IDENTICA al precedente riuso del Gigante → bilanciamento invariato. `tint` non colora più
-// lo sprite (palette cotta nella texture): è l'accento emissivo "firma" usato nei VFX (morte).
-export const BOSS_CONFIG: Record<BossType, BossConfig> = {
-  mega_mutant:       { name: 'boss.mega_mutant.name',       hp: 80,  speed: 55, scaleX: 2.4, scaleY: 2.6, tint: 0xff4030, bodyW: 56,  bodyH: 71, reward: 400 },
-  giant_worm:        { name: 'boss.giant_worm.name',        hp: 110, speed: 40, scaleX: 2.0, scaleY: 2.0, tint: 0xff7722, bodyW: 152, bodyH: 34, reward: 500 },
-  armored_colossus:  { name: 'boss.armored_colossus.name',  hp: 150, speed: 28, scaleX: 2.5, scaleY: 2.8, tint: 0xffcc22, bodyW: 62,  bodyH: 80, reward: 650 },
-  radioactive_beast: { name: 'boss.radioactive_beast.name', hp: 95,  speed: 50, scaleX: 2.2, scaleY: 2.3, tint: 0x7dff4a, bodyW: 59,  bodyH: 66, reward: 450 },
-};
-
-export const BOSS_ORDER: BossType[] = ['mega_mutant', 'giant_worm', 'armored_colossus', 'radioactive_beast'];
 
 interface EnvConfig {
   name: string;
@@ -75,9 +57,6 @@ const ENVIRONMENTS: EnvConfig[] = [
   { name: 'region.military',    bgColor: 0x080e06, skyColor: 0x0c1008, groundColor: 0x080e06, roadColor: 0x202818, lineColor: 0x88bb44, shoulderColor: 0x101608, grade: 0x9ab074, gradeAlpha: 0.42, emissive: 0x99cc55, hazeColor: 0x162012 },
   { name: 'region.finalCity',   bgColor: 0x0c0612, skyColor: 0x100618, groundColor: 0x0c0612, roadColor: 0x180c22, lineColor: 0xcc44ff, shoulderColor: 0x140a1a, grade: 0xb074d8, gradeAlpha: 0.48, emissive: 0xcc44ff, hazeColor: 0x240a36 },
 ];
-
-export type ZombieType = 'common' | 'runner' | 'armored' | 'jumper' | 'giant' | 'toxic';
-export type ComponentKey = 'engine' | 'wheels' | 'tank' | 'turret' | 'armor';
 
 interface ZombieStats { speed: number; hp: number; scale: number; damage: number; score: number; }
 export interface ComponentData { health: number; label: string; baseColor: number; fill?: Phaser.GameObjects.Rectangle; }
@@ -159,6 +138,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private mechanicTimer = 0;
   private soldierTimer = 0;
+  private lowFuelWarned = false; // evita di ripetere l'allarme carburante ogni frame (AU5)
   private giantTimer = 0;
   private envIndex = 0;
   private missionNumber = 1; // numero di missione corrente (per scaling NG+ e vittoria di ciclo)
@@ -205,12 +185,12 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   create() {
     // Camera in zoom: lo spazio di design riempie la risoluzione nativa scelta.
     this.designW = setupCamera(this).designW;
-    this.vehicleKey        = this.registry.get('vehicle')       ?? 'civilian_car';
-    this.activeSurvivors   = this.registry.get('survivors')     ?? [];
-    this.upgrades          = this.registry.get('upgrades')      ?? {};
-    const missionNum: number = this.registry.get('missionNumber') ?? 1;
+    this.vehicleKey        = getRun(this.registry, 'vehicle')       ?? 'civilian_car';
+    this.activeSurvivors   = getRun(this.registry, 'survivors')     ?? [];
+    this.upgrades          = getRun(this.registry, 'upgrades')      ?? {};
+    const missionNum: number = getRun(this.registry, 'missionNumber') ?? 1;
     this.missionNumber = missionNum;
-    const savedComp        = this.registry.get('components')    ?? null;
+    const savedComp        = getRun(this.registry, 'components')    ?? null;
 
     const vData = VEHICLES[this.vehicleKey];
     this.maxHealth       = 100 + vData.healthBonus;
@@ -232,9 +212,10 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.mechanicTimer = 0;
     this.soldierTimer = 0;
     this.giantTimer = GIANT_SPAWN_INTERVAL;
+    this.lowFuelWarned = false;
     this.envIndex = (missionNum - 1) % ENVIRONMENTS.length;
-    this.currentWeapon = this.registry.get('currentWeapon') ?? 'mg';
-    this.ownedWeapons  = this.registry.get('ownedWeapons')  ?? ['mg'];
+    this.currentWeapon = getRun(this.registry, 'currentWeapon') ?? 'mg';
+    this.ownedWeapons  = getRun(this.registry, 'ownedWeapons')  ?? ['mg'];
     if (!this.ownedWeapons.includes(this.currentWeapon)) this.currentWeapon = this.ownedWeapons[0] ?? 'mg';
     this.combo = 0; this.comboTimer = 0;
     this.dashReadyAt = 0; this.dashGraceUntil = 0;
@@ -284,7 +265,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // viene rieseguito e, senza off(), ogni RESUME si accumulerebbe → startEngine() chiamato N volte
     // su istanze SoundManager stale. Registrato con .once perché lo SHUTDOWN avviene una sola volta.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.sfx?.stopEngine();
+      this.sfx?.dispose(); // ferma il motore E scollega master+limiter (no nodi orfani a ogni restart, AU7)
       this.events.off(Phaser.Scenes.Events.RESUME, onResume);
     });
 
@@ -551,7 +532,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private selectWeapon(key: WeaponType) {
     if (!this.ownedWeapons.includes(key) || key === this.currentWeapon) return;
     this.currentWeapon = key;
-    this.registry.set('currentWeapon', key);
+    setRun(this.registry, 'currentWeapon', key);
     this.hud.setWeapon(key); // nome + selettore + pop cosmetico
   }
 
@@ -599,17 +580,25 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   }
 
   /**
-   * Moltiplicatore di difficoltà "new game+" (G2): cresce di 0.15 a ogni ciclo completo di 7 regioni
-   * (missioni 1–7 = ×1.0, 8–14 = ×1.15, …). Scala gli HP di nemici e boss così il late-game non si
-   * appiattisce quando il giocatore è ormai forte. Vedi BALANCE §5.
+   * Moltiplicatore di difficoltà "new game+" (G2/B4): cresce di 0.2 a ogni ciclo completo di 7 regioni
+   * (missioni 1–7 = ×1.0, 8–14 = ×1.2, 15–21 = ×1.4, …). Scala HP **e danno** di nemici e boss così il
+   * late-game non si appiattisce quando il giocatore è ormai forte. Vedi BALANCE §5.
    */
   private difficultyMult(): number {
-    return 1 + 0.15 * Math.floor((this.missionNumber - 1) / 7);
+    return 1 + 0.2 * Math.floor((this.missionNumber - 1) / 7);
   }
 
-  /** HP di base scalati per la difficoltà NG+ (G2). */
+  /**
+   * HP di base scalati per la difficoltà NG+ (B4). Math.ceil — non round — così anche i nemici da 1 HP
+   * (comune/corridore, ~60% del pool) scalano davvero: con round, round(1×1.2)=1 li lasciava invariati.
+   */
   private scaledHp(base: number): number {
-    return Math.max(1, Math.round(base * this.difficultyMult()));
+    return Math.max(1, Math.ceil(base * this.difficultyMult()));
+  }
+
+  /** Danno da contatto scalato per la difficoltà NG+ (B4: prima il danno non scalava affatto). */
+  private scaledDamage(type: ZombieType): number {
+    return Math.round(ZOMBIE_STATS[type].damage * this.difficultyMult());
   }
 
   /** Aggiunge punteggio da un'uccisione applicando il moltiplicatore combo. */
@@ -626,6 +615,10 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // col carburante che drena su un avanzamento fermo si poteva fare game over a metà boss.
     if (this.boss.active || this.boss.defeated) return;
     this.fuel -= this.getEffectiveFuelDrain() * dt;
+    // Allarme sonoro quando il carburante scende sotto il 25% (una volta sola, isteresi al 30% — AU5).
+    const fuelPct = this.fuel / this.maxFuel;
+    if (fuelPct < 0.25 && !this.lowFuelWarned) { this.lowFuelWarned = true; this.sfx?.playLowFuel(); }
+    else if (fuelPct >= 0.30) { this.lowFuelWarned = false; }
     if (this.fuel <= 0) { this.fuel = 0; this.endGame(t('game.over.fuel')); }
   }
 
@@ -682,7 +675,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       for (let i = this.attachedZombies.length - 1; i >= 0; i--) {
         const az = this.attachedZombies[i];
         if (Phaser.Math.Distance.Between(bullet.x,bullet.y,az.sprite.x,az.sprite.y) < 22) {
-          bullet.destroy();
+          this.killBullet(bullet);
           az.hp--;
           if (az.hp <= 0) {
             this.addKillScore(5);
@@ -767,7 +760,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     (this.bullets.getChildren() as Phaser.Physics.Arcade.Sprite[]).forEach(s => {
       if (!s.active) return;
       const maxX = (s.getData('maxX') as number) ?? this.designW + 40;
-      if (s.x < -20 || s.x > maxX) s.destroy();
+      if (s.x < -20 || s.x > maxX) this.killBullet(s);
     });
   }
 
@@ -848,9 +841,27 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         .setScale(z.scaleX, z.scaleY).setRotation(z.rotation).setAlpha(0.26).setTint(0xff7744).setDepth(8);
       this.tweens.add({ targets: ghost, alpha: 0, duration: 220, onComplete: () => ghost.destroy() });
     } else if (type === 'giant') {
-      const d = this.add.image(z.x + Phaser.Math.Between(-14, 14), z.y + 28, 'particle')
-        .setTint(0x6a5a44).setAlpha(0.5).setScale(1).setDepth(8);
-      this.tweens.add({ targets: d, y: d.y - 4, scale: 2, alpha: 0, duration: 600, onComplete: () => d.destroy() });
+      // Passo pesante: polvere calciata da ENTRAMBI i piedi, a due strati (zolla scura +
+      // foschia chiara) e trascinata indietro (il gigante avanza verso sinistra).
+      for (const fx of [-13, 11]) {
+        const px = z.x + fx + Phaser.Math.Between(-4, 4), py = z.y + 30;
+        const d = this.add.image(px, py, 'particle').setTint(0x4a3d2c).setAlpha(0.6).setScale(0.9).setDepth(8);
+        this.tweens.add({ targets: d, x: px + 12, y: py - 5, scale: 2.3, alpha: 0, duration: 650, ease: 'Quad.easeOut', onComplete: () => d.destroy() });
+        const h = this.add.image(px, py - 2, 'particle').setTint(0x6a5a44).setAlpha(0.38).setScale(0.6).setDepth(8);
+        this.tweens.add({ targets: h, y: py - 16, scale: 1.5, alpha: 0, duration: 720, onComplete: () => h.destroy() });
+      }
+      // A rotazione: goccia di sangue dalla ferita ventrale OPPURE bagliore degli occhi.
+      const r = Math.random();
+      if (r < 0.45) {
+        const bx = z.x + Phaser.Math.Between(-6, 6), by = z.y + 8;
+        const drop = this.add.image(bx, by, 'particle').setTint(0x6e1410).setScale(0.4).setDepth(10);
+        this.tweens.add({ targets: drop, y: by + 26, scaleX: 0.25, scaleY: 1.4, alpha: 0, duration: 520, ease: 'Quad.easeIn', onComplete: () => drop.destroy() });
+      } else if (r < 0.78) {
+        // Pulsazione emissiva degli occhi rossi (alone additivo che sboccia e svanisce) → "vivo".
+        const gl = this.add.image(z.x - 2, z.y - 30, 'particle')
+          .setTint(0xff3018).setAlpha(0).setScale(0.7).setBlendMode(Phaser.BlendModes.ADD).setDepth(10);
+        this.tweens.add({ targets: gl, alpha: 0.5, scale: 1.15, duration: 180, yoyo: true, onComplete: () => gl.destroy() });
+      }
     }
   }
 
@@ -939,11 +950,23 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   }
 
   private spawnBullet(x: number, y: number, damage: number, speed: number, color: number, maxX: number) {
-    const b = this.bullets.create(x, y, 'bullet') as Phaser.Physics.Arcade.Sprite;
+    // Object pooling (P1): riusa un proiettile "morto" del gruppo invece di allocarne uno nuovo a
+    // ogni colpo (lo sparo è l'oggetto più frequente del gioco). get() ne ripesca uno dal pool o,
+    // se il pool è vuoto, lo crea; enableBody lo riposiziona e riattiva corpo+sprite. killBullet() lo
+    // restituisce al pool (disableBody) invece di distruggerlo → niente churn di create/destroy/GC.
+    const b = this.bullets.get(x, y, 'bullet') as Phaser.Physics.Arcade.Sprite | null;
+    if (!b) return;
+    b.enableBody(true, x, y, true, true);
     // Texture sovracampionata (OS_G) → torna a scala design; hitbox auto = 18×5 invariata.
     b.setScale(1 / OVERSAMPLE).setVelocityX(speed).setDepth(8).setTint(color);
     b.setData('damage', damage);
     b.setData('maxX', maxX);
+  }
+
+  /** Restituisce un proiettile al pool (P1): corpo disabilitato + sprite nascosto/disattivato,
+   *  così `bullets.get()` può riusarlo. Sostituisce `destroy()`. Usato anche dal boss via BossHost. */
+  killBullet(b: Phaser.Physics.Arcade.Sprite) {
+    b.disableBody(true, true);
   }
 
   private spawnRocket(x: number, y: number) {
@@ -973,7 +996,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private onBulletHitZombie(bullet: Phaser.Physics.Arcade.Sprite, zombie: Phaser.Physics.Arcade.Sprite) {
     if (!bullet.active || !zombie.active) return;
     const dmg = (bullet.getData('damage') as number) ?? 1;
-    bullet.destroy();
+    this.killBullet(bullet);
     const type = zombie.getData('type') as ZombieType;
     if (type === 'armored') this.emitSparks(zombie.x, zombie.y);
     const hp   = (zombie.getData('hp') as number) - dmg;
@@ -1000,7 +1023,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       case 'runner':
         zombie.destroy();
         this.damageComponent('armor', 10);
-        this.dealDamage(ZOMBIE_STATS.runner.damage);
+        this.dealDamage(this.scaledDamage('runner'));
         this.cameras.main.shake(80, 0.005);
         this.sfx?.playImpact();
         this.environment?.addDecal('skid', zombie.x, zombie.y);
@@ -1011,7 +1034,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         zombie.destroy();
         this.damageComponent('armor', 18);
         this.damageComponent('engine', 8);
-        this.dealDamage(ZOMBIE_STATS.armored.damage);
+        this.dealDamage(this.scaledDamage('armored'));
         this.cameras.main.shake(200, 0.014);
         this.sfx?.playImpact();
         this.environment?.addDecal('skid', zombie.x, zombie.y);
@@ -1026,7 +1049,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         this.damageComponent('armor', 30);
         this.damageComponent('engine', 20);
         this.damageComponent('wheels', 20);
-        this.dealDamage(ZOMBIE_STATS.giant.damage);
+        this.dealDamage(this.scaledDamage('giant'));
         this.cameras.main.shake(400, 0.025);
         this.hitStop(50);
         this.killBurst('giant', gx, gy);
@@ -1042,7 +1065,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
           this.attachZombie(zombie, true);
         } else {
           zombie.destroy();
-          this.dealDamage(ZOMBIE_STATS.jumper.damage);
+          this.dealDamage(this.scaledDamage('jumper'));
           this.damageComponent('turret', 15);
           this.sfx?.playImpact();
         }
@@ -1051,7 +1074,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       case 'toxic':
         zombie.destroy();
         this.spawnToxicCloud(zombie.x, zombie.y);
-        this.dealDamage(ZOMBIE_STATS.toxic.damage);
+        this.dealDamage(this.scaledDamage('toxic'));
         this.damageComponent('armor', 8);
         this.sfx?.playImpact();
         this.environment?.addDecal('blood', zombie.x, zombie.y);
@@ -1062,7 +1085,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
           this.attachZombie(zombie, false);
         } else {
           zombie.destroy();
-          this.dealDamage(ZOMBIE_STATS.common.damage);
+          this.dealDamage(this.scaledDamage('common'));
           this.damageComponent('armor', 5);
           this.cameras.main.shake(60, 0.004);
           this.sfx?.playImpact();
@@ -1243,10 +1266,10 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.missionDone = true;
 
     const earned = Math.floor(this.score / 8);
-    this.registry.set('money',         (this.registry.get('money') ?? 0) + earned);
-    this.registry.set('missionNumber', (this.registry.get('missionNumber') ?? 1) + 1);
-    this.registry.set('lastScore',     this.score);
-    this.registry.set('components', {
+    setRun(this.registry, 'money',         (getRun(this.registry, 'money') ?? 0) + earned);
+    setRun(this.registry, 'missionNumber', (getRun(this.registry, 'missionNumber') ?? 1) + 1);
+    setRun(this.registry, 'lastScore',     this.score);
+    setRun(this.registry, 'components', {
       engine: this.components.engine.health,
       wheels: this.components.wheels.health,
       tank:   this.components.tank.health,
@@ -1279,7 +1302,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     Ui.text(this, cx,cy-48,t('game.scoreLine', { n: this.score }),{fontSize:'20px',color:UI.white}).setOrigin(0.5).setDepth(31);
     Ui.text(this, cx,cy-14,t('game.distanceLine', { n: Math.floor(this.distance/100) }),{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
     Ui.text(this, cx,cy+20,t('game.coinsEarned', { n: earned }),{fontSize:'18px',color:UI.gold}).setOrigin(0.5).setDepth(31);
-    Ui.text(this, cx,cy+55,t('game.coinsTotal', { n: (this.registry.get('money') ?? 0) }),{fontSize:'15px',color:UI.goldDim}).setOrigin(0.5).setDepth(31);
+    Ui.text(this, cx,cy+55,t('game.coinsTotal', { n: (getRun(this.registry, 'money') ?? 0) }),{fontSize:'15px',color:UI.goldDim}).setOrigin(0.5).setDepth(31);
     Ui.text(this, cx,cy+82,t('game.toShop'),{fontSize:'13px',color:UI.faint}).setOrigin(0.5).setDepth(31);
     this.addMenuReturn(cx, cy+108);
 
@@ -1402,6 +1425,24 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         duration: 300 + Phaser.Math.Between(-60, 120),
         ease: 'Quad.easeOut', onComplete: () => p.destroy(),
       });
+    }
+    // Morte del bruto: oltre al gore, alone rosso emissivo (accento-firma) + schegge d'osso/sangue
+    // più grandi e rotanti. Tutto fire-and-forget → nessun impatto sul gameplay.
+    if (type === 'giant') {
+      Juice.lightFlash(this, x, y, 0xff2a10, 6, 360);
+      Juice.bloomBurst(this, x, y, 0xff3018, 3, 300);
+      for (let i = 0; i < 4; i++) {
+        const a = Math.PI + Phaser.Math.FloatBetween(-1.3, 1.3);
+        const sp = Phaser.Math.Between(60, 130);
+        const chunk = this.add.image(x, y, 'particle').setDepth(15)
+          .setScale(Phaser.Math.FloatBetween(0.7, 1.1)).setTint(i % 2 ? 0xd9c8a0 : 0x6e2a26);
+        this.tweens.add({
+          targets: chunk,
+          x: x + Math.cos(a) * sp, y: y + Math.sin(a) * sp * 0.7 + Phaser.Math.Between(10, 30),
+          angle: Phaser.Math.Between(-280, 280), alpha: 0, scale: 0.1,
+          duration: 560 + Phaser.Math.Between(-80, 120), ease: 'Quad.easeOut', onComplete: () => chunk.destroy(),
+        });
+      }
     }
   }
 }

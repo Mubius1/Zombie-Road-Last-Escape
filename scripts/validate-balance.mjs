@@ -21,6 +21,7 @@ import { dirname, join } from 'node:path';
 
 const root      = join(dirname(fileURLToPath(import.meta.url)), '..');
 const code      = readFileSync(join(root, 'src/scenes/GameScene.ts'), 'utf8');
+const world     = readFileSync(join(root, 'src/World.ts'), 'utf8'); // BOSS_CONFIG vive qui (A4: modulo dati neutro)
 const gameData  = readFileSync(join(root, 'src/GameData.ts'), 'utf8');
 const shopSrc   = readFileSync(join(root, 'src/scenes/ShopScene.ts'), 'utf8');
 const bible     = readFileSync(join(root, 'docs/BALANCE.md'), 'utf8');
@@ -192,7 +193,7 @@ for (const key of ZOMBIE_KEYS) {
 // tenere invariata la hitbox effettiva nel mondo → resta di competenza dell'arte.
 // ════════════════════════════════════════════════════════════════════════════
 const BOSS_KEYS = ['mega_mutant', 'giant_worm', 'armored_colossus', 'radioactive_beast'];
-const bossSrc = sliceObject(code, 'const BOSS_CONFIG');
+const bossSrc = sliceObject(world, 'const BOSS_CONFIG'); // A4: BOSS_CONFIG spostato in src/World.ts
 checkCoverage('boss', recordKeys(bossSrc), BOSS_KEYS);
 for (const key of BOSS_KEYS) {
   let c;

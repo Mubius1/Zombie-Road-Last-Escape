@@ -312,74 +312,165 @@ export function buildEntityTextures(scene: Phaser.Scene) {
     g.generateTexture('zombie_toxic',90,48); AF('zombie_toxic',30,48,3); g.destroy();
   }
 
-  // ── ZOMBIE GIANT · "L'Innesto" (48×66 × 3) — riusato dai boss ──────────────
+  // ── ZOMBIE GIANT · "L'Innesto" (48×66 × 3) ─────────────────────────────────
+  // Bruto patchwork: più cadaveri cuciti insieme. Ganci di silhouette: GOBBA con
+  // CRANIO VESTIGIALE innestato, BRACCIO DX sovradimensionato e GAMBA SX di un altro
+  // corpo (tono diverso), suture ovunque, ventre squarciato. Texture standalone
+  // (i boss hanno modelli propri — vedi §6.7 della Art Bible). Disegno a strati:
+  // luce alto-sx, bordo d'ombra basso-dx (§3.2), unico accento emissivo = occhi rossi.
   {
     const g = OS_G(144,66);
-    const sk=0x5a3a2e, skHi=0x7d5240, skSh=0x38241c, livid=0x4a3a52;
-    const graft=0x5a5a3a, graftHi=0x7d7d50, graftSh=0x2a2a18;
-    const sut=0x1e140e, stitch=0x8a7a60, bone=0xd9c8a0, blood=0x6e2a26, eye=0xff2a10;
+    // carne necrotica dell'OSPITE — 5 toni per dare volume sotto lo zoom
+    const sk=0x5a3a2e, skHi=0x7d5240, skMid=0x6a4636, skSh=0x38241c, skDeep=0x231009;
+    // livor mortis (sempre nella metà bassa, §3.1)
+    const livid=0x4a3a52, lividDk=0x32243f;
+    // arto INNESTATO da un altro cadavere — verde-oliva malato, materia diversa
+    const gr=0x5a5a3a, grHi=0x7d7d50, grMid=0x66663f, grSh=0x2a2a18, grDeep=0x16160b;
+    // suture + punti che ricuciono i pezzi (la firma de "L'Innesto")
+    const sut=0x180f08, stitch=0x9a896a, stitchHi=0xc2b186;
+    // osso · muscolo vivo · viscere · sangue
+    const bone=0xd9c8a0, boneSh=0x9c8c66, musc=0x7a2a24, muscHi=0xa83a2e;
+    const gut=0x3a1410, blood=0x6e2a26, bloodDk=0x360d07;
+    // UNICO accento emissivo: rosso degli occhi (+ bloom finto cotto)
+    const eye=0xff2a10, eyeHot=0xffb59a, glow=0xff3018;
     for (let f = 0; f < 3; f++) {
       const ox = f * 48, ph = f - 1; const X = (x: number) => ox + x;
-      g.fillStyle(0x000000,0.4); g.fillEllipse(X(24),64,44,8);
-      // piedi + gambe massicce (passo pesante)
-      g.fillStyle(0x120c06); g.fillEllipse(X(13-ph*2),60,16,8); g.fillEllipse(X(35+ph*2),60,16,8);
-      g.fillStyle(skSh); g.fillRoundedRect(X(6-ph*2),38+ph*2,16,22,7); g.fillRoundedRect(X(26+ph*2),38-ph*2,16,22,7);
-      g.fillStyle(sk);   g.fillRoundedRect(X(7-ph*2),38+ph*2,13,20,6); g.fillRoundedRect(X(28+ph*2),38-ph*2,13,20,6);
-      g.fillStyle(skHi); g.fillEllipse(X(12-ph*2),44+ph,5,11); g.fillEllipse(X(33+ph*2),44-ph,5,11);
-      g.fillStyle(livid,0.6); g.fillEllipse(X(10),52,5,8);
-      g.fillStyle(blood); g.fillEllipse(X(35),50,5,7);
-      // braccio SINISTRO (carne normale)
+      // ombra a terra doppia (nucleo + alone morbido)
+      g.fillStyle(0x000000,0.42); g.fillEllipse(X(24),64,46,9);
+      g.fillStyle(0x000000,0.20); g.fillEllipse(X(24),64,54,12);
+
+      // ── GAMBE massicce (passo alternato via ph) ─────────────────────────────
+      // gamba DX (carne ospite)
+      const rlX = 32 + ph*2, rlY = 38 - ph*2;
+      g.fillStyle(0x0f0a05); g.fillEllipse(X(rlX+2),61,17,8);                 // stivale affondato
+      g.fillStyle(skDeep);   g.fillRoundedRect(X(rlX-5),rlY,17,23,7);
+      g.fillStyle(skSh);     g.fillRoundedRect(X(rlX-4),rlY,15,21,7);
+      g.fillStyle(sk);       g.fillRoundedRect(X(rlX-3),rlY+1,12,18,6);
+      g.fillStyle(skHi);     g.fillEllipse(X(rlX),rlY+6,4,10);
+      g.fillStyle(blood,0.8);g.fillEllipse(X(rlX+5),rlY+11,5,7);              // sangue colato sulla coscia
+      // gamba SX (INNESTATA, tono oliva) + osso esposto sullo stinco
+      const llX = 13 - ph*2, llY = 39 + ph*2;
+      g.fillStyle(0x0d0a05); g.fillEllipse(X(llX-2),61,17,8);
+      g.fillStyle(grDeep);   g.fillRoundedRect(X(llX-5),llY,17,22,7);
+      g.fillStyle(grSh);     g.fillRoundedRect(X(llX-4),llY,15,20,7);
+      g.fillStyle(gr);       g.fillRoundedRect(X(llX-3),llY+1,12,17,6);
+      g.fillStyle(grHi);     g.fillEllipse(X(llX),llY+6,4,9);
+      g.fillStyle(livid,0.6);g.fillEllipse(X(llX-2),llY+11,5,7);             // livor sull'arto morto
+      g.fillStyle(gut);      g.fillEllipse(X(llX-3),llY+13,4,5);             // squarcio
+      g.fillStyle(bone);     g.fillRect(X(llX-4),llY+11,2,7);               // tibia che spunta
+      // sutura all'inguine sx (dove la gamba è cucita)
+      g.fillStyle(sut);      g.fillEllipse(X(llX+5),llY-1,12,3);
+      g.fillStyle(stitch);   [-4,-1,2,5,8].forEach(d=>g.fillRect(X(llX+1+d),llY-3,1,4));
+
+      // ── BRACCIO SX (carne ospite) — penzola lungo il fianco ─────────────────
       const laY=22+ph*2;
-      g.fillStyle(skSh); g.fillEllipse(X(5),laY,18,14);
-      g.fillStyle(sk);   g.fillEllipse(X(5),laY-1,14,11);
-      g.fillStyle(skHi); g.fillEllipse(X(3),laY-4,6,5);
-      g.fillStyle(skSh); g.fillEllipse(X(4),laY+8,13,12);
-      g.fillStyle(sk);   g.fillEllipse(X(4),laY+8,10,10);
-      // braccio DESTRO INNESTATO (più grosso, colore diverso, suture alla spalla)
+      g.fillStyle(skDeep); g.fillEllipse(X(5),laY,18,15);                    // spalla
+      g.fillStyle(skSh);   g.fillEllipse(X(5),laY-1,14,11);
+      g.fillStyle(sk);     g.fillEllipse(X(4),laY-2,10,8);
+      g.fillStyle(skHi);   g.fillEllipse(X(2),laY-4,5,4);
+      g.fillStyle(skSh);   g.fillEllipse(X(3),laY+9,13,13);                  // avambraccio
+      g.fillStyle(sk);     g.fillEllipse(X(3),laY+9,10,11);
+      g.fillStyle(skMid);  g.fillEllipse(X(1),laY+6,4,5);
+      g.fillStyle(skSh);   g.fillEllipse(X(2),laY+19,8,5);                   // mano
+      [0,3,6].forEach(d=>{ g.fillStyle(skSh); g.fillRoundedRect(X(-2+d),laY+20,2,6,1);
+                           g.fillStyle(0x1a1008); g.fillRect(X(-2+d),laY+25,2,2); });
+
+      // ── BRACCIO DX INNESTATO (sovradimensionato, altro cadavere) ────────────
       const raY=22-ph*2;
-      g.fillStyle(graftSh); g.fillEllipse(X(43),raY,21,16);
-      g.fillStyle(graft);   g.fillEllipse(X(43),raY-1,17,13);
-      g.fillStyle(graftHi); g.fillEllipse(X(44),raY-4,7,5);
-      g.fillStyle(graftSh); g.fillEllipse(X(44),raY+9,15,14);
-      g.fillStyle(graft);   g.fillEllipse(X(44),raY+9,12,11);
-      g.fillStyle(sut); g.fillRect(X(35),raY-6,1,15);
-      g.fillStyle(stitch); [raY-5,raY-1,raY+3,raY+7].forEach(y => g.fillRect(X(33),y,5,1));
-      // nocche
-      g.fillStyle(skSh);   [1,4,7].forEach(x => g.fillCircle(X(x),laY+18,1.6));
-      g.fillStyle(graftSh); [41,44,47].forEach(x => g.fillCircle(X(x),raY+18,1.6));
-      // torso colossale + GOBBA (spalla destra rialzata)
-      g.fillStyle(skSh); g.fillRoundedRect(X(3),15,42,26,10);
-      g.fillStyle(sk);   g.fillRoundedRect(X(5),16,38,23,9);
-      g.fillStyle(skSh); g.fillEllipse(X(38),13,16,12);
-      g.fillStyle(sk);   g.fillEllipse(X(38),13,12,9);
-      g.fillStyle(skHi); g.fillEllipse(X(15),21,12,8); g.fillEllipse(X(33),20,10,7);
-      g.fillStyle(skSh); g.fillRect(X(24),18,1,20);
-      // chiazze livide + suture sul torso
-      g.fillStyle(livid,0.55); g.fillEllipse(X(13),30,8,6); g.fillEllipse(X(34),31,7,5);
-      g.fillStyle(sut); g.fillRect(X(18),18,1,18);
-      g.fillStyle(stitch); [20,24,28,32].forEach(y => g.fillRect(X(16),y,5,1));
-      // pancia squarciata (costole + sangue)
-      g.fillStyle(0x2e1a14); g.fillEllipse(X(24),33,18,9);
-      g.fillStyle(bone); [16,20,24,28,32].forEach(x => g.fillRect(X(x),29,2,8));
-      g.fillStyle(blood); g.fillEllipse(X(24),35,12,4);
-      // collo + testa piccola e infossata
-      g.fillStyle(skSh); g.fillRoundedRect(X(16),9,16,10,4);
-      g.fillStyle(skSh); g.fillEllipse(X(23),6,26,14);
-      g.fillStyle(sk);   g.fillEllipse(X(23),6,22,11);
-      g.fillStyle(skHi); g.fillEllipse(X(17),2,9,6);
+      g.fillStyle(grDeep); g.fillEllipse(X(43),raY,22,18);                   // spalla enorme
+      g.fillStyle(grSh);   g.fillEllipse(X(42),raY-1,18,14);
+      g.fillStyle(gr);     g.fillEllipse(X(41),raY-2,13,10);
+      g.fillStyle(grHi);   g.fillEllipse(X(44),raY-5,7,5);
+      g.fillStyle(livid,0.5); g.fillEllipse(X(46),raY+4,7,6);               // livor
+      g.fillStyle(grSh);   g.fillEllipse(X(44),raY+10,17,15);                // avambraccio
+      g.fillStyle(gr);     g.fillEllipse(X(44),raY+10,13,12);
+      g.fillStyle(grMid);  g.fillEllipse(X(42),raY+8,5,6);
+      g.fillStyle(grHi);   g.fillEllipse(X(42),raY+6,4,3);
+      // sutura della spalla innestata (cucitura al torso)
+      g.fillStyle(sut);    g.fillRect(X(35),raY-7,1,18);
+      g.fillStyle(sut);    g.fillEllipse(X(36),raY+2,3,13);
+      g.fillStyle(stitch); [raY-6,raY-2,raY+2,raY+6,raY+10].forEach(y=>g.fillRect(X(32),y,6,1));
+      g.fillStyle(stitchHi);[raY-6,raY+2,raY+10].forEach(y=>g.fillRect(X(33),y,1,1));
+      // PUGNO + artigli ossei (gancio minaccioso)
+      g.fillStyle(grSh);   g.fillEllipse(X(44),raY+21,12,8);
+      [40,44,48].forEach(x=>{ g.fillStyle(grSh); g.fillRoundedRect(X(x-1),raY+22,3,7,1); });
+      g.fillStyle(bone);   [40,44,48].forEach(x=>g.fillTriangle(X(x-1),raY+28,X(x+2),raY+28,X(x),raY+33));
+
+      // ── TORSO colossale (ospite) + GOBBA rialzata sulla spalla dx ───────────
+      g.fillStyle(skDeep); g.fillRoundedRect(X(3),15,42,27,11);
+      g.fillStyle(skSh);   g.fillRoundedRect(X(4),15,40,25,10);
+      g.fillStyle(sk);     g.fillRoundedRect(X(6),16,35,22,9);
+      g.fillStyle(skMid);  g.fillEllipse(X(16),22,14,10);                    // pettorale sx
+      g.fillStyle(skHi);   g.fillEllipse(X(13),19,9,6);                      // luce alto-sx
+      g.fillStyle(skSh);   g.fillEllipse(X(33),25,12,10);                    // bordo d'ombra dx
+      // GOBBA: massa sopra la testa
+      g.fillStyle(skDeep); g.fillEllipse(X(38),12,18,15);
+      g.fillStyle(skSh);   g.fillEllipse(X(37),12,15,12);
+      g.fillStyle(sk);     g.fillEllipse(X(36),11,11,8);
+      g.fillStyle(skHi);   g.fillEllipse(X(33),8,6,4);
+      // vertebre che affiorano sulla gobba
+      g.fillStyle(boneSh); ([[44,5],[42,8],[40,11]] as [number,number][]).forEach(([x,y])=>g.fillCircle(X(x),y,2));
+      g.fillStyle(bone);   ([[44,5],[42,8],[40,11]] as [number,number][]).forEach(([x,y])=>g.fillCircle(X(x),y-1,1));
+
+      // ── CRANIO VESTIGIALE innestato nella gobba (occhi MORTI, no emissivo) ───
+      g.fillStyle(grSh);  g.fillEllipse(X(41),16,9,10);
+      g.fillStyle(gr);    g.fillEllipse(X(41),16,6,7);
+      g.fillStyle(grHi);  g.fillEllipse(X(39),14,3,3);
+      g.fillStyle(0x080503); g.fillEllipse(X(39),16,2,2.4); g.fillEllipse(X(43),16,2,2.4); // occhiaie spente
+      g.fillStyle(sut);   g.fillRect(X(38),19,6,1);                          // bocca cucita
+      g.fillStyle(sut);   g.fillEllipse(X(41),22,8,2);                       // sutura cranio→gobba
+      g.fillStyle(stitch);[38,41,44].forEach(x=>g.fillRect(X(x),21,1,3));
+
+      // ── SUTURE sul torso ────────────────────────────────────────────────────
+      g.fillStyle(sut);    g.fillRect(X(24),17,1,21);                        // sutura mediana
+      g.fillStyle(stitch); [20,24,28,32,36].forEach(y=>g.fillRect(X(22),y,5,1));
+      g.fillStyle(sut);    g.fillRect(X(15),16,1,11);                        // sutura sx
+      g.fillStyle(stitch); [18,22,26].forEach(y=>g.fillRect(X(13),y,5,1));
+      // chiazze livide (metà bassa)
+      g.fillStyle(livid,0.5);   g.fillEllipse(X(11),34,8,6);
+      g.fillStyle(lividDk,0.5); g.fillEllipse(X(34),35,7,5);
+
+      // ── PANCIA SQUARCIATA: cavità + gabbia toracica + viscere + sangue ──────
+      g.fillStyle(gut);      g.fillEllipse(X(23),33,19,10);
+      g.fillStyle(0x140706); g.fillEllipse(X(23),34,15,7);                   // fondo nero
+      g.fillStyle(glow,0.16);g.fillEllipse(X(23),33,12,6);                   // tenue rosso interno (stesso accento)
+      g.fillStyle(musc);     g.fillEllipse(X(20),35,6,4);                    // muscolo vivo
+      g.fillStyle(muscHi);   g.fillEllipse(X(19),34,2.5,1.6);
+      g.fillStyle(boneSh);   [15,19,23,27,31].forEach(x=>g.fillRect(X(x),28,2,9));   // costole (ombra)
+      g.fillStyle(bone);     [15,19,23,27,31].forEach(x=>g.fillRect(X(x),28,1,8));   // costole (luce)
+      g.fillStyle(gut);      g.fillEllipse(X(26),38,3,5);                    // viscere pendenti
+      g.fillStyle(blood);    g.fillEllipse(X(23),39,11,4);                   // pozza
+      g.fillStyle(bloodDk);  g.fillRect(X(20),40,2,5); g.fillRect(X(27),40,2,4);     // colature
+
+      // ── COLLO tozzo + TESTA piccola e infossata tra le spalle ───────────────
+      g.fillStyle(skDeep); g.fillRoundedRect(X(17),9,15,10,4);
+      g.fillStyle(skSh);   g.fillRoundedRect(X(18),9,13,9,4);
+      g.fillStyle(sut);    g.fillEllipse(X(24),10,9,2);                      // collo ricucito
+      g.fillStyle(stitch); [20,23,26].forEach(x=>g.fillRect(X(x),8,1,4));
+      g.fillStyle(skDeep); g.fillEllipse(X(23),6,25,14);
+      g.fillStyle(skSh);   g.fillEllipse(X(23),6,22,12);
+      g.fillStyle(sk);     g.fillEllipse(X(22),5,17,9);
+      g.fillStyle(skHi);   g.fillEllipse(X(17),2,8,5);
+      g.fillStyle(skMid);  g.fillEllipse(X(26),4,7,5);
       // cresta ossea
-      g.fillStyle(skSh); g.fillEllipse(X(23),1,20,6);
-      [14,18,22,26,30].forEach(x => g.fillTriangle(X(x),1,X(x+3),1,X(x+1.5),4));
-      // occhi rossi infossati
-      g.fillStyle(0x100000); g.fillEllipse(X(16),6,8,6); g.fillEllipse(X(30),6,8,6);
-      g.fillStyle(eye); g.fillEllipse(X(16),6,4.5,3.5); g.fillEllipse(X(30),6,4.5,3.5);
-      g.fillStyle(0xff9977); g.fillCircle(X(15),5,1.4); g.fillCircle(X(29),5,1.4);
-      // mascella + zanne + sangue
-      g.fillStyle(0x180000); g.fillEllipse(X(23),12,20,6);
+      g.fillStyle(boneSh); g.fillEllipse(X(23),2,19,5);
+      g.fillStyle(bone);   [13,17,21,25,29].forEach(x=>g.fillTriangle(X(x),3,X(x+3),3,X(x+1.5),0));
+
+      // ── BLOOM finto cotto + OCCHI ROSSI emissivi (unico accento) ────────────
+      g.fillStyle(glow,0.14); g.fillCircle(X(16),6,7); g.fillCircle(X(30),6,7);
+      g.fillStyle(glow,0.22); g.fillCircle(X(16),6,4); g.fillCircle(X(30),6,4);
+      g.fillStyle(0x0a0000);  g.fillEllipse(X(16),6,8,6); g.fillEllipse(X(30),6,8,6);
+      g.fillStyle(eye);       g.fillEllipse(X(16),6,4.5,3.5); g.fillEllipse(X(30),6,4.5,3.5);
+      g.fillStyle(eyeHot);    g.fillCircle(X(15),5,1.5); g.fillCircle(X(29),5,1.5);
+
+      // ── MASCELLA spalancata + zanne + bava di sangue ────────────────────────
+      g.fillStyle(0x140000); g.fillEllipse(X(23),13,19,7);
+      g.fillStyle(musc,0.7); g.fillEllipse(X(23),15,12,3);                   // gengiva
       g.fillStyle(bone);
-      [14,18,23,28,32].forEach(x => g.fillTriangle(X(x),9,X(x+3),9,X(x+1.5),14));
-      [16,21,26,30].forEach(x => g.fillTriangle(X(x),16,X(x+3),16,X(x+1.5),11));
-      g.fillStyle(blood); g.fillRect(X(19),14,3,7); g.fillRect(X(27),14,2,6);
+      [14,18,23,28,32].forEach(x=>g.fillTriangle(X(x),10,X(x+3),10,X(x+1.5),15));   // denti superiori
+      [16,21,26,30].forEach(x=>g.fillTriangle(X(x),17,X(x+3),17,X(x+1.5),12));      // denti inferiori
+      g.fillStyle(blood);    g.fillRect(X(19),15,3,8); g.fillRect(X(27),15,2,7);    // bava di sangue
+      g.fillStyle(bloodDk);  g.fillRect(X(20),22,2,3);
     }
     g.generateTexture('zombie_giant',144,66); AF('zombie_giant',48,66,3); g.destroy();
   }

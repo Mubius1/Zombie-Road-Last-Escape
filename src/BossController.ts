@@ -7,11 +7,9 @@ import { OVERSAMPLE } from './Config';
 import Settings from './Settings';
 import SoundManager from './SoundManager';
 import Environment from './Environment';
-import {
-  BOSS_CONFIG, BOSS_ORDER, BossType,
-  ROAD_TOP, ROAD_CENTER, ROAD_BOTTOM,
-} from './scenes/GameScene';
-import type { ComponentKey, ZombieType } from './scenes/GameScene';
+import { BOSS_CONFIG, BOSS_ORDER, ROAD_TOP, ROAD_CENTER, ROAD_BOTTOM } from './World';
+import type { BossType, ComponentKey, ZombieType } from './World';
+import { getRun, setRun } from './RunState';
 
 const H = 600;
 
@@ -29,6 +27,7 @@ export interface BossHost extends Phaser.Scene {
   environment: Environment | null;
   addKillScore(base: number): void;
   dealDamage(amount: number): void;
+  killBullet(b: Phaser.Physics.Arcade.Sprite): void;
   damageComponent(key: ComponentKey, amount: number): void;
   hitStop(ms: number): void;
   triggerMissionComplete(): void;
@@ -76,11 +75,12 @@ export default class BossController {
     this._active = true;
     this.phase2 = false;
 
-    const missionNum: number = host.registry.get('missionNumber') ?? 1;
+    const missionNum: number = getRun(host.registry, 'missionNumber') ?? 1;
     const bossType = BOSS_ORDER[(missionNum - 1) % BOSS_ORDER.length];
     const cfg = BOSS_CONFIG[bossType];
-    // Scaling NG+ (G2): gli HP del boss crescono di 0.15 a ogni ciclo di 7 regioni, come gli zombi.
-    const diff = 1 + 0.15 * Math.floor((missionNum - 1) / 7);
+    // Scaling NG+ (G2/B4): gli HP del boss crescono di 0.2 a ogni ciclo di 7 regioni, come gli zombi
+    // (stessa formula di GameScene.difficultyMult — tenerle in sync).
+    const diff = 1 + 0.2 * Math.floor((missionNum - 1) / 7);
     this.maxHp = Math.round(cfg.hp * diff);
 
     // Alert
@@ -95,7 +95,7 @@ export default class BossController {
       },
     });
     host.cameras.main.shake(300, 0.016);
-    host.sfx?.playExplosion();
+    host.sfx?.playBossWarn(); // stinger di apparizione dedicato (AU5) invece del boato generico
 
     // Sprite boss (texture + animazione dedicate per ciascun tipo)
     const texKey = `boss_${bossType}`;
@@ -221,7 +221,7 @@ export default class BossController {
   onBulletHit(bullet: Phaser.Physics.Arcade.Sprite, boss: Phaser.Physics.Arcade.Sprite) {
     if (!bullet.active || !boss.active) return;
     const dmg = (bullet.getData('damage') as number) ?? 1;
-    bullet.destroy();
+    this.host.killBullet(bullet); // pool (P1) invece di destroy
     this.damageBoss(boss, dmg);
     // Flash bianco pieno sull'impatto (la texture ha la palette cotta, niente tinta da ripristinare).
     boss.setTintFill(0xffffff);
@@ -291,7 +291,7 @@ export default class BossController {
 
     const earned = cfg.reward;
     host.addKillScore(500);
-    host.registry.set('money', (host.registry.get('money') ?? 0) + earned);
+    setRun(host.registry, 'money', (getRun(host.registry, 'money') ?? 0) + earned);
     this.hideHud();
 
     const vt = Ui.text(host, host.designW / 2, H / 2 - 10, t('boss.defeated', { n: earned }), {

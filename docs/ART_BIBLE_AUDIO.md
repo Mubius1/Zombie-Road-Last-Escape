@@ -199,6 +199,18 @@ Sottoinsieme di numeri verificato automaticamente da `npm run validate:audio` co
 - **Trigger:** `bossDeathFx()` (da `killBoss`), una volta, al momento della morte.
 - **Intento:** dare a ogni boss una **voce di morte riconoscibile**, coerente col modello e coi VFX dedicati (ART_BIBLE_ZOMBIES §6.7.6): viscerale · che si spezza · metallico · radioattivo. Mai un gesto salente (= ricompensa): la morte del boss è una deflagrazione, non una fanfara (quella è `playMissionComplete`, che parte subito dopo).
 
+### 5.11 APPARIZIONE BOSS — `playBossWarn()`
+- **F:** sawtooth · **Freq:** 55 → **110** (sale, minaccia che cresce) in 0.5 s · **Env:** attacco lineare a 0.5 in 0.08 s → 0.001 in 0.6 s.
+- **Trigger:** `BossController.spawn()` (sostituisce il vecchio `playExplosion` generico).
+- **Intento:** stinger di **telegrafo**: grave che sale = "sta arrivando qualcosa di grosso". Gesto ascendente ammesso qui perché è *tensione*, non ricompensa.
+
+### 5.12 ALLARME CARBURANTE — `playLowFuel()`
+- **F:** 2 × sine · **Freq:** 880 Hz · **Env per bip:** attacco a 0.2 in 0.01 s → 0.001 in 0.12 s, due bip sfalsati di 0.18 s.
+- **Trigger:** in `updateFuel`, una volta sola, quando il carburante scende **sotto il 25%** (isteresi: si riarma sopra il 30%).
+- **Intento:** avviso secco e acuto, sotto l'azione, per la risorsa-tempo critica. Volutamente breve e poco invadente (non deve coprire l'azione).
+
+> **Lifecycle (AU):** il `master` ha un **buffer di rumore condiviso** (`noiseBuffer`, generato una volta) riusato da tutte le voci a rumore; `startEngine()` fa `ctx.resume()` se il contesto è sospeso; `dispose()` (chiamato allo SHUTDOWN di GameScene e SettingsScene) ferma il motore e **scollega master+limiter** da `destination` → nessun nodo orfano sul context condiviso a ogni restart.
+
 ---
 
 ## 6. Loop del motore (l'unica voce con stato)

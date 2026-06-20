@@ -22,7 +22,7 @@ Se cambi un numero nel codice, aggiorna il documento corrispondente e ri-valida:
 - **valore di bilanciamento** (`VEHICLES`, `WEAPONS`, `ZOMBIE_STATS` velocità/hp/danno/punteggio, `BOSS_CONFIG`, `SHOP_ITEMS`, costanti di missione di `GameScene.ts`) → aggiorna la tabella 🔒 di [`docs/BALANCE.md`](docs/BALANCE.md) → `npm run validate:balance`.
 
 ```bash
-npm run validate        # art + balance + audio insieme
+npm run validate        # art + balance + audio + i18n insieme
 npm run build           # esegue tutti i validatori come gate duro, poi tsc + vite build
 ```
 
@@ -54,12 +54,15 @@ Se cambi una **regola di gioco** (core loop, game over, ruoli) aggiorna `GAME_DE
 | Comando | Cosa fa |
 |---|---|
 | `npm run dev` | avvia Vite in sviluppo |
-| `npm run build` | **valida art + balance + audio** → `tsc` → build di produzione |
-| `npm run validate` | esegue i tre validatori (art + balance + audio) |
+| `npm run build` | **valida art + balance + audio + i18n** → `tsc` → build di produzione |
+| `npm run validate` | esegue i quattro validatori (art + balance + audio + i18n) |
 | `npm run validate:art` | allineamento codice ↔ art bible |
 | `npm run validate:balance` | allineamento codice ↔ `BALANCE.md` |
 | `npm run validate:audio` | allineamento codice ↔ `ART_BIBLE_AUDIO.md` |
+| `npm run validate:i18n` | dizionari `src/locales/` completi e coerenti vs `it.ts` |
 | `npm run preview` | anteprima della build |
+
+> **CI:** `.github/workflows/ci.yml` esegue `npm run build` a ogni push/PR (gate anti-deriva + type-check + build). ESLint e test unitari delle formule pure restano da aggiungere (richiedono nuove devDependencies).
 
 ## Mappa del codice
 
@@ -69,15 +72,16 @@ Se cambi una **regola di gioco** (core loop, game over, ruoli) aggiorna `GAME_DE
 | Negozio tra le missioni | `src/scenes/ShopScene.ts` |
 | Modalità debug / galleria modelli | `src/scenes/DebugScene.ts` |
 | Dati condivisi (veicoli, armi, sopravvissuti) | `src/GameData.ts` (i campi `name`/`desc`/`ability` sono **chiavi i18n**) |
+| Dati di dominio neutri (boss, geometria strada, tipi) | `src/World.ts` — `BOSS_CONFIG`/`BOSS_ORDER`, `ROAD_*`, `ZombieType`/`ComponentKey`/`BossType` (modulo senza import → rompe il ciclo GameScene↔BossController) |
 | Testi / internazionalizzazione | `src/i18n.ts` → `t()` · dizionari in `src/locales/<lang>.ts` (vedi [`docs/I18N.md`](docs/I18N.md)) |
 | Audio procedurale | `src/SoundManager.ts` |
 | Texture & animazioni nemici/boss/oggetti | `src/EntityTextures.ts` → `buildEntityTextures()` |
 | Texture veicolo | `src/VehicleTextures.ts` → `buildVehicleTexture()` |
 | Statistiche nemici | `ZOMBIE_STATS` (in `GameScene.ts`) |
 | Personalità di movimento + VFX | `ZOMBIE_MOTION`, `updateZombieMotion()`, `emitZombieFx()` |
-| Boss di fine regione | dati `BOSS_CONFIG`/`BOSS_ORDER` (in `GameScene.ts`) + sottosistema in `src/BossController.ts` (`spawn`/`update`/`onBulletHit`/`enterPhase2`, dialoga con la scena via interfaccia `BossHost`) |
+| Boss di fine regione | dati `BOSS_CONFIG`/`BOSS_ORDER` (in `src/World.ts`) + sottosistema in `src/BossController.ts` (`spawn`/`update`/`onBulletHit`/`enterPhase2`, dialoga con la scena via interfaccia `BossHost`) |
 | HUD di gioco (vista) | `src/HudController.ts` (barre, % salute, combo, scatto, selettore armi, componenti, debug, palette daltonico-safe) |
-| Reset stato run sul registry | `src/RunState.ts` → `resetRunState()` |
+| Stato run sul registry (tipizzato) | `src/RunState.ts` → contratto `RunData` + `getRun`/`setRun` (accesso type-checked) + `resetRunState()` |
 | Record persistente (localStorage) | `src/SaveData.ts` (bestMission/bestScore) · preferenze in `src/Settings.ts` |
 | Juice / game-feel (hit-stop, vignetta, bloom, muzzle-flash, transizioni) | `src/Juice.ts` |
 | Risoluzione, preset, zoom camera, sovracampionamento | `src/Config.ts` |

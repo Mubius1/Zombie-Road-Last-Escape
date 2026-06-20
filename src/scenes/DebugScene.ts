@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
-import { BOSS_CONFIG, BOSS_ORDER } from './GameScene';
+import { BOSS_CONFIG, BOSS_ORDER } from '../World';
 import { buildEntityTextures } from '../EntityTextures';
 import { buildVehicleTexture } from '../VehicleTextures';
 import { VEHICLES, VEHICLE_KEYS, WEAPONS, WEAPON_KEYS, WeaponType, SURVIVORS } from '../GameData';
 import Juice from '../Juice';
 import Ui, { UI } from '../Ui';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
-import { resetRunState } from '../RunState';
+import { resetRunState, getRun, setRun } from '../RunState';
 import { t } from '../i18n';
 
 const H = 600;
@@ -158,15 +158,15 @@ export default class DebugScene extends Phaser.Scene {
 
     // Riga 1: setup test
     mk(90,  150, t('debug.add5000'), 0x665500, () => this.toast(t('debug.toastCoins'), () =>
-      this.registry.set('money', (this.registry.get('money') ?? 0) + 5000)));
+      setRun(this.registry, 'money', (getRun(this.registry, 'money') ?? 0) + 5000)));
     mk(250, 150, t('debug.allWeapons'), 0x664400, () => this.toast(t('debug.toastWeapons'), () => {
-      this.registry.set('ownedWeapons', [...WEAPON_KEYS]);
+      setRun(this.registry, 'ownedWeapons', [...WEAPON_KEYS]);
     }));
     mk(410, 150, t('debug.allVehicles'), 0x445566, () => this.toast(t('debug.toastVehicles'), () => {
-      this.registry.set('ownedVehicles', [...VEHICLE_KEYS]);
+      setRun(this.registry, 'ownedVehicles', [...VEHICLE_KEYS]);
     }));
     mk(570, 150, t('debug.recruitAll'), 0x556644, () => this.toast(t('debug.toastSurvivors'), () => {
-      this.registry.set('survivors', SURVIVORS.map(s => s.key));
+      setRun(this.registry, 'survivors', SURVIVORS.map(s => s.key));
     }));
 
     // Riga 2: navigazione
@@ -186,18 +186,18 @@ export default class DebugScene extends Phaser.Scene {
   // ─── Actions ─────────────────────────────────────────────────────────────────
 
   private testVehicle(key: string) {
-    const owned = (this.registry.get('ownedVehicles') as string[] | null) ?? ['civilian_car'];
+    const owned = getRun(this.registry, 'ownedVehicles') ?? ['civilian_car'];
     if (!owned.includes(key)) owned.push(key);
-    this.registry.set('ownedVehicles', owned);
-    this.registry.set('vehicle', key);
+    setRun(this.registry, 'ownedVehicles', owned);
+    setRun(this.registry, 'vehicle', key);
     Juice.go(this, 'GameScene');
   }
 
   private testWeapon(key: WeaponType) {
-    const owned = (this.registry.get('ownedWeapons') as WeaponType[] | null) ?? ['mg'];
+    const owned = getRun(this.registry, 'ownedWeapons') ?? ['mg'];
     if (!owned.includes(key)) owned.push(key);
-    this.registry.set('ownedWeapons', owned);
-    this.registry.set('currentWeapon', key);
+    setRun(this.registry, 'ownedWeapons', owned);
+    setRun(this.registry, 'currentWeapon', key);
     Juice.go(this, 'GameScene');
   }
 

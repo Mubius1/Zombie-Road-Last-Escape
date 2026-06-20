@@ -120,6 +120,18 @@ Inoltre allineati `CLAUDE.md` e `ARCHITETTURA.md` ai refactor (citavano `spawnBo
 
 **Aperti storici confermati (non regressioni):** A3–A8, P3/P5/P6, AU2–AU7, V4–V7, B3/B5/B6/B7, T5, G1, U2. **Verificati già risolti/conformi:** V3 (scia baked, ok per art bible), T6 (WATCHED completa), + tutte le meccaniche R5.
 
+**Round 7 — Big bet "alta priorità" (5 pacchetti, build verde dopo ciascuno)**
+
+| ID | Pacchetto | Cosa è stato fatto |
+|---|---|---|
+| **B3+B4** | Ribilanciamento late-game | NG+ ora **morde**: `difficultyMult` step **0.2** (era 0.15), HP con `Math.ceil` (i nemici da 1 HP scalano: prima `round(1×1.2)=1` li lasciava fermi), **danno da contatto scalato** (`scaledDamage`, prima non scalava); boss in sync. **Sperimentale** da dominante-su-tutto a **glass cannon** (salute/armatura 120/50→**60/20**, resta re di velocità 1.2 / cadenza 1.5). BALANCE §3/§5 aggiornati (con nota "da tarare a playtest"). |
+| **AU** | Teardown + eventi audio | `SoundManager.dispose()` (scollega master+limiter → no nodi orfani a ogni restart, AU7), cablato in `GameScene`/`SettingsScene` SHUTDOWN; **buffer di rumore condiviso** (AU4, niente alloc per sparo); `ctx.resume()` in `startEngine` (AU6); disconnessione catena motore su `onended` (AU2, parte leak); **2 cue nuovi** (AU5): stinger apparizione boss `playBossWarn`, allarme carburante `playLowFuel` (<25%, isteresi). Schede in ART_BIBLE_AUDIO §5.11/5.12. |
+| **T5** | Rete anti-regressione | Nuovo validatore **`validate:i18n`** (parità chiavi + coerenza segnaposto `{…}` + no duplicati nei 6 dizionari) agganciato a `validate`/`build`/plugin dev; **CI GitHub Actions** (`.github/workflows/ci.yml`) che gira `npm run build` a ogni push/PR. *ESLint + unit-test delle formule pure: rimandati (richiedono nuove devDependencies, non installabili nell'ambiente attuale).* |
+| **A3+A4** | Architettura | **Import circolare rotto**: `BOSS_CONFIG`/`BOSS_ORDER`/`ROAD_*` + tipi dominio spostati nel modulo neutro **`src/World.ts`**; `BossController` non importa più `GameScene` (verificato). Validatori art/balance ri-puntati a `World.ts`. **Registry tipizzato** (A3): `RunData` + `getRun`/`setRun` in `RunState.ts`, migrati **tutti i 60 call site** → le chiavi/valori del canale cross-scena sono ora type-checked. |
+| **P1** | Object pooling | **Proiettili** poolati (pattern Phaser `bullets.get()` + `enableBody` / `killBullet`→`disableBody`): l'oggetto più frequente non fa più create/destroy a ogni colpo. Boss via `BossHost.killBullet`. ⚠️ *Da verificare a playtest* (correttezza pool non coperta dalla build). **Razzi e particelle/detriti** (`add.image`+tween) **non** ancora poolati → follow-up (richiedono pool con gestione tween). |
+
+**Resta da fare dopo R7:** P1-fase2 (rockets + particelle/detriti), ESLint+unit-test (T5), medie A5–A8 · P3/P5 · B5/B7, basse AU3/AU4 · V4–V7 · P6 · B6, decisioni G1/U2. La tabella prioritizzata vive nella chat.
+
 ---
 
 ## Verdetto complessivo
