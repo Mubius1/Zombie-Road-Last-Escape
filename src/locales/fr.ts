@@ -72,6 +72,9 @@ const fr: Record<string, string> = {
   'hud.mission': 'MIS.{n}',
   'hud.dash': '↯ DASH',
   'hud.dashCooldown': '↯ {n}s',
+  'hud.overdrive': 'SURRÉGIME',
+  'hud.overdriveReady': 'PRÊT ▶F',
+  'hud.overdriveActive': 'ACTIF !',
   'hud.route': 'PARCOURS',
   'hud.km': '{n} km',
   'hud.kmTarget': '/ {n} km',
@@ -79,7 +82,7 @@ const fr: Record<string, string> = {
   'hud.comboMult': 'COMBO {n}  ×{m}',
   'hud.attached': '[{n} accrochés]',
   'hud.godMode': '◆ GOD MODE  (G off · B boss · N fin · H répare)',
-  'hud.controls': '↑↓/WS Bouger · ESPACE Tirer · 1-5/Q Arme · SHIFT Dash',
+  'hud.controls': '↑↓/WS Bouger · ESPACE Tirer · 1-5/Q Arme · SHIFT Dash · F Surrégime',
   'hud.debugHint': '0=Debug',
 
   'comp.engine': 'MOTEUR',
@@ -97,6 +100,7 @@ const fr: Record<string, string> = {
   'region.finalCity': 'Ville Finale',
 
   'game.giantWarn': '⚠ GÉANT !',
+  'game.overdriveOn': '⚡ SURRÉGIME !',
   'game.over.fuel': 'Plus de carburant !',
   'game.over.engine': 'Moteur détruit !',
   'game.over.vehicle': 'Véhicule détruit !',

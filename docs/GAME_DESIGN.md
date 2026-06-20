@@ -54,6 +54,7 @@ Questo documento è la **fonte di verità** del *design del gioco*: cosa fa il g
 | **↑ / ↓** (o W/S) | Muovi il veicolo su/giù nella strada |
 | **Sparo** | Automatico, in avanti, secondo l'arma equipaggiata |
 | **Shift** | **Scatto** (dash): scrolla via gli zombi aggrappati · ricarica 5 s |
+| **F** | **Sovraccarico** (overdrive): a barra piena, ~3 s di cadenza ×2 + veicolo-ariete + onda d'urto frontale. La barra si carica dalle uccisioni in combo (§7). |
 | **1–5** | Cambia arma posseduta al volo |
 | **ESC** | Pausa / Impostazioni (mette in pausa la scena) |
 | **SPAZIO** | Avanza nelle schermate di esito (negozio / restart) |
@@ -154,6 +155,7 @@ Il veicolo è definito da `VEHICLES[key]` (salute/armatura/velocità/cadenza bas
 - **Salute** (`100 + bonus veicolo`): a 0 → *"Veicolo distrutto!"* (game over).
 - **Carburante** (`100`, +30 con upgrade serbatoio): cala di continuo (`BASE_FUEL_DRAIN`), più in fretta se il serbatoio è danneggiato; a 0 → *"Carburante esaurito!"* (game over). Si ricarica con le **taniche** (+30) che appaiono ogni 7,5 s (ogni 5 s con l'Esploratore).
 - **Punteggio / Combo**: ogni uccisione dà punti × moltiplicatore combo. La **combo** sale a ogni kill entro 2,5 s dal precedente e moltiplica fino a **×5** (cap a 13 kill di fila, vedi [BALANCE §2](BALANCE.md#2--economia--flusso-delle-monete)). Il punteggio è la valuta-sorgente: a fine missione diventa **monete** (= ⌊punteggio/8⌋). Il **boss** dà inoltre una **ricompensa in monete diretta** (accreditata subito) **più** +500 punteggio — due accrediti distinti a fine missione.
+- **Sovraccarico (Overdrive)** (A3): una barra che si carica dalle uccisioni in combo. A barra piena, **F** scatena ~3 s di cadenza di fuoco ×2, veicolo-ariete (il contatto uccide senza danneggiare i componenti) e un'onda d'urto frontale. È la valvola **attiva** legata alla combo — premia l'aggressività e aggiunge un secondo verbo oltre allo Scatto. Numeri in [BALANCE §1](BALANCE.md#1--costanti-di-missione-).
 - **Monete (★)**: spese solo al Negozio. **Non** sopravvivono al game over.
 
 ---

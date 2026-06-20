@@ -28,8 +28,16 @@ Fonte: costanti in testa a `GameScene.ts`. La colonna **Valore** è validata (un
 | `DASH_GRACE` | 350 | grazia post-scatto senza riaggancio (ms) |
 | `ATTACH_DAMAGE_AMOUNT` | 14 | danno al componente per zombi aggrappato |
 | `ATTACH_DAMAGE_INTERVAL` | 1600 | cadenza del danno da aggancio (ms) |
+| `OVERDRIVE_MAX` | 100 | soglia della barra piena del Sovraccarico (A3) |
+| `OVERDRIVE_DURATION` | 3000 | durata del Sovraccarico una volta attivato (ms) |
+| `OVERDRIVE_FIRE_MULT` | 2 | ×cadenza di fuoco durante il Sovraccarico |
+| `OVERDRIVE_SHOCK_DMG` | 6 | danno dell'onda d'urto frontale all'attivazione |
+| `OVERDRIVE_CHARGE_BASE` | 2 | carica della barra per ogni uccisione (base) |
+| `OVERDRIVE_CHARGE_COMBO` | 2 | carica aggiuntiva per uccisione = questo × moltiplicatore combo |
 
 > *Non validati (valori inline):* tanica = **+30** carburante per pickup; intervallo tanica **7500 ms** (**5000 ms** con Esploratore).
+
+> **Sovraccarico (Overdrive, A3).** La barra (`OVERDRIVE_MAX`) si carica a ogni uccisione di `OVERDRIVE_CHARGE_BASE + OVERDRIVE_CHARGE_COMBO · moltiplicatore_combo` (→ ~15-20 kill per riempirla a combo media). A barra piena, **F** attiva il Sovraccarico per `OVERDRIVE_DURATION` ms: cadenza di fuoco ×`OVERDRIVE_FIRE_MULT`, veicolo-ariete (il contatto uccide senza danni ai componenti) e onda d'urto frontale da `OVERDRIVE_SHOCK_DMG` all'attivazione. *Da tarare a playtest.*
 
 ---
 

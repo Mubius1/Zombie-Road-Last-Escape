@@ -85,6 +85,9 @@ const it: Record<string, string> = {
   'hud.mission': 'MISS.{n}',
   'hud.dash': '↯ SCATTO',
   'hud.dashCooldown': '↯ {n}s',
+  'hud.overdrive': 'SOVRACCARICO',
+  'hud.overdriveReady': 'PRONTO ▶F',
+  'hud.overdriveActive': 'ATTIVO!',
   'hud.route': 'PERCORSO',
   'hud.km': '{n} km',
   'hud.kmTarget': '/ {n} km',
@@ -92,7 +95,7 @@ const it: Record<string, string> = {
   'hud.comboMult': 'COMBO {n}  ×{m}',
   'hud.attached': '[{n} aggrappati]',
   'hud.godMode': '◆ GOD MODE  (G off · B boss · N fine · H ripara)',
-  'hud.controls': '↑↓/WS Muovi · SPAZIO Spara · 1-5/Q Arma · SHIFT Scatto',
+  'hud.controls': '↑↓/WS Muovi · SPAZIO Spara · 1-5/Q Arma · SHIFT Scatto · F Sovracc.',
   'hud.debugHint': '0=Debug',
 
   // ── Componenti del veicolo (HUD) ─────────────────────────────────────────────────
@@ -113,6 +116,7 @@ const it: Record<string, string> = {
 
   // ── Gioco: esiti e avvisi ────────────────────────────────────────────────────────
   'game.giantWarn': '⚠ GIGANTE!',
+  'game.overdriveOn': '⚡ SOVRACCARICO!',
   'game.over.fuel': 'Carburante esaurito!',
   'game.over.engine': 'Motore distrutto!',
   'game.over.vehicle': 'Veicolo distrutto!',

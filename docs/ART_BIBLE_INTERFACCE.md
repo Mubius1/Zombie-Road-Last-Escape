@@ -270,11 +270,12 @@ Niente icone importate: usiamo **caratteri** coerenti, sempre con lo stesso sign
 - **PUNTEGGIO** (x 290, y 6): `13px` `#ffffff`. · **MISS.N** (x 620): `12px` `#88ff88`. · **[N aggrappati]** (x 700): `11px` `#ff8800`. · **arma** (x 620, y 22): `10px` `#ffaa44` (nome arma in maiuscolo).
 - **COMBO** (x 470, y 6, visibile da catena ≥2): `13px` bold; testo `COMBO {n}  ×{mult}`; **colore per livello** del moltiplicatore (×1 `#888899` → ×2 oro `#ffee44` → ×3 ambra `#ffaa00` → ×4 `#ff8888` → ×5 rosso `#ff6666`) — `COMBO_COLORS` in `GameScene`; **pop di scala** a ogni uccisione.
 - **SCATTO** (x W-10, y 22, allineato a destra): `11px` bold; `↯ SCATTO` verde `#44cc44` quando pronto, `↯ Ns` `#556677` durante la ricarica (`DASH_COOLDOWN` 5s).
+- **SOVRACCARICO** (Overdrive, A3) (x 10, y 98, sotto il pannello a sinistra): label `10px` `#ffaa66` `SOVRACCARICO`; barra `120×9` su fondo `0x1a1a1a`, fill che sale di tono col carico — carica `#cc8a2a` → **pronto** `#ffcc33` → **attivo** `#fff0a0`; a destra `PRONTO ▶F` / `ATTIVO!` `10px` bold (oro) come ridondanza non cromatica. La barra si carica dalle uccisioni in combo; a piena, **F** la spende (vedi `GAME_DESIGN §7`, `BALANCE §1`). Palette ambra/oro **CB-safe**.
 - **Selettore armi** (x 620, y 34): una **cifra-hotkey** (`1`–`5`) per ogni arma **posseduta**; quella attiva in **oro** `#ffee44`, le altre `#888899`. Il nome esteso dell'arma attiva resta in **arma** (y 22).
 - **PERCORSO** (x 290, y 24): label `10px` `#7777aa`; valore km `#aaaaff`; barra `110×7` su fondo `0x111122`, fill `0x4466cc`; meta "/ N km" `9px` `#445577`.
 - **Sopravvissuti** (in alto a destra, se presenti): icone testuali `[M] [+] [S] [E]` `11px` `#cccc44`.
 - **Componenti** (5, fascia `y 49–72`): per ciascuno label `10px` `#888888` + barra `120×7` su fondo `0x1a1a1a`, fill = **`comp.baseColor`** (funzionale, vedi `ART_BIBLE_OGGETTI` §4.2: motore `#44cc44`, ruote `#44aa88`, serbatoio `#ff8800`, torretta `#8899ff`, corazza `#6688bb`).
-- **Hint comandi** (basso, `y H-6`): `"↑↓ Muovi · SPAZIO Spara · 1-5/Q Arma · SHIFT Scatto"` `11px` `#333333` centrato; "0=Debug" `9px` `#2a3a2a`; indicatore GOD MODE a destra `10px` `#00ff88` bold.
+- **Hint comandi** (basso, `y H-6`): `"↑↓ Muovi · SPAZIO Spara · 1-5/Q Arma · SHIFT Scatto · F Sovracc."` `11px` `#333333` centrato; "0=Debug" `9px` `#2a3a2a`; indicatore GOD MODE a destra `10px` `#00ff88` bold.
 
 **Reazione (soglie in `updateHUD`):**
 - **Salute** cambia colore alla soglia: `#44cc44` (≥60%) → `#ffaa00` (30–60%) → `#ff2222` (<30%). La barra è uno **strumento di lettura del rischio**, non solo un numero.

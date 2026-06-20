@@ -15,6 +15,9 @@ const COMBO_COLORS = [UI.muted, UI.gold, UI.amber, UI.redText, UI.red];
 // sulle barre resta sempre come ridondanza non cromatica.
 const CB_HP   = { low: 0xff7a2a, mid: 0xffd23a, high: 0x3a9bff };
 const CB_COMP = { zero: 0x552200, low: 0xff7a2a, mid: 0xffd23a, base: 0x3a9bff };
+// Palette del Sovraccarico (Overdrive, A3): ambra→oro (gialli CB-safe per protan/deutan). La
+// label testuale "PRONTO/ATTIVO" è ridondanza non cromatica, come la % sulle altre barre.
+const OD_COLORS = { charge: 0xcc8a2a, ready: 0xffcc33, active: 0xfff0a0 };
 
 export interface HudBuildOpts {
   missionNum: number;
@@ -34,6 +37,7 @@ export interface HudState {
   score: number; distance: number;
   attachedCount: number;
   combo: number; comboMult: number;
+  overdrive: number; overdriveMax: number; overdriveActive: boolean;
   dashReadyAt: number; now: number;
   components: Record<ComponentKey, ComponentData>;
 }
@@ -62,9 +66,11 @@ export default class HudController {
   private weaponTxt!: Phaser.GameObjects.Text;
   private comboTxt!: Phaser.GameObjects.Text;
   private dashTxt!: Phaser.GameObjects.Text;
+  private overdriveFill!: Phaser.GameObjects.Rectangle;
+  private overdriveTxt!: Phaser.GameObjects.Text;
   private debugTxt!: Phaser.GameObjects.Text;
   private weaponSlots: { key: WeaponType; txt: Phaser.GameObjects.Text }[] = [];
-  private cache = { score: -1, km: -1, fuel: -1, health: -1, attached: -1, combo: '', dash: '' };
+  private cache = { score: -1, km: -1, fuel: -1, health: -1, attached: -1, combo: '', dash: '', overdrive: '' };
   // Tutti gli oggetti creati da build(): tracciati per poterli distruggere su un re-build
   // (es. cambio lingua a partita in pausa → l'HUD va ridisegnato nella nuova lingua).
   private objects: { destroy(): void }[] = [];
@@ -84,7 +90,7 @@ export default class HudController {
     for (const obj of this.objects) obj.destroy();
     this.objects = [];
     // I Text vengono (ri)creati a ogni build: azzera la cache così il primo update li popola.
-    this.cache = { score: -1, km: -1, fuel: -1, health: -1, attached: -1, combo: '', dash: '' };
+    this.cache = { score: -1, km: -1, fuel: -1, health: -1, attached: -1, combo: '', dash: '', overdrive: '' };
     const s = this.scene, dW = this.designW;
     const D = 20, BAR_W = 110, COMP_BAR_W = 120;
     // Blocco di destra ancorato a dW: in 4:3 (dW=800) coincide con i vecchi 620/700; in 16:9 si
@@ -162,6 +168,13 @@ export default class HudController {
       comp.fill = fill;
     });
 
+    // Barra Sovraccarico (Overdrive, A3): gauge nella banda alta a sinistra, sotto il pannello HUD.
+    const OD_X = 10, OD_Y = 98, OD_W = 120;
+    this.own(Ui.text(s, OD_X, OD_Y - 13, t('hud.overdrive'), { fontSize:'10px', color:UI.amberSoft }).setDepth(D+1));
+    this.own(Ui.box(s, OD_X + OD_W/2, OD_Y, OD_W, 9, { fill:UI.barGrey, radius:3 }).setDepth(D+1));
+    this.overdriveFill = this.own(s.add.rectangle(OD_X, OD_Y, OD_W, 9, OD_COLORS.charge).setOrigin(0,0.5).setDepth(D+2));
+    this.overdriveTxt  = this.own(Ui.text(s, OD_X + OD_W + 6, OD_Y, '', { fontSize:'10px', fontStyle:'bold', color:UI.gold }).setOrigin(0,0.5).setDepth(D+2));
+
     // Hint comandi: leggibile (U11). Prima era UI.disabled (#333) su pannello quasi nero → illeggibile.
     this.own(Ui.text(s, dW/2,H-6,t('hud.controls'),{fontSize:'11px',color:UI.faint}).setOrigin(0.5,1).setDepth(D));
     this.own(Ui.text(s, 4,H-6,t('hud.debugHint'),{fontSize:'9px',color:'#2a3a2a'}).setOrigin(0,1).setDepth(D));
@@ -215,6 +228,14 @@ export default class HudController {
       this.dashTxt.setColor(dashRemain <= 0 ? UI.greenOk : UI.faint);
       this.cache.dash = dashStr;
     }
+
+    // Sovraccarico (A3): riempimento + stato (carica → pronto → attivo).
+    const odPct = Phaser.Math.Clamp(o.overdrive / o.overdriveMax, 0, 1);
+    this.overdriveFill.displayWidth = Math.max(0, odPct * 120);
+    const odReady = odPct >= 1;
+    this.overdriveFill.setFillStyle(o.overdriveActive ? OD_COLORS.active : odReady ? OD_COLORS.ready : OD_COLORS.charge);
+    const odStr = o.overdriveActive ? t('hud.overdriveActive') : odReady ? t('hud.overdriveReady') : '';
+    if (odStr !== this.cache.overdrive) { this.overdriveTxt.setText(odStr); this.cache.overdrive = odStr; }
 
     for (const key of Object.keys(o.components) as ComponentKey[]) {
       const comp = o.components[key];

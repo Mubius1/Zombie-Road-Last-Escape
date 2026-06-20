@@ -305,6 +305,35 @@ export default class SoundManager {
     });
   }
 
+  /** Sovraccarico attivato (A3): triade ascendente brillante + sweep d'aria — gesto power-up. Vedi §5. */
+  playOverdrive() {
+    const t0 = this.ctx.currentTime;
+    // Triade che sale (oro): tre sine sovrapposte, ognuna piega verso l'alto.
+    [392, 523, 659].forEach((f, i) => {
+      const t = t0 + i * 0.05;
+      const osc = this.ctx.createOscillator(); osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, t);
+      osc.frequency.exponentialRampToValueAtTime(f * 1.5, t + 0.18);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.linearRampToValueAtTime(0.26, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      osc.connect(g); g.connect(this.master);
+      osc.start(t); osc.stop(t + 0.32);
+    });
+    // Sweep d'aria: rumore highpass che si apre (whoosh ascendente).
+    const src = this.noise(0.3);
+    const flt = this.ctx.createBiquadFilter(); flt.type = 'highpass';
+    flt.frequency.setValueAtTime(600, t0);
+    flt.frequency.exponentialRampToValueAtTime(4000, t0 + 0.28);
+    const ng = this.ctx.createGain();
+    ng.gain.setValueAtTime(0.001, t0);
+    ng.gain.linearRampToValueAtTime(0.22, t0 + 0.06);
+    ng.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3);
+    src.connect(flt); flt.connect(ng); ng.connect(this.master);
+    src.start(t0); src.stop(t0 + 0.32);
+  }
+
   // ─── Engine loop ─────────────────────────────────────────────────────────────
 
   startEngine() {

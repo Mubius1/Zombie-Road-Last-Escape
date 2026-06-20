@@ -35,6 +35,13 @@ const BOSS_TRIGGER = 0.82; // % missione a cui appare il boss
 const COMBO_WINDOW = 2500;  // ms: finestra per mantenere la catena di uccisioni
 const DASH_COOLDOWN = 5000; // ms: ricarica dello scatto anti-aggancio
 const DASH_GRACE = 350;     // ms: dopo lo scatto nessun nuovo zombi si aggrappa
+// ── Sovraccarico (Overdrive, A3): risorsa attiva caricata dalla combo, spesa col tasto F. Vedi BALANCE §1. ──
+const OVERDRIVE_MAX = 100;        // soglia della barra piena
+const OVERDRIVE_DURATION = 3000;  // ms: durata del Sovraccarico una volta attivato
+const OVERDRIVE_FIRE_MULT = 2;    // ×cadenza di fuoco durante il Sovraccarico
+const OVERDRIVE_SHOCK_DMG = 6;    // danno dell'onda d'urto frontale all'attivazione
+const OVERDRIVE_CHARGE_BASE = 2;  // carica base per ogni uccisione
+const OVERDRIVE_CHARGE_COMBO = 2; // carica aggiuntiva = questo × moltiplicatore combo, per uccisione
 
 interface EnvConfig {
   name: string;
@@ -166,12 +173,18 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private spaceKey!: Phaser.Input.Keyboard.Key;
   private shiftKey!: Phaser.Input.Keyboard.Key;
   private cycleKey!: Phaser.Input.Keyboard.Key;
+  private fKey!: Phaser.Input.Keyboard.Key; // Sovraccarico (Overdrive, A3)
   private numberKeys: Phaser.Input.Keyboard.Key[] = [];
 
   private combo = 0;
   private comboTimer = 0;
   private dashReadyAt = 0;
   private dashGraceUntil = 0;
+
+  // Sovraccarico (Overdrive, A3): carica 0..OVERDRIVE_MAX dalla combo; attivo finché now < overdriveActiveUntil.
+  private overdrive = 0;
+  private overdriveActiveUntil = 0;
+  private overdriveGlow: Phaser.GameObjects.Image | null = null;
 
   private lastFire = 0;
   private spawnTimer = 0;
@@ -219,6 +232,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (!this.ownedWeapons.includes(this.currentWeapon)) this.currentWeapon = this.ownedWeapons[0] ?? 'mg';
     this.combo = 0; this.comboTimer = 0;
     this.dashReadyAt = 0; this.dashGraceUntil = 0;
+    this.overdrive = 0; this.overdriveActiveUntil = 0; this.overdriveGlow = null;
     this.boss = new BossController(this); // stato boss fresco + gruppi fisici (usati da buildColliders)
 
     const def = { engine: 100, wheels: 100, tank: 100, turret: 100, armor: 100 };
@@ -271,6 +285,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
     // Juice: overlay filmico (opzionale) + entrata in dissolvenza
     this.frozen = false;
+    // Garantisce le texture del juice (fx_light) anche con overlay disattivato: muzzleFlash/bloom e
+    // l'alone del Sovraccarico (A3) le usano a prescindere da screenFx.
+    Juice.buildTextures(this);
     this.grain = Settings.screenFx ? Juice.addOverlay(this) : null;
     Juice.fadeIn(this);
   }
@@ -305,6 +322,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.updateFiring(time);
     this.updateWeaponSwitch();
     this.updateDash(time);
+    this.updateOverdrive(time);
     this.updateCombo(delta);
     this.updateFuel(dt);
     this.updateDistance(dt);
@@ -463,6 +481,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.spaceKey = this.input.keyboard!.addKey(KC.SPACE);
     this.shiftKey = this.input.keyboard!.addKey(KC.SHIFT);
     this.cycleKey = this.input.keyboard!.addKey(KC.Q);
+    this.fKey = this.input.keyboard!.addKey(KC.F); // Sovraccarico (Overdrive, A3)
     this.wKey = this.input.keyboard!.addKey(KC.W); // movimento anche con W/S (G8, come da GAME_DESIGN §2)
     this.sKey = this.input.keyboard!.addKey(KC.S);
     this.numberKeys = [KC.ONE, KC.TWO, KC.THREE, KC.FOUR, KC.FIVE]
@@ -567,6 +586,74 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.sfx?.playImpact();
   }
 
+  // ─── Sovraccarico / Overdrive (A3) ──────────────────────────────────────────
+  /** True mentre il Sovraccarico è attivo (≈OVERDRIVE_DURATION dall'attivazione). */
+  private overdriveOn(): boolean { return this.time.now < this.overdriveActiveUntil; }
+
+  private updateOverdrive(time: number) {
+    // Attivazione: tasto F a barra piena e non già attivo.
+    if (Phaser.Input.Keyboard.JustDown(this.fKey) && !this.overdriveOn() && this.overdrive >= OVERDRIVE_MAX) {
+      this.activateOverdrive(time);
+      return;
+    }
+    // Alone "vivo" che segue il veicolo durante il Sovraccarico; rimosso quando finisce.
+    if (this.overdriveOn()) {
+      this.overdriveGlow?.setPosition(this.vehicle.x, this.vehicle.y).setAlpha(0.30 + 0.22 * Math.sin(time / 55));
+    } else if (this.overdriveGlow) {
+      this.overdriveGlow.destroy();
+      this.overdriveGlow = null;
+    }
+  }
+
+  private activateOverdrive(time: number) {
+    this.overdrive = 0;
+    this.overdriveActiveUntil = time + OVERDRIVE_DURATION;
+
+    // Onda d'urto: sbalza via gli aggrappati (come lo scatto) e danneggia i nemici davanti al veicolo.
+    for (const az of this.attachedZombies) {
+      this.spawnHitParticles(az.sprite.x, az.sprite.y);
+      this.tweens.add({
+        targets: az.sprite,
+        x: az.sprite.x - 130, y: az.sprite.y + Phaser.Math.Between(-40, 40),
+        angle: Phaser.Math.Between(-260, 260), alpha: 0,
+        duration: 340, ease: 'Cubic.easeIn', onComplete: () => az.sprite.destroy(),
+      });
+    }
+    this.attachedZombies = [];
+    for (const z of this.zombies.getChildren() as Phaser.Physics.Arcade.Sprite[]) {
+      if (!z.active) continue;
+      const dx = z.x - this.vehicle.x;
+      if (dx < -10 || dx > 240) continue; // solo il cono frontale
+      const zt = z.getData('type') as ZombieType;
+      const hp = (z.getData('hp') as number) - OVERDRIVE_SHOCK_DMG;
+      if (hp <= 0) {
+        this.addKillScore(ZOMBIE_STATS[zt].score);
+        this.killBurst(zt, z.x, z.y);
+        if (zt === 'toxic') this.spawnToxicCloud(z.x, z.y);
+        z.destroy();
+      } else {
+        z.setData('hp', hp);
+        z.setTint(0xffffff);
+        this.time.delayedCall(80, () => { if (z?.active) z.clearTint(); });
+      }
+    }
+
+    // Alone additivo che accompagna il veicolo per tutta la durata (mosso in updateOverdrive).
+    this.overdriveGlow = this.add.image(this.vehicle.x, this.vehicle.y, 'fx_light')
+      .setTint(0xffd24a).setScale(2.6).setAlpha(0.4).setDepth(9).setBlendMode(Phaser.BlendModes.ADD);
+
+    Juice.flash(this, 0xffdd55, 0.28, 160);
+    Juice.bloomBurst(this, this.vehicle.x + 44, this.vehicle.y, 0xffcc33, 3.2, 320);
+    Juice.lightFlash(this, this.vehicle.x, this.vehicle.y, 0xffd24a, 5, 360);
+    this.cameras.main.shake(220, 0.01);
+    this.sfx?.playOverdrive();
+
+    const banner = Ui.text(this, this.designW / 2, ROAD_TOP - 28, t('game.overdriveOn'), {
+      fontSize: '20px', color: UI.gold, fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(25).setAlpha(0);
+    this.tweens.add({ targets: banner, alpha: 1, y: ROAD_TOP - 36, duration: 220, yoyo: true, hold: 520, onComplete: () => banner.destroy() });
+  }
+
   // ─── Combo / moltiplicatore di punteggio ───────────────────────────────────
   private updateCombo(delta: number) {
     if (this.combo <= 0) return;
@@ -606,6 +693,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.combo++;
     this.comboTimer = COMBO_WINDOW;
     this.score += base * this.comboMultiplier();
+    // Carica il Sovraccarico (A3): più alta la combo, più in fretta si riempie la barra.
+    this.overdrive = Math.min(OVERDRIVE_MAX, this.overdrive + OVERDRIVE_CHARGE_BASE + OVERDRIVE_CHARGE_COMBO * this.comboMultiplier());
     if (this.combo >= 2) this.hud.popCombo();
   }
 
@@ -743,6 +832,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       score: this.score, distance: this.distance,
       attachedCount: this.attachedZombies.length,
       combo: this.combo, comboMult: this.comboMultiplier(),
+      overdrive: this.overdrive, overdriveMax: OVERDRIVE_MAX, overdriveActive: this.overdriveOn(),
       dashReadyAt: this.dashReadyAt, now: this.time.now,
       components: this.components,
     });
@@ -1019,6 +1109,18 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (!zombie.active) return;
     const type = zombie.getData('type') as ZombieType;
 
+    // Sovraccarico (A3): il veicolo è un ariete → il contatto uccide senza danneggiare i componenti.
+    if (this.overdriveOn()) {
+      this.addKillScore(ZOMBIE_STATS[type].score);
+      this.killBurst(type, zombie.x, zombie.y);
+      if (type === 'toxic') this.spawnToxicCloud(zombie.x, zombie.y);
+      if (type === 'giant') { this.cameras.main.shake(180, 0.01); this.hitStop(40); this.sfx?.playExplosion(); }
+      else this.sfx?.playZombieKill();
+      this.environment?.addDecal('blood', zombie.x, zombie.y);
+      zombie.destroy();
+      return;
+    }
+
     switch (type) {
       case 'runner':
         zombie.destroy();
@@ -1246,7 +1348,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private getEffectiveCooldown(): number {
     if (this.components.turret.health <= 0) return 99999;
     const base = WEAPONS[this.currentWeapon].cooldown;
-    return (base / this.vehicleFireMult) * (1 + (1 - this.components.turret.health/100) * 1.4);
+    const od = this.overdriveOn() ? OVERDRIVE_FIRE_MULT : 1; // Sovraccarico: cadenza moltiplicata (A3)
+    return (base / this.vehicleFireMult / od) * (1 + (1 - this.components.turret.health/100) * 1.4);
   }
 
   private getEffectiveFuelDrain(): number {
@@ -1259,6 +1362,10 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private clearAttachedZombies() {
     this.attachedZombies.forEach(az => az.sprite.destroy());
     this.attachedZombies = [];
+    // Fine run: spegni il Sovraccarico e rimuovi l'alone (niente sprite/timer orfani, A3).
+    this.overdriveActiveUntil = 0;
+    this.overdriveGlow?.destroy();
+    this.overdriveGlow = null;
   }
 
   triggerMissionComplete() {

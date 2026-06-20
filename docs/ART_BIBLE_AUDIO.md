@@ -209,6 +209,11 @@ Sottoinsieme di numeri verificato automaticamente da `npm run validate:audio` co
 - **Trigger:** in `updateFuel`, una volta sola, quando il carburante scende **sotto il 25%** (isteresi: si riarma sopra il 30%).
 - **Intento:** avviso secco e acuto, sotto l'azione, per la risorsa-tempo critica. Volutamente breve e poco invadente (non deve coprire l'azione).
 
+### 5.13 SOVRACCARICO — `playOverdrive()`
+- **Voci:** triade `392·523·659 Hz` (3 × sine, ognuna piega ×1.5 verso l'alto, sfalsate di 0.05 s) + **sweep d'aria** (rumore `highpass` 600→4000 Hz in 0.28 s). **Env:** attacco rapido (lin → 0.26 / 0.22), coda esponenziale → 0.001 a ~0.3 s.
+- **Trigger:** in `activateOverdrive` (tasto F a barra piena del Sovraccarico, A3), una volta per attivazione.
+- **Intento:** gesto **power-up** ascendente e brillante — la ricompensa *attiva* della combo. Sale come `playBossWarn`, ma in tono **trionfale** (triade maggiore) anziché minaccioso.
+
 > **Lifecycle (AU):** il `master` ha un **buffer di rumore condiviso** (`noiseBuffer`, generato una volta) riusato da tutte le voci a rumore; `startEngine()` fa `ctx.resume()` se il contesto è sospeso; `dispose()` (chiamato allo SHUTDOWN di GameScene e SettingsScene) ferma il motore e **scollega master+limiter** da `destination` → nessun nodo orfano sul context condiviso a ogni restart.
 
 ---
