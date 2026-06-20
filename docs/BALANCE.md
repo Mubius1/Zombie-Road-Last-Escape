@@ -139,8 +139,10 @@ Fonte: `ZOMBIE_STATS` (velocità/HP/danno/punteggio) e `SPAWN_POOL` (peso pool).
 | `jumper` | Saltatore | 160 | 2 | 12 | 20 | 1 |
 | `toxic` | Tossico | 55 | 2 | 10 | 25 | 2 |
 | `giant` | Gigante | 30 | 12 | 35 | 80 | — |
+| `charger` | Caricatore | 60 | 3 | 30 | 40 | 1 |
 
-- **Peso pool** = occorrenze in `SPAWN_POOL` (10 voci totali): Comune 40% · Corridore 20% · Tossico 20% · Corazzato 10% · Saltatore 10%. Il **Gigante** è fuori pool (timer 22 s) → peso `—` (non validato).
+- **Peso pool** = occorrenze in `SPAWN_POOL` (11 voci totali): Comune ~36% · Corridore ~18% · Tossico ~18% · Corazzato ~9% · Saltatore ~9% · Caricatore ~9%. Il **Gigante** è fuori pool (timer 22 s) → peso `—` (non validato).
+- **Caricatore (A2):** la colonna *Velocità* (60) è la velocità di **avvicinamento**. A `CHARGER_TRIGGER_X` (360 u) dal veicolo si **impenna** per `CHARGER_TELEGRAPH` (700 ms, telegrafo), poi **carica** orizzontalmente a `CHARGER_CHARGE_SPEED` (420, oltre lo scroll) puntando la corsia del veicolo: va schivato o attraversato con lo Scatto. Le tre costanti di carica sono *derivate/da tarare*, non validate a numero.
 - Il **Tossico** rilascia una nube velenosa alla morte; il danno tabellato è quello da contatto.
 - *Rapporto rischio/ricompensa:* punteggio ∝ pericolosità (HP×danno), così la combo premia l'aggressività verso i bersagli grossi.
 - Il **danno** in tabella è il valore nominale: passa sempre dalla mitigazione corazza (§4).

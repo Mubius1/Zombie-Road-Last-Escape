@@ -102,11 +102,11 @@ function bibleRow(bible, key) {
 // ════════════════════════════════════════════════════════════════════════════
 // 1. NEMICI (ART_BIBLE_ZOMBIES.md)
 // ════════════════════════════════════════════════════════════════════════════
-const TYPES = ['common', 'runner', 'armored', 'jumper', 'toxic', 'giant'];
+const TYPES = ['common', 'runner', 'armored', 'jumper', 'toxic', 'giant', 'charger'];
 // Nome italiano (MAIUSCOLO) usato nei titoli §6  →  chiave inglese.
 const IT2KEY = {
   COMUNE: 'common', CORRIDORE: 'runner', CORAZZATO: 'armored',
-  SALTATORE: 'jumper', TOSSICO: 'toxic', GIGANTE: 'giant',
+  SALTATORE: 'jumper', TOSSICO: 'toxic', GIGANTE: 'giant', CARICATORE: 'charger',
 };
 const MOTION_FIELDS = ['amp', 'spd', 'lean', 'pow', 'stomp', 'wob', 'home', 'turn', 'fxEvery'];
 

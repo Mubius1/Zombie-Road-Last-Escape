@@ -179,6 +179,7 @@ Costruzioni riutilizzabili (solo primitive). Il *sottile* va **cotto nei 3 frame
 | jumper | 0.10 | 9.0 | 0.00 | **0.5** | 0 | 0 | 0 | 0 | — | — |
 | giant | 0.04 | 2.0 | 0.00 | **1.6** | **1.8** | 0.03 | 0 | 0 | polvere | 360 |
 | toxic | 0.13 | 2.2 | 0.00 | 1.0 | 0 | **0.05** | 16 | 0.05 | vapore | 220 |
+| charger | 0.05 | 3.0 | 0.00 | **1.4** | **1.0** | 0 | 0 | 0 | — | — |
 
 ---
 
@@ -276,6 +277,20 @@ Costruzioni riutilizzabili (solo primitive). Il *sottile* va **cotto nei 3 frame
 **Motion:** peso massimo (`pow 1.6`, `spd 2`), **tonfo marcato** + **respiro** (`wob 0.03`). Va dritto, inarrestabile.
 
 **Boss:** non riusano più questa texture. Ognuno ha **modello, silhouette e palette dedicati** — vedi **§6.7**. Il Gigante resta il loro *antenato di linguaggio* (massa, suture, innesti, occhi rossi), ma i quattro boss sono creature distinte, non recolor.
+
+---
+
+### 6.6 bis · CARICATORE — *"Il Toro"* · 34×46 · `scale 1.1`
+**Concept:** un bruto che ha smesso di trascinarsi e ha imparato a **incornare**. Abbassa la testa tra le spalle gonfie e parte in carica: o lo schivi, o lo sfondi con lo Scatto. È il primo nemico "a risposta" (A2): non chiede di sparare di più, chiede di **muoverti**.
+
+**Palette:**
+`carne necrotica #6a4030` · luce `#8a5742` · mezzo `#7a4a38` · ombra `#3e241a` · **bordo d'ombra #281008** · muscolo vivo `#7a2a24 / #a83a2e` · osso `#d9c8a0 / #9c8c66` · stracci `#3a2e24` · **livor mortis #4a3a52** · sangue `#6e2a26` · **occhi #ff2a10**, bloom cotto `#ff3018`.
+
+**Silhouette:** **hunchback proteso in avanti** — testa piccola e abbassata a sinistra (in carica), **gobba muscolare** sulla spalla destra con **spuntoni ossei a corna**, braccia spesse protese avanti con nocche d'osso. Triangolo basso-e-pesante che "punta" il bersaglio.
+
+**VFX (cotti):** corna/creste ossee su gobba e fronte, squarcio sul fianco con muscolo e costola, chiazze livide sulle gambe, bava di sangue dalla mascella zannuta. **Telegrafo (dinamico):** quando entra in raggio si **impenna** (tinta gialla `#ffcc44` + pulsazione di scala) per ~0,7 s, poi **scatta** orizzontale sulla corsia del veicolo (particelle + impatto sonoro).
+
+**Motion:** pesante (`pow 1.4`, `stomp 1.0`), **nessun inseguimento continuo** (`home 0`): avanza lento finché non **carica**. Logica in `updateChargerMotion` (stati approach → telegraph → charging). Numeri di carica in [BALANCE §5](BALANCE.md#5--nemici-).
 
 ---
 

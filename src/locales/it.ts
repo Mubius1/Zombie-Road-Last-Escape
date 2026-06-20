@@ -201,6 +201,7 @@ const it: Record<string, string> = {
   'zombie.jumper': 'Saltatore',
   'zombie.toxic': 'Tossico',
   'zombie.giant': 'Gigante',
+  'zombie.charger': 'Caricatore',
 
   // ── Oggetti (etichette galleria debug) ───────────────────────────────────────────
   'obj.bullet': 'Proiettile',

@@ -179,6 +179,7 @@ const pt: Record<string, string> = {
   'zombie.jumper': 'Saltador',
   'zombie.toxic': 'Tóxico',
   'zombie.giant': 'Gigante',
+  'zombie.charger': 'Aríete',
 
   'obj.bullet': 'Projétil',
   'obj.rocket': 'Foguete',

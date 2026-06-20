@@ -42,6 +42,10 @@ const OVERDRIVE_FIRE_MULT = 2;    // ×cadenza di fuoco durante il Sovraccarico
 const OVERDRIVE_SHOCK_DMG = 6;    // danno dell'onda d'urto frontale all'attivazione
 const OVERDRIVE_CHARGE_BASE = 2;  // carica base per ogni uccisione
 const OVERDRIVE_CHARGE_COMBO = 2; // carica aggiuntiva = questo × moltiplicatore combo, per uccisione
+// ── Caricatore (A2): avvicinamento lento → telegrafo → carica orizzontale sulla corsia. Vedi BALANCE §5. ──
+const CHARGER_TRIGGER_X = 360;    // distanza dal veicolo a cui scatta il telegrafo
+const CHARGER_TELEGRAPH = 700;    // ms di impennata prima della carica
+const CHARGER_CHARGE_SPEED = 420; // velocità della carica (oltre lo scorrimento del mondo)
 
 interface EnvConfig {
   name: string;
@@ -79,6 +83,7 @@ const ZOMBIE_STATS: Record<ZombieType, ZombieStats> = {
   jumper:  { speed: 160, hp: 2,  scale: 0.9,  damage: 12, score: 20 },
   giant:   { speed: 30,  hp: 12, scale: 2.2,  damage: 35, score: 80 },
   toxic:   { speed: 55,  hp: 2,  scale: 1.1,  damage: 10, score: 25 },
+  charger: { speed: 60,  hp: 3,  scale: 1.1,  damage: 30, score: 40 },
 };
 
 // Personalità di movimento per tipo.
@@ -97,6 +102,7 @@ const ZOMBIE_MOTION: Record<ZombieType, ZombieMotion> = {
   jumper:  { amp: 0.10, spd: 9.0,  lean:  0.00, pow: 0.5,  stomp: 0,   wob: 0,    home: 0,  turn: 0,    fx: false, fxEvery: 0   },
   giant:   { amp: 0.04, spd: 2.0,  lean:  0.00, pow: 1.6,  stomp: 1.8, wob: 0.03, home: 0,  turn: 0,    fx: true,  fxEvery: 360 },
   toxic:   { amp: 0.13, spd: 2.2,  lean:  0.00, pow: 1.0,  stomp: 0,   wob: 0.05, home: 16, turn: 0.05, fx: true,  fxEvery: 220 },
+  charger: { amp: 0.05, spd: 3.0,  lean:  0.00, pow: 1.4,  stomp: 1.0, wob: 0,    home: 0,  turn: 0,    fx: false, fxEvery: 0   },
 };
 
 const SPAWN_POOL: ZombieType[] = [
@@ -105,6 +111,7 @@ const SPAWN_POOL: ZombieType[] = [
   'armored',
   'jumper',
   'toxic', 'toxic',
+  'charger',
 ];
 
 const ATTACH_SLOTS: Array<{ dx: number; dy: number; comp: ComponentKey }> = [
@@ -912,6 +919,36 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         if (fxT <= 0) { this.emitZombieFx(z, type); fxT = m.fxEvery; }
         z.setData('fxT', fxT);
       }
+
+      // Caricatore (A2): logica di carica (avvicinamento → telegrafo → scatto sulla corsia).
+      if (type === 'charger') this.updateChargerMotion(z, time);
+    }
+  }
+
+  /** Caricatore (A2): avvicinamento lento → impennata di telegrafo → carica orizzontale sulla corsia. */
+  private updateChargerMotion(z: Phaser.Physics.Arcade.Sprite, time: number) {
+    if (z.getData('entering')) return;
+    const body = z.body as Phaser.Physics.Arcade.Body;
+    const state = (z.getData('chargeState') as string) ?? 'approach';
+    if (state === 'approach') {
+      if (z.x - this.vehicle.x < CHARGER_TRIGGER_X) {
+        z.setData('chargeState', 'telegraph').setData('chargeAt', time + CHARGER_TELEGRAPH);
+        body.setVelocityX(-SCROLL_SPEED * 0.4);                    // si impenna, quasi fermo rispetto alla strada
+        z.setTint(0xffcc44);
+        this.tweens.add({ targets: z, scaleY: (ZOMBIE_STATS.charger.scale / OVERSAMPLE) * 1.18, duration: 130, yoyo: true, repeat: 2 });
+      }
+    } else if (state === 'telegraph') {
+      if (time >= (z.getData('chargeAt') as number)) {
+        z.setData('chargeState', 'charging');
+        this.tweens.killTweensOf(z);
+        z.clearTint().setScale(ZOMBIE_STATS.charger.scale / OVERSAMPLE);
+        body.setVelocityX(-(CHARGER_CHARGE_SPEED + SCROLL_SPEED));  // scatto orizzontale rapido
+        body.setVelocityY(Phaser.Math.Clamp(this.vehicle.y - z.y, -1, 1) * 260); // punta la corsia del veicolo
+        this.spawnHitParticles(z.x, z.y);
+        this.sfx?.playImpact();
+      }
+    } else {
+      z.y = Phaser.Math.Clamp(z.y, ROAD_TOP + 12, ROAD_BOTTOM - 12);
     }
   }
 
@@ -1141,6 +1178,19 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         this.sfx?.playImpact();
         this.environment?.addDecal('skid', zombie.x, zombie.y);
         this.environment?.addDecal('debris', zombie.x, zombie.y);
+        this.environment?.addDecal('blood', zombie.x, zombie.y);
+        break;
+
+      case 'charger':
+        // Bruto incornante (A2): se non l'hai schivato, l'impatto è pesante.
+        zombie.destroy();
+        this.damageComponent('armor', 22);
+        this.damageComponent('engine', 10);
+        this.dealDamage(this.scaledDamage('charger'));
+        this.cameras.main.shake(280, 0.02);
+        this.hitStop(45);
+        this.sfx?.playImpact();
+        this.environment?.addDecal('skid', zombie.x, zombie.y);
         this.environment?.addDecal('blood', zombie.x, zombie.y);
         break;
 
@@ -1515,6 +1565,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       giant:   [0xb31818, 0x540c0a],
       toxic:   [0x6cff3a, 0x2cbb2a],
       armored: [0x9aa7b5, 0x5f6b78],
+      charger: [0xb31818, 0x540c0a],
     };
     const [c1, c2] = palette[type];
     const n = type === 'giant' ? 10 : Phaser.Math.Between(4, 6);

@@ -21,6 +21,7 @@ const ZOMBIE_INFO: ZombieInfo[] = [
   { key: 'zombie_jumper',  label: 'zombie.jumper' },
   { key: 'zombie_toxic',   label: 'zombie.toxic' },
   { key: 'zombie_giant',   label: 'zombie.giant' },
+  { key: 'zombie_charger', label: 'zombie.charger' },
 ];
 
 const OBJECT_INFO: Array<{ key: string; label: string; scale: number; over?: boolean }> = [

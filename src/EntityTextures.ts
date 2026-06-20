@@ -475,6 +475,72 @@ export function buildEntityTextures(scene: Phaser.Scene) {
     g.generateTexture('zombie_giant',144,66); AF('zombie_giant',48,66,3); g.destroy();
   }
 
+  // ── ZOMBIE CHARGER · "Il Toro" (34×46 × 3) — bruto incornante (A2) ──────────
+  // Hunchback muscolare proteso in avanti: testa abbassata tra spalle enormi,
+  // spuntoni ossei a corna, braccia spesse avanti. Telegrafa la carica (tinta
+  // gialla + impennata) prima di scattare sulla corsia del giocatore.
+  {
+    const g = OS_G(102,46);
+    const sk=0x6a4030, skHi=0x8a5742, skMid=0x7a4a38, skSh=0x3e241a, skDeep=0x281008;
+    const musc=0x7a2a24, muscHi=0xa83a2e, bone=0xd9c8a0, boneSh=0x9c8c66;
+    const rag=0x3a2e24, livid=0x4a3a52, blood=0x6e2a26, eye=0xff2a10, glow=0xff3018;
+    for (let f = 0; f < 3; f++) {
+      const ox = f * 34, ph = f - 1; const X = (x: number) => ox + x;
+      // ombra a terra
+      g.fillStyle(0x000000,0.36); g.fillEllipse(X(18),44,30,6);
+      // gambe massicce piantate (passo alternato via ph)
+      g.fillStyle(0x140a06); g.fillEllipse(X(11-ph),43,11,6); g.fillEllipse(X(24+ph),43,11,6);
+      g.fillStyle(skDeep); g.fillRoundedRect(X(7-ph),30,11,14,5); g.fillRoundedRect(X(20+ph),30,11,14,5);
+      g.fillStyle(skSh);   g.fillRoundedRect(X(8-ph),30,9,12,4);  g.fillRoundedRect(X(21+ph),30,9,12,4);
+      g.fillStyle(sk);     g.fillRoundedRect(X(9-ph),31,6,9,3);   g.fillRoundedRect(X(22+ph),31,6,9,3);
+      g.fillStyle(livid,0.5); g.fillEllipse(X(11-ph),38,4,5); g.fillEllipse(X(24+ph),38,4,5);
+      // torso enorme inclinato in avanti
+      g.fillStyle(skDeep); g.fillEllipse(X(20),20,30,22);
+      g.fillStyle(skSh);   g.fillEllipse(X(20),20,27,19);
+      g.fillStyle(sk);     g.fillEllipse(X(19),19,21,15);
+      g.fillStyle(skMid);  g.fillEllipse(X(15),17,12,9);
+      g.fillStyle(skHi);   g.fillEllipse(X(12),14,7,5);                  // luce alto-sx
+      g.fillStyle(rag);    g.fillEllipse(X(22),23,12,8);                 // brandelli di stoffa sul dorso
+      // GOBBA muscolare (spalla destra rialzata) + spuntoni ossei a corna
+      g.fillStyle(skDeep); g.fillEllipse(X(28),12,16,13);
+      g.fillStyle(skSh);   g.fillEllipse(X(27),12,13,10);
+      g.fillStyle(sk);     g.fillEllipse(X(26),11,9,7);
+      g.fillStyle(skHi);   g.fillEllipse(X(24),9,4,3);
+      g.fillStyle(boneSh); ([[33,8],[31,11],[35,12]] as [number,number][]).forEach(([x,y])=>g.fillTriangle(X(x),y,X(x+3),y,X(x+1.5),y-7));
+      g.fillStyle(bone);   ([[33,8],[31,11]] as [number,number][]).forEach(([x,y])=>g.fillTriangle(X(x),y-1,X(x+2),y-1,X(x+1),y-6));
+      // braccia spesse protese in avanti (sx) — l'impatto incornante
+      const aY = 22 + ph*2;
+      g.fillStyle(skDeep); g.fillEllipse(X(6),aY,14,9);
+      g.fillStyle(skSh);   g.fillEllipse(X(5),aY,11,7);
+      g.fillStyle(sk);     g.fillEllipse(X(3),aY-1,7,5);
+      g.fillStyle(skSh);   g.fillCircle(X(0),aY+3,4);                    // pugno
+      g.fillStyle(bone);   [-2,1].forEach(x=>g.fillTriangle(X(x),aY+6,X(x+2),aY+6,X(x+1),aY+10)); // nocche ossee
+      const a2Y = 24 - ph*2;
+      g.fillStyle(skSh);   g.fillEllipse(X(8),a2Y,10,6);
+      g.fillStyle(sk);     g.fillEllipse(X(6),a2Y,6,4);
+      // testa piccola ABBASSATA tra le spalle (a sx, in carica)
+      g.fillStyle(skDeep); g.fillRoundedRect(X(8),14,9,8,3);             // collo taurino
+      g.fillStyle(skSh);   g.fillEllipse(X(9),16,13,10);
+      g.fillStyle(sk);     g.fillEllipse(X(8),16,10,8);
+      g.fillStyle(skHi);   g.fillEllipse(X(5),13,5,4);
+      g.fillStyle(boneSh); g.fillTriangle(X(2),12,X(6),14,X(1),8); g.fillTriangle(X(15),12,X(11),14,X(16),8); // corna ossee
+      g.fillStyle(bone);   g.fillTriangle(X(2),11,X(5),13,X(1),8);
+      // occhi rossi (faro) + bloom cotto
+      g.fillStyle(glow,0.18); g.fillCircle(X(6),16,5); g.fillCircle(X(12),16,4);
+      g.fillStyle(0x0a0000);  g.fillEllipse(X(6),16,5,4); g.fillEllipse(X(12),16,4,3);
+      g.fillStyle(eye);       g.fillEllipse(X(6),16,2.6,2.2); g.fillEllipse(X(12),16,2.2,1.8);
+      g.fillStyle(0xffb59a);  g.fillCircle(X(5),15,1); g.fillCircle(X(11),15,0.9);
+      // mascella + zanne + bava
+      g.fillStyle(0x140000); g.fillEllipse(X(8),21,9,4);
+      g.fillStyle(bone); [4,7,10,13].forEach(x=>g.fillTriangle(X(x),19,X(x+2),19,X(x+1),23));
+      g.fillStyle(blood); g.fillRect(X(7),22,2,5);
+      // squarcio sul fianco (muscolo + costola)
+      g.fillStyle(musc); g.fillEllipse(X(24),26,6,4); g.fillStyle(muscHi); g.fillEllipse(X(23),25,2,1.4);
+      g.fillStyle(bone); [22,25].forEach(x=>g.fillRect(X(x),24,1,5));
+    }
+    g.generateTexture('zombie_charger',102,46); AF('zombie_charger',34,46,3); g.destroy();
+  }
+
   // ════════════════════════════════════════════════════════════════════════
   // BOSS — texture dedicate (silhouette propria per ciascuno). Vedi §6.7 della
   // Art Bible zombi. Gameplay/hitbox restano in BOSS_CONFIG (bodyW/bodyH).
@@ -926,6 +992,7 @@ export function buildEntityTextures(scene: Phaser.Scene) {
   walk('jumper', 9);
   walk('toxic', 4);
   walk('giant', 3.5);
+  walk('charger', 4.5); // bruto pesante che incorna
 
   // Animazioni boss: stesso ciclo a 3 frame ma su texture dedicate (boss_<tipo>).
   const bwalk = (texKey: string, rate: number) => {
