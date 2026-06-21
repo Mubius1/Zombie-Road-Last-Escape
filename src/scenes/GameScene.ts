@@ -58,8 +58,8 @@ const MAX_AIM = Phaser.Math.DegToRad(82); // arco frontale di mira (±82° da de
 const KNOCK = 220;        // impulso di rinculo dei colpi (px/s, decade) — solo game-feel
 const KNOCK_DECAY = 0.84; // decadimento del rinculo per frame
 // ── Densità "orda" (combat reboot): sferzate periodiche di nemici oltre allo spawn regolare. ──
-const SURGE_INTERVAL = 13000; // ms tra una sferzata e l'altra
-const SURGE_BASE = 3;         // chiamate di spawn extra per sferzata (cresce con la missione, ognuna può essere uno sciame)
+const SURGE_INTERVAL = 11500; // ms tra una sferzata e l'altra
+const SURGE_BASE = 4;         // chiamate di spawn extra per sferzata (cresce con la missione, ognuna può essere uno sciame)
 
 interface EnvConfig {
   name: string;
@@ -257,7 +257,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.distance = 0;
     this.alive = true;
     this.missionDone = false;
-    this.spawnInterval = Math.max(380, 1500 - (missionNum - 1) * 75); // densità "orda": più stretto di prima
+    this.spawnInterval = Math.max(330, 1350 - (missionNum - 1) * 80); // densità "orda": più stretto di prima
     this.spawnTimer = 0;
     this.surgeTimer = SURGE_INTERVAL;
     this.stripes = [];
@@ -822,7 +822,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.spawnTimer -= delta;
     if (this.spawnTimer <= 0) {
       this.spawnZombie();
-      this.spawnInterval = Math.max(320, this.spawnInterval - 3);
+      this.spawnInterval = Math.max(290, this.spawnInterval - 3);
       this.spawnTimer = this.spawnInterval;
     }
     // Sferzata: ogni SURGE_INTERVAL un'orda extra (ritmo a picchi, come l'arena).
