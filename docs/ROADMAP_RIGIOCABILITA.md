@@ -6,18 +6,24 @@
 
 ---
 
+> 🔁 **AGGIORNAMENTO — il fun-gate (tappa 1) ha FALSIFICATO l'ipotesi di §0, ed era l'esito desiderabile.** Track A (Overdrive/Caricatore/Sputatore/Hazard) è stato implementato per intero, ma al playtest il combat **restava passivo**: il vero collo di bottiglia non erano i *sistemi mancanti*, era il **verbo** — il **fuoco automatico in avanti** lasciava il giocatore a *guardare* l'autofire. La risposta è stata un **COMBAT REBOOT a mira col mouse** (branch `aim-combat`), che il fun-gate ha **VALIDATO**: ora la torretta punta il puntatore (clamp ±82°) e si spara attivamente verso il mirino. Il problema "il giocatore non fa niente" è stato risolto **cambiando il verbo, non aggiungendo altri sistemi**. Il mouse-aim è la **nuova fondazione del combat**; i sistemi di Track A restano e **convivono** con esso (gli zombi a risposta e gli hazard ora chiedono mira *e* posizione). Dettaglio del reboot in [ARCHITETTURA §8.1](ARCHITETTURA.md#81-combat-a-mira-col-mouse-perché-overlay-perché-getworldpoint); la §0 qui sotto è la diagnosi **originale** (autofire), conservata per contesto storico.
+
 ## §0 · Diagnosi: due problemi distinti, un ordine obbligato
 
 Sono emersi due problemi, di natura diversa — e l'ordine in cui si affrontano conta più della lista stessa.
 
-| Problema | Natura | Sintomi osservati |
-|---|---|---|
-| **"Non è molto divertente"** | profondità del **core loop** | il combat si gioca quasi da solo |
-| **"Finisce in 2-4 ore"** | **contenuto & retention** | 7 regioni che riusano la stessa strada (cambia il colore), 4 boss in ciclo, una sola modalità, nessuno sblocco persistente, nessun daily/leaderboard |
+| Problema | Natura | Sintomi osservati | Stato |
+|---|---|---|---|
+| **"Non è molto divertente"** | profondità del **core loop** | il combat si gioca quasi da solo | ✅ **risolto dal combat reboot** (mira col mouse): il verbo è ora attivo |
+| **"Finisce in 2-4 ore"** | **contenuto & retention** | 7 regioni che riusano la stessa strada (cambia il colore), 4 boss in ciclo, una sola modalità, nessuno sblocco persistente, nessun daily/leaderboard | aperto → Track B/C/D |
 
 **Tesi fondante della roadmap:** il secondo problema è *a valle* del primo. Aggiungere meta-progressione e sblocchi sopra un loop che non diverte è un secchio bucato più grande — dà più motivi per *tornare* a fare una cosa che non piace *fare*. Quindi: **prima si approfondisce il loop (Track A), poi se ne aumenta la varietà strutturale (Track B/C), e solo alla fine si costruisce la retention (Track D).**
 
+> **Lezione del fun-gate (a posteriori):** la tesi "loop prima di meta" ha tenuto, ma con una correzione importante — il loop non si approfondisce solo *aggiungendo sistemi* (Track A), bensì anche (e prima) scegliendo il **verbo giusto**. Track A era necessario ma non sufficiente finché il fuoco restava automatico; con la mira col mouse i suoi sistemi finalmente "mordono".
+
 ### Perché (ipotesi) il loop non diverte
+
+> 🔁 Questa era l'ipotesi pre-reboot. Il punto debole comune ai quattro sintomi sotto era il **fuoco automatico**; il combat reboot (mira col mouse) attacca proprio quello — vedi il banner in testa a §0. La lascio integrale come diagnosi storica.
 
 Il gioco ha sistemi ricchi *attorno* al combat (degrado componenti, carburante, sopravvissuti, negozio) ma il **combat in sé è poco profondo**, ed è lì che si passa il 90% del tempo:
 
@@ -27,6 +33,8 @@ Il gioco ha sistemi ricchi *attorno* al combat (degrado componenti, carburante, 
 - **La combo è solo un numero.** Sale da sola con l'autofire e moltiplica il punteggio, ma non alimenta nulla che il giocatore *controlli*.
 
 > ⚠️ **Questa è un'ipotesi da playtest**, non una certezza. La domanda da verificare appena Track A tappa 1 è giocabile: *adesso il combat diverte per 5 minuti senza pensare a sblocchi?* Se la risposta è no, Track B/C/D vanno ripensati prima di spenderci sopra.
+>
+> 🔁 **Esito (a posteriori):** la risposta del fun-gate con il solo Track A è stata **no** → da qui il combat reboot a mira col mouse, dopo il quale la stessa domanda ha avuto risposta **sì**. Track B/C/D restano validi e non sono stati ripensati nella sostanza: cambia la *fondazione* sotto di loro, non il loro contenuto.
 
 ---
 
@@ -267,7 +275,7 @@ Ogni tappa è spedibile e testabile da sola.
 
 | # | Tappa | Contenuto | Criterio di uscita |
 |---|---|---|---|
-| 1 | **Fun-gate** | **A3 Overdrive** + **A2 Caricatore** | *playtest:* il combat è attivo e divertente per 5 min senza pensare a sblocchi? |
+| 1 | **Fun-gate** | **A3 Overdrive** + **A2 Caricatore** → *(esito: FALLITO con l'autofire)* → **Combat reboot mira-mouse** | *playtest:* il combat è attivo e divertente per 5 min senza pensare a sblocchi? → **sì, dopo il reboot** |
 | 2 | Profondità posizione | **A1 Hazard** + **A2 Sputatore** | "su o giù?" è una decisione reale a ogni momento |
 | 3 | Decisioni di run | **B1 Scelta percorso** + **B2 un evento** | due run si *giocano* diverse, non solo *durano* diverse |
 | 4 | Distintività contenuti | **C1 Pattern boss** + **C2 Meccanica regione** | boss e regioni hanno identità di gameplay, non solo colore |
@@ -320,6 +328,7 @@ Questa roadmap, da sola, **non tocca codice** → tutti i validatori restano ver
 | A2a | Nemico Caricatore | A | ✅ fatto |
 | A2b | Nemico Sputatore | A | ✅ fatto |
 | A1 | Hazard di corsia | A | ✅ fatto |
+| — | **Combat reboot (mira col mouse)** | **fondazione** | ✅ fatto (branch `aim-combat`) — esito del fun-gate; convive con Track A |
 | B1 | Nodo scelta percorso | B | ⬜ da fare |
 | B2 | Eventi in-run | B | ⬜ da fare |
 | C1 | Pattern d'attacco boss | C | ⬜ da fare |

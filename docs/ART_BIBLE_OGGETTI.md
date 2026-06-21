@@ -122,6 +122,8 @@ Tutto ciò che è meccanico (torrette, canne, testate, beccucci, bull bar) usa l
 - **Fari anteriori:** caldo `#fff4bc` + nucleo `#ffffff` + alone `#fff4bc` alpha `0.3`. **Fanali posteriori:** `#cc1111` + `#ff4444`.
 - **Metallo** (torrette/canne/bull bar): kit §3.2.
 
+> **Combat reboot — la canna non è più "cotta" nella texture.** Dalla mira col mouse, in `buildVehicleTexture` resta disegnato **solo il MOZZO/base** della torretta: la **canna** è ora un **overlay rotante separato** (`aim_turret_<weapon>`, vedi §4.1 bis) che ruota verso il puntatore e cambia con l'arma. Le **dimensioni della texture veicolo restano `100×44` invariate** (il mozzo occupava già quello spazio) → validatori invariati. Conseguenza per il **Mezzo Pesante**: perde la **doppia canna cotta** nella sagoma (il suo gancio "DOPPIO CANNONE" nella tabella sopra resta il riferimento storico, ma in gioco la canna è l'overlay; oggi a canna singola).
+
 **Le 7 silhouette (il gancio di ognuna):**
 
 | Chiave (`vehicle_…`) | Nome | Prezzo | `color` | Gancio di silhouette |
@@ -139,6 +141,32 @@ Tutto ciò che è meccanico (torrette, canne, testate, beccucci, bull bar) usa l
 **Note di gameplay (cosmetico ≠ bilanciamento):** la scala/stazza visiva **non** è la hitbox. Statistiche reali (salute, corazza, velocità, fuoco) vivono in `VEHICLES` e nei moltiplicatori in `create()`. Più il veicolo "sembra" pesante (camion/mezzo pesante), più ha `healthBonus`/`armorBonus` e `speedMult` basso — la lettura visiva **deve** combaciare coi numeri.
 
 **Scatto / scrollata (SHIFT · `performDash`):** manovra difensiva con cooldown (`DASH_COOLDOWN`) che **stacca tutti gli zombi aggrappati** sbalzandoli via, con breve **grazia** (`DASH_GRACE`) in cui nessun nuovo zombi si attacca. Il feedback è **solo cosmetico** (tinta blu `#aaddff`, lampo, shake): **niente rotazione/scala del corpo fisico** → la hitbox del veicolo resta invariata (vedi §2). È la contromossa al sistema d'aggancio (§4.2).
+
+---
+
+### 4.1 bis · TORRETTA PER ARMA — *overlay rotante (mira col mouse)*
+
+**Concept:** col **combat reboot** (mira col mouse) la canna del veicolo non è più "cotta" nella texture (§4.1): è un **overlay separato che RUOTA verso il puntatore** e **CAMBIA forma con l'arma equipaggiata**. È la parte più osservata durante il combattimento — è dove l'occhio del giocatore vive mentre mira. Codice in `buildTurretTextures` (`src/VehicleTextures.ts`); le canne sono disegnate, la mira/rotazione in `GameScene.buildAim`/`updateAim`.
+
+**Le 5 texture `aim_turret_<weapon>` · `36×14` · sovracampionate `OS_G` 2×** (kit metallo §3.2 — `#26262c` / `#44454f` / `#6a6c78`, con il **mozzo** comune accennato in viola-torretta `#8899ff`, coerente col colore-indicatore della torretta in §4.2):
+
+| Chiave | Arma | Gancio di silhouette |
+|---|---|---|
+| `aim_turret_mg` | Mitragliatrice | **canna singola** media, volata in punta |
+| `aim_turret_double_mg` | Doppia MG | **due canne** parallele, doppia volata |
+| `aim_turret_rifle` | Fucile Auto | **canna lunga e sottile** + **tacca di mira** sopra |
+| `aim_turret_rockets` | Razzi | **lanciatore tozzo** + **ogiva rossa** che sporge (`#cc2200` / `#ff5533`) |
+| `aim_turret_flamethrower` | Lanciafiamme | **ugello svasato** + **fiammella pilota** (`#ff6622` / `#ffcc44`) |
+
+**Pivot / origine:** le texture hanno il **mozzo a sinistra** e si ancorano con **origine `(0.11, 0.5)`** ≈ sul perno; lo sprite torna a scala design con `setScale(1/OVERSAMPLE)`. Ruotano impostando l'angolo verso il mirino, **clampato all'arco frontale** (vedi mira sotto). Al **cambio arma** (`selectWeapon`/`turretTex`) la torretta fa `setTexture('aim_turret_'+arma)`.
+
+**`TURRET_DX` (offset perno per veicolo, esportato da `VehicleTextures`):** dove è disegnato il mozzo cambia per silhouette, quindi il perno della torretta segue — `civilian_car +8`, `pickup −22`, `armored_van 0`, `military_suv −3`, `armored_truck −13`, `heavy_military −17`, `experimental −3` (offset x dal centro veicolo). Lo stesso valore allinea la canna statica nelle anteprime.
+
+**Mirino — `aim_crosshair` · `24×24` · ciano:** reticolo ciano (`#00ffff`, coerente §3.1) disegnato sul **punto mirato** (depth alta, sopra il mondo). La torretta punta verso di esso entro l'**arco frontale `±82°`** (`MAX_AIM`, costante di feel **derivata/da tarare**, non validata).
+
+**In gioco vs vetrine:** in partita la canna è l'**overlay rotante** (depth sopra il corpo del veicolo e sotto i proiettili). Nel **negozio** (`ShopScene`) e nella **galleria Debug** (`DebugScene`) la torretta è mostrata **statica**, sempre `aim_turret_mg` puntata in avanti sul mozzo (con `TURRET_DX` per l'aggancio) — anteprima leggibile, non rotante.
+
+**Note di gameplay (cosmetico ≠ bilanciamento):** la torretta è grafica; cadenza/danno restano nei numeri (`WEAPONS`, salute componente `turret`, Overdrive). La rotazione e il recoil visivo della canna **non toccano** hitbox né bilanciamento. *Queste texture **non** sono nell'header dei validatori §4.4–§4.8/§9 (non sono dimensioni-soggette-a-validazione del set oggetti): restano in sincronia manuale.*
 
 ---
 

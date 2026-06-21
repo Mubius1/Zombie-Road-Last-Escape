@@ -39,6 +39,44 @@ Fonte: costanti in testa a `GameScene.ts`. La colonna **Valore** è validata (un
 
 > **Sovraccarico (Overdrive, A3).** La barra (`OVERDRIVE_MAX`) si carica a ogni uccisione di `OVERDRIVE_CHARGE_BASE + OVERDRIVE_CHARGE_COMBO · moltiplicatore_combo` (→ ~15-20 kill per riempirla a combo media). A barra piena, **F** attiva il Sovraccarico per `OVERDRIVE_DURATION` ms: cadenza di fuoco ×`OVERDRIVE_FIRE_MULT`, veicolo-ariete (il contatto uccide senza danni ai componenti) e onda d'urto frontale da `OVERDRIVE_SHOCK_DMG` all'attivazione. *Da tarare a playtest.*
 
+### §1 bis · Combat reboot — mira & densità (derivate, NON validate)
+
+> ⚠️ **In taratura.** Le costanti qui sotto nascono dal *combat reboot* (mira col mouse, branch `aim-combat`): **non** sono marcate 🔒 e **non** sono lette dal validatore — sono valori di *feel/densità* da rifinire a playtest. Vivono in testa a `GameScene.ts` (e `TURRET_DX` in `VehicleTextures.ts`). La struttura di campagna (km → boss all'82% → 7 regioni → negozio, componenti, carburante, 5 armi, sopravvissuti, Track A, scaling NG+) è invariata: cambia *come si spara*, non *cosa* si affronta.
+
+**Mira & knockback**
+
+| Costante | Valore | Effetto |
+|---|---|---|
+| `MAX_AIM` | 82° | semi-arco frontale di mira: la torretta ruota verso il puntatore, clampata a ±82° da destra |
+| `KNOCK` | 220 | impulso di rinculo (px/s) impresso al nemico colpito, lungo l'angolo del colpo |
+| `KNOCK_DECAY` | 0.84 | decadimento del rinculo per frame (~16,67 ms; applicato time-based con `pow(decay, Δ/16.67)`) |
+
+- **Mira:** il puntatore viene portato in spazio di design (`cameras.main.getWorldPoint`), l'angolo è `atan2` clampato a `±MAX_AIM`; un mirino (`aim_crosshair`) marca il punto mirato. Si spara tenendo premuto **CLIC** (o **SPAZIO**) verso il mirino; col mouse il colpo è ignorato se il puntatore è sopra un elemento UI cliccabile (`input.hitTestPointer`). Tutte e 5 le armi sparano in direzione della mira (non più dritto). La cadenza resta gateata da salute Torretta (a 0 non spari) e Overdrive (§1).
+- **Knockback:** spinta scalata sugli HP, `kf = clamp(2/hp, 0.18, 1)` → i tank quasi non rinculano. È un offset di posizione decadente clampato nella corsia `[ROAD_TOP+12 .. ROAD_BOTTOM-12]`: **solo game-feel**, non altera le velocità del motion (§4/§5).
+
+**`TURRET_DX` — perno torretta per veicolo** (offset x del mozzo, esportato da `VehicleTextures.ts`):
+
+| Veicolo | `TURRET_DX` |
+|---|---|
+| Auto Civile (civilian_car) | +8 |
+| Pickup (pickup) | −22 |
+| Furgone Blindato (armored_van) | 0 |
+| SUV Militare (military_suv) | −3 |
+| Camion Corazzato (armored_truck) | −13 |
+| Mezzo Pesante (heavy_military) | −17 |
+| Veicolo Sperimentale (experimental) | −3 |
+
+> La canna non è più "cotta" nelle 7 texture veicolo (resta solo il mozzo); è un overlay rotante che cambia texture al cambio arma (5 torrette: `aim_turret_mg/double_mg/rifle/rockets/flamethrower`). Dimensioni texture veicolo invariate (100×44) → validatori arte OK.
+
+**Sferzate (surge) — orde a picchi**
+
+| Costante | Valore | Effetto |
+|---|---|---|
+| `SURGE_INTERVAL` | 11500 | ms tra una sferzata e l'altra (sospese durante il duello col boss) |
+| `SURGE_BASE` | 4 | chiamate di spawn extra alla base di ogni sferzata |
+
+- Numero di chiamate per sferzata: `min(7, SURGE_BASE + ⌊(missione − 1)/2⌋)` → 4 alla missione 1, sale di 1 ogni 2 missioni, cap **7**. Ogni chiamata è un normale `spawnZombie()` e può quindi essere uno sciame (vedi sotto).
+
 ---
 
 ## §2 · Economia — flusso delle monete
@@ -151,16 +189,20 @@ Fonte: `ZOMBIE_STATS` (velocità/HP/danno/punteggio) e `SPAWN_POOL` (peso pool).
 - Il **danno** in tabella è il valore nominale: passa sempre dalla mitigazione corazza (§4).
 
 ### Curva di difficoltà (frequenza di spawn)
-- Intervallo iniziale per missione: `max(700, 2100 − (missione−1)·80)` ms.
-- A ogni spawn l'intervallo cala di **3 ms**, con pavimento a **500 ms** entro la missione.
+
+> ⚠️ *Derivata, non validata* — rivista col **combat reboot** per la densità "orda" (mira col mouse → più nemici sullo schermo). Valori in taratura.
+
+- Intervallo iniziale per missione: `max(330, 1350 − (missione−1)·80)` ms *(prima: `max(700, 2100 − …)`)*.
+- A ogni spawn l'intervallo cala di **3 ms**, con pavimento a **290 ms** entro la missione *(prima: 500 ms)*.
 
 | Missione | Intervallo iniziale |
 |---|---|
-| 1 | 2100 ms |
-| 5 | 1780 ms |
-| 10 | 1380 ms |
-| 15 | 980 ms |
-| 18+ | 700 ms (pavimento) |
+| 1 | 1350 ms |
+| 5 | 1030 ms |
+| 10 | 630 ms |
+| 13+ | 330 ms (pavimento iniziale) |
+
+- **Sciami:** ogni `spawnZombie()` non genera più un singolo nemico per i *fodder* — Comune e Corridore arrivano in gruppo di **1-3**, Tossico **1-2**; tutti gli altri tipi restano **singoli**. Combinato con le sferzate (§1 bis) il risultato è un ritmo a picchi molto più affollato di prima (quando solo il Comune, al 25%, usciva a 2-3).
 
 ### Scaling "new game+" (G2 · rafforzato in B4)
 Oltre la frequenza di spawn, da fine ciclo crescono **HP e danno** di nemici e boss col numero di ciclo di regioni (1 ciclo = 7 regioni):

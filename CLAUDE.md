@@ -43,6 +43,7 @@ Se cambi una **regola di gioco** (core loop, game over, ruoli) aggiorna `GAME_DE
 
 - **Nome:** Zombie Road: Last Escape
 - **Genere:** arcade survival top-down (la strada scorre verso sinistra, il veicolo si muove su/giù).
+- **Combat:** **mira col mouse** — la torretta è un overlay che ruota verso il puntatore (clamp all'arco frontale ±82°) e si spara attivamente tenendo premuto il mouse (o `SPAZIO`) verso il mirino. Non è più autofire dritto in avanti: questa è la nuova fondazione del combat (combat reboot, branch `aim-combat`). I sistemi di Track A (Overdrive/Caricatore/Sputatore/Hazard) restano e convivono.
 - **Stack:** Phaser 3.90 + TypeScript + Vite. UI **internazionalizzata** (it · en · es · fr · de · pt); l'italiano è la locale di default e canonica. Vedi [`docs/I18N.md`](docs/I18N.md).
 - **Grafica:** **100% procedurale** (Graphics API → `generateTexture`). **Nessun PNG / nessun asset esterno.**
 - **Audio:** **100% procedurale** (Web Audio API) in `src/SoundManager.ts`. Direzione sonora in [`docs/ART_BIBLE_AUDIO.md`](docs/ART_BIBLE_AUDIO.md).

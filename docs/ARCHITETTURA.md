@@ -207,6 +207,16 @@ Guida completa ("aggiungere una lingua / una chiave", insidie font/layout) in [`
 - **HUD:** `buildHUD()` crea, `updateHUD()` muta solo `displayWidth`/`setText`/`setFillStyle` su oggetti memorizzati. Stesso principio per il mondo che scorre (tileSprite → `tilePositionX`).
 - **Effetti "vivi"** (respiro, rotazione, VFX) sono **solo visivi**: non toccano hitbox né bilanciamento (CLAUDE.md, Convenzioni).
 
+### 8.1 Combat a mira col mouse (perché overlay, perché `getWorldPoint`)
+
+Il combat è a **mira col mouse** (combat reboot, branch `aim-combat`), non più autofire frontale. Tre scelte tecniche non ovvie:
+
+- **La torretta è un overlay rotante, non il corpo del veicolo.** La canna non è più "cotta" nelle 7 texture veicolo (in `buildVehicleTexture` resta solo il **mozzo/base**); è una texture separata per arma (`buildTurretTextures` in [`VehicleTextures.ts`](../src/VehicleTextures.ts): `aim_turret_mg/double_mg/rifle/rockets/flamethrower`) sovrapposta sul mozzo e ruotata verso il puntatore. **Motivo:** ruotare lo sprite del *corpo* veicolo ruoterebbe anche la sua hitbox fisica Arcade — rompendo il bilanciamento delle collisioni; ruotare solo l'overlay lascia la hitbox del veicolo invariata (coerente con la regola "effetti vivi = solo visivi"). Il perno per veicolo è `TURRET_DX` (offset x del mozzo, esportato da `VehicleTextures`); la torretta fa `setTexture` al cambio arma.
+- **Mira via `cameras.main.getWorldPoint`.** Il puntatore arriva in pixel nativi; va riportato nello **spazio di design sotto lo zoom** (§3) prima di calcolare l'angolo (`atan2`), che è poi clampato all'arco frontale ±82° (costante di feel `MAX_AIM`, **non** validata). Senza questa conversione la mira sarebbe sfasata a ogni risoluzione ≠ 800×600.
+- **Proiettili/razzi a `depth 12`.** Velocità **vettoriale** (`physics.velocityFromRotation`) verso il mirino e sprite ruotato; `depth 12` li mette **sopra** veicolo (10) e torretta (11) — prima erano a 8 ("fuoco da sotto il veicolo", bug risolto). Il fuoco col mouse è ignorato se il puntatore è sopra un elemento UI cliccabile (`input.hitTestPointer`) → cliccare l'HUD/selettore armi non spara.
+
+> Le costanti di feel introdotte dal reboot (`MAX_AIM`, knockback `KNOCK`/`KNOCK_DECAY`, sferzate `SURGE_INTERVAL`/`SURGE_BASE`, densità orda) sono **derivate/in taratura** e **non** lette dai validatori 🔒.
+
 ---
 
 ## 9. Dove guardare per…

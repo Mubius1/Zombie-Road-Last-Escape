@@ -151,9 +151,9 @@ Sottoinsieme di numeri verificato automaticamente da `npm run validate:audio` co
 - **Intento:** schiocco secco e leggero. Acuto perché si ripete tantissimo: non deve affaticare né mascherare gli impatti.
 
 ### 5.2 UCCISIONE ZOMBI — `playZombieKill()`
-- **F:** sine · **Freq:** 160 → **40** (precipita) esponenziale in 0.18 s · **Env:** 0.32 → 0.001 in **0.18 s**.
-- **Trigger:** uno zombi muore per i colpi del giocatore. Anche **anteprima** nelle Impostazioni.
-- **Intento:** "tonfo" cupo discendente = qualcosa è caduto. Tono puro (non rumore) per staccare dall'impatto fisico.
+- **F:** sine (tono) + rumore bianco (splat) · **Freq:** sine 180 → **40** (precipita) esponenziale in 0.16 s · **Filtro splat:** lowpass 600 Hz · **Env:** tono 0.30 → 0.001 in **0.18 s**; splat 0.26 → 0.001 in **0.12 s** (sotto il tono).
+- **Trigger:** uno zombi muore per i colpi del giocatore (`onBulletHitZombie`/`checkBulletsVsAttached`). Anche **anteprima** nelle Impostazioni.
+- **Intento:** "tonfo" cupo discendente = qualcosa è caduto. Il tono puro stacca dall'impatto fisico; lo **splat** di rumore lowpass breve sotto di esso (la carne che cede) aggiunge "ciccia" all'abbattimento. Resta distinto dal *thwack* del colpo non letale (§5.14, solo rumore, senza gesto discendente).
 
 ### 5.3 AGGANCIO ZOMBI — `playZombieAttach()`
 - **F:** sawtooth (sporco) · **Freq:** 90 → **25** in 0.22 s · **Env:** 0.28 → 0.001 in **0.25 s**.
@@ -213,6 +213,11 @@ Sottoinsieme di numeri verificato automaticamente da `npm run validate:audio` co
 - **Voci:** triade `392·523·659 Hz` (3 × sine, ognuna piega ×1.5 verso l'alto, sfalsate di 0.05 s) + **sweep d'aria** (rumore `highpass` 600→4000 Hz in 0.28 s). **Env:** attacco rapido (lin → 0.26 / 0.22), coda esponenziale → 0.001 a ~0.3 s.
 - **Trigger:** in `activateOverdrive` (tasto F a barra piena del Sovraccarico, A3), una volta per attivazione.
 - **Intento:** gesto **power-up** ascendente e brillante — la ricompensa *attiva* della combo. Sale come `playBossWarn`, ma in tono **trionfale** (triade maggiore) anziché minaccioso.
+
+### 5.14 COLPO A SEGNO (non letale) — `playHit()`
+- **F:** rumore bianco (corpo) + triangle (click) · **Filtro:** bandpass **~600–860 Hz** (Q 0.8, frequenza `f` randomizzata per colpo) · **Env:** corpo 0.30 → 0.001 in **0.06 s**; click 0.16 → 0.001 in **0.05 s** (durata totale ~0.06–0.07 s). Il triangle scende da `f·0.7` a 150 Hz: micro-impatto del proiettile.
+- **Trigger:** un nemico **incassa** un colpo ma **sopravvive** (HP > 0) — `onBulletHitZombie` e `checkBulletsVsAttached` (zombi agganciato). Lato gioco è **throttellato a 45 ms** via `playHitSfx()` (anti-cacofonia a fuoco rapido / più colpi nello stesso frame).
+- **Intento:** *thwack* secco e cortissimo che chiude l'anello "ho premuto → l'ho preso" anche quando il bersaglio non muore (prima era **muto**, feedback assente). La frequenza variata per colpo evita l'affaticamento a raffica. Volutamente più leggero e più alto dell'uccisione (§5.2) e senza gesto discendente: dice "colpito", non "morto".
 
 > **Lifecycle (AU):** il `master` ha un **buffer di rumore condiviso** (`noiseBuffer`, generato una volta) riusato da tutte le voci a rumore; `startEngine()` fa `ctx.resume()` se il contesto è sospeso; `dispose()` (chiamato allo SHUTDOWN di GameScene e SettingsScene) ferma il motore e **scollega master+limiter** da `destination` → nessun nodo orfano sul context condiviso a ogni restart.
 

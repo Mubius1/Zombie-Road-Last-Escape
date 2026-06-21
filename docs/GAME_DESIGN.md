@@ -18,7 +18,10 @@ Questo documento è la **fonte di verità** del *design del gioco*: cosa fa il g
 1. **Tensione a doppia risorsa.** Non muori solo perché ti colpiscono: muori anche se finisci il **carburante**. Ogni secondo conta; fermarsi non è un'opzione.
 2. **Corsa roguelike.** Una "corsa" è una catena di missioni. La morte **azzera tutto** (soldi, veicolo, armi, sopravvissuti, potenziamenti): la posta è alta, ogni acquisto pesa.
 3. **Degrado significativo.** I componenti del veicolo si danneggiano e questo **cambia come si guida** (più lento, spara peggio, beve più carburante) — non è solo una barra che cala.
-4. **Leggibilità arcade.** Lettura immediata della minaccia, feedback tattile su ogni colpo (vedi Standard di Produzione AAA nell'art bible zombi).
+4. **Mira attiva.** Spari **dove punti**: il combat è un verbo che il giocatore esercita di continuo, non un automatismo di sfondo. Lo Scatto e l'Overdrive aggiungono verbi tattici sopra alla mira.
+5. **Leggibilità arcade.** Lettura immediata della minaccia, feedback tattile su ogni colpo (vedi Standard di Produzione AAA nell'art bible zombi).
+
+> 🔁 **Decisione — Combat reboot.** Nelle prime versioni il fuoco era **automatico in avanti**: il fun-gate ha mostrato che rendeva il giocatore **passivo** (bastava posizionarsi in verticale). Il combat è stato riprogettato sulla **mira col mouse**: la torretta ruota verso il puntatore (arco frontale ±82°) e si spara attivamente verso il mirino. La struttura della campagna (km → boss all'82% → 7 regioni → negozio, componenti, carburante, armi, sopravvissuti, Track A, scaling NG+) resta **invariata**.
 
 ---
 
@@ -39,7 +42,7 @@ Questo documento è la **fonte di verità** del *design del gioco*: cosa fa il g
         └────────┴───────┘                 └──────────┘
 ```
 
-1. **Missione** (`GameScene`): il veicolo è ancorato a sinistra (`VEHICLE_X = 150`) e si muove solo in verticale dentro la strada. Il mondo scorre, gli zombi arrivano da destra. Spari in automatico in avanti. Avanzi accumulando **distanza**.
+1. **Missione** (`GameScene`): il veicolo è ancorato a sinistra (`VEHICLE_X = 150`) e si muove solo in verticale dentro la strada. Il mondo scorre, gli zombi arrivano da destra. **Miri col mouse** (la torretta segue il puntatore nell'arco frontale) e spari verso il mirino tenendo premuto. Avanzi accumulando **distanza**.
 2. **Boss** all'**82%** della distanza di missione: mentre il boss è vivo l'avanzamento si congela e gli spawn ordinari si fermano — è un duello.
 3. **Missione completata** (boss sconfitto → completamento): converti il punteggio in **monete**, salvi lo stato dei componenti, passi al **Negozio**.
 4. **Negozio** (`ShopScene` — "GARAGE"): spendi le monete in riparazioni, potenziamenti, armi, veicoli; recluti **gratis** un sopravvissuto tra 3 offerti. Poi parte la missione successiva.
@@ -52,7 +55,8 @@ Questo documento è la **fonte di verità** del *design del gioco*: cosa fa il g
 | Input | Azione |
 |---|---|
 | **↑ / ↓** (o W/S) | Muovi il veicolo su/giù nella strada |
-| **Sparo** | Automatico, in avanti, secondo l'arma equipaggiata |
+| **MOUSE** | **Mira**: la torretta ruota verso il puntatore, vincolata all'arco frontale **±82°**; il mirino segna il punto mirato |
+| **CLIC / SPAZIO** | **Sparo**: tieni premuto per fare fuoco verso il mirino, secondo l'arma equipaggiata (cliccare l'HUD non spara) |
 | **Shift** | **Scatto** (dash): scrolla via gli zombi aggrappati · ricarica 5 s |
 | **F** | **Sovraccarico** (overdrive): a barra piena, ~3 s di cadenza ×2 + veicolo-ariete + onda d'urto frontale. La barra si carica dalle uccisioni in combo (§7). |
 | **1–5** | Cambia arma posseduta al volo |
@@ -103,11 +107,19 @@ Tutto vive in uno **spazio di design alto 600** (vedi [CLAUDE.md → Risoluzione
 |---|---|---|
 | Distanza missione | `MISSION_DIST = 18000` u | ~**180 km** mostrati; ~75 s di guida pura a `SCROLL_SPEED=240 u/s` |
 | Trigger boss | `82%` (`BOSS_TRIGGER`) | il boss appare a 14 760 u; l'avanzamento si congela finché vive |
-| Spawn zombi | a intervallo decrescente | parte da `max(700, 2100 − (missione−1)·80)` ms, accelera (§5) |
+| Spawn zombi | a intervallo decrescente | parte da `max(330, 1350 − (missione−1)·80)` ms, accelera (§5) |
+| Sferzata d'orda | ogni `SURGE_INTERVAL = 11 500` ms | onda extra `min(7, 4 + ⌊(missione−1)/2⌋)` spawn; sospesa durante il boss |
 | Gigante | ogni `22 000` ms | spawn speciale fuori dal pool ordinario |
 | Hazard di corsia | ogni `4500` ms | relitto/olio/mina che scorrono col mondo, da schivare (A1) |
 
-**Sequenza:** guida e sopravvivi → all'82% **spawn boss** (gli zombi ordinari smettono) → sconfiggi il boss → schermata *BOSS SCONFITTO* → dopo 2,2 s **MISSIONE COMPLETATA** → bottino → Negozio.
+**Densità "orda".** La mira attiva regge una pressione più alta: la strada è **affollata**. Tre leve danno il ritmo:
+- **Intervallo più fitto** — lo spawn ordinario parte molto più stretto di prima (pavimento `290` ms vs `500`), così la massa cresce in fretta.
+- **Sciami** — i *fodder* (Comune/Corridore) arrivano in gruppo da 1-3, il Tossico da 1-2, gli altri singoli: piccoli grappoli da falciare, non file isolate.
+- **Sferzate** — ogni `SURGE_INTERVAL` un'**orda extra** (più chiamate di spawn, ognuna eventualmente uno sciame), che cresce con la missione. È un ritmo a **picchi** (calma → ondata → calma); le sferzate si **fermano durante il duello col boss**.
+
+> ⚠️ Le costanti di densità (intervallo, sciami, `SURGE_INTERVAL`/base) sono **derivate / in taratura**, non valori 🔒 di bilanciamento.
+
+**Sequenza:** guida e sopravvivi → all'82% **spawn boss** (gli zombi ordinari e le sferzate smettono) → sconfiggi il boss → schermata *BOSS SCONFITTO* → dopo 2,2 s **MISSIONE COMPLETATA** → bottino → Negozio.
 
 ---
 
@@ -134,6 +146,9 @@ Gli zombi che raggiungono il veicolo si **aggrappano** a uno dei 6 slot-componen
 - infliggono **14 danni** al componente collegato ogni **1,6 s**;
 - ogni zombi aggrappato **rallenta** il veicolo (−12% velocità verticale, fino a un minimo del 30%).
 - Lo **Scatto** (Shift) li sbalza via tutti — è la valvola di sfogo anti-soffocamento (cooldown 5 s, 350 ms di grazia in cui nessuno si riaggancia). Sbalzarli **non dà punteggio**.
+
+### Knockback dei colpi
+Ogni colpo che **non** uccide dà un **rinculo** al nemico: una spinta lungo l'angolo del proiettile, scalata sugli HP (i bersagli fragili schizzano via, i tank quasi non si muovono) e che **decade** nel tempo, restando dentro la corsia. È **solo game-feel** — dà peso ai colpi e fa "respirare" la mischia — e **non** altera le velocità di movimento né il bilanciamento (costante di feel derivata, non 🔒).
 
 ---
 
@@ -165,15 +180,15 @@ Il veicolo è definito da `VEHICLES[key]` (salute/armatura/velocità/cadenza bas
 
 ## §8 · Armi
 
-5 armi (`WEAPONS`), tutte a fuoco automatico in avanti. Profilo d'uso (numeri in [BALANCE.md §7](BALANCE.md#7--armi)):
+5 armi (`WEAPONS`), tutte sparano **in direzione della mira** (verso il mirino), non più dritte in avanti — profili e numeri **invariati** (in [BALANCE.md §7](BALANCE.md#7--armi)). Ogni arma ha la sua **torretta** dedicata che ruota col puntatore (vedi art bible oggetti):
 
 | Arma | Identità di design |
 |---|---|
-| **Mitragliatrice** | base affidabile, gratis |
-| **Doppia MG** | due proiettili paralleli, copertura verticale |
-| **Fucile Auto** | alta cadenza, danno doppio — DPS singolo-bersaglio |
-| **Razzi** | esplosione ad area (r≈90px), lenta — anti-orda/boss |
-| **Lanciafiamme** | flusso continuo a corto raggio (range 440) |
+| **Mitragliatrice** | base affidabile, gratis; singolo proiettile mirato |
+| **Doppia MG** | due linee con offset **perpendicolare** alla mira (±14) — copertura attorno al punto mirato |
+| **Fucile Auto** | alta cadenza, danno doppio — DPS singolo-bersaglio, colpo mirato |
+| **Razzi** | missile mirato con esplosione ad area (r≈90px), lenta — anti-orda/boss |
+| **Lanciafiamme** | ventaglio breve attorno alla mira a corto raggio (range 440) |
 
 Le armi si **comprano** una volta e si **equipaggiano** liberamente (tasti 1–5 o dal Negozio).
 
