@@ -195,6 +195,7 @@ export default class DebugScene extends Phaser.Scene {
     if (!owned.includes(key)) owned.push(key);
     setRun(this.registry, 'ownedVehicles', owned);
     setRun(this.registry, 'vehicle', key);
+    this.registry.set('debugRun', true); // run di test: non persistere sul salvataggio reale
     Juice.go(this, 'GameScene');
   }
 
@@ -203,11 +204,13 @@ export default class DebugScene extends Phaser.Scene {
     if (!owned.includes(key)) owned.push(key);
     setRun(this.registry, 'ownedWeapons', owned);
     setRun(this.registry, 'currentWeapon', key);
+    this.registry.set('debugRun', true); // run di test: non persistere sul salvataggio reale
     Juice.go(this, 'GameScene');
   }
 
   private startFresh() {
     SaveData.clearRun();
+    this.registry.set('debugRun', false); // nuova partita reale dal Debug → persiste normalmente
     resetRunState(this.registry);
     Juice.go(this, 'GameScene');
   }

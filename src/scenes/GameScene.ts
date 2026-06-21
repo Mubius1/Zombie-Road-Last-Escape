@@ -179,6 +179,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private envIndex = 0;
   private missionNumber = 1; // numero di missione corrente (per scaling NG+ e vittoria di ciclo)
   private deathToll = 0;     // monete perse al pedaggio dell'ultima morte (per l'overlay)
+  private debugRun = false;  // run di Debug (prova veicolo/arma): NON persiste il checkpoint reale
 
   private hud!: HudController;
 
@@ -276,7 +277,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
     // CHECKPOINT (campagna a checkpoint): salva su disco lo stato d'inizio missione → "CONTINUA"
     // cross-sessione e ripristino alla morte (vedi endGame). Il registry è autorevole qui.
-    SaveData.saveRun(snapshotRun(this.registry));
+    // I run di Debug (prova veicolo/arma) NON persistono: non devono sovrascrivere il salvataggio reale.
+    this.debugRun = this.registry.get('debugRun') === true;
+    if (!this.debugRun) SaveData.saveRun(snapshotRun(this.registry));
     this.combo = 0; this.comboTimer = 0;
     this.dashReadyAt = 0; this.dashGraceUntil = 0;
     this.overdrive = 0; this.overdriveActiveUntil = 0; this.overdriveGlow = null;
@@ -1679,6 +1682,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       turret: this.components.turret.health,
       armor:  this.components.armor.health,
     });
+    // CHECKPOINT: lo stato è avanzato (ricompense + missione successiva) → persisti subito, così
+    // chiudere il browser sull'overlay di fine missione o nel negozio non perde la missione (fix review).
+    if (!this.debugRun) SaveData.saveRun(snapshotRun(this.registry));
 
     this.sfx?.playMissionComplete();
     this.sfx?.stopEngine();
@@ -1741,15 +1747,21 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // della missione corrente (salvato in create) e si paga un PEDAGGIO di recupero sulle monete
     // (modello B): forgiving, ma morire costa. Solo "Nuova Partita" cancella davvero il progresso.
     // Fallback difensivo: se manca il checkpoint (non dovrebbe), reset totale come prima.
-    const cp = SaveData.loadRun();
-    if (cp) {
-      this.deathToll = Math.floor(cp.money * DEATH_MONEY_PENALTY);
-      const recovered = { ...cp, money: Math.max(0, cp.money - this.deathToll) };
-      restoreRun(this.registry, recovered);
-      SaveData.saveRun(recovered); // il checkpoint riflette il pedaggio (auto-limitante: monete ≥ 0)
-    } else {
+    if (this.debugRun) {
+      // Debug: morte effimera, NON tocca il salvataggio reale del giocatore.
       this.deathToll = 0;
       resetRunState(this.registry);
+    } else {
+      const cp = SaveData.loadRun();
+      if (cp) {
+        this.deathToll = Math.floor(cp.money * DEATH_MONEY_PENALTY);
+        const recovered = { ...cp, money: Math.max(0, cp.money - this.deathToll) };
+        restoreRun(this.registry, recovered);
+        SaveData.saveRun(recovered); // il checkpoint riflette il pedaggio (auto-limitante: monete ≥ 0)
+      } else {
+        this.deathToll = 0;
+        resetRunState(this.registry);
+      }
     }
 
     this.sfx?.playGameOver();

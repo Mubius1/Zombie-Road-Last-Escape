@@ -196,6 +196,7 @@ export default class MenuScene extends Phaser.Scene {
   }
 
   private continueGame() {
+    this.registry.set('debugRun', false);  // resume di una corsa reale → persiste normalmente
     const saved = SaveData.loadRun();      // riprende il checkpoint salvato (anche cross-sessione)
     if (saved) restoreRun(this.registry, saved);
     Juice.go(this, 'GameScene');
@@ -206,6 +207,7 @@ export default class MenuScene extends Phaser.Scene {
   private newGame() {
     // Azzera completamente il progresso: è l'UNICO vero reset (cancella anche il checkpoint salvato).
     SaveData.clearRun();
+    this.registry.set('debugRun', false);
     resetRunState(this.registry);
     Juice.go(this, 'GameScene');
   }

@@ -7,7 +7,8 @@ import Settings from '../Settings';
 import SoundManager from '../SoundManager';
 import Ui, { UI, MENU_VIGNETTE } from '../Ui';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
-import { getRun, setRun } from '../RunState';
+import { getRun, setRun, snapshotRun } from '../RunState';
+import SaveData from '../SaveData';
 import { t } from '../i18n';
 
 const H = 600;
@@ -340,12 +341,14 @@ export default class ShopScene extends Phaser.Scene {
   private recruitSurvivor(key: string) {
     if (this.survivors.includes(key)) return;
     setRun(this.registry, 'survivors', [...this.survivors, key]);
+    this.persist();
     ShopScene.sfx?.playFuelPickup();
     this.time.delayedCall(150, () => this.refresh());
   }
 
   private selectVehicle(key: string) {
     setRun(this.registry, 'vehicle', key);
+    this.persist();
     this.refresh();
   }
 
@@ -362,6 +365,7 @@ export default class ShopScene extends Phaser.Scene {
 
   private selectWeapon(key: WeaponType) {
     setRun(this.registry, 'currentWeapon', key);
+    this.persist();
     this.refresh();
   }
 
@@ -376,8 +380,16 @@ export default class ShopScene extends Phaser.Scene {
     this.afterPurchase();
   }
 
+  /** Persiste il checkpoint su disco dopo ogni cambiamento di stato nel negozio (fix review: chiudere
+   *  il browser nel negozio non deve perdere acquisti/scelte). I run di Debug non persistono. */
+  private persist() {
+    if (this.registry.get('debugRun') === true) return;
+    SaveData.saveRun(snapshotRun(this.registry));
+  }
+
   /** Feedback positivo all'acquisto (U7): suono + "pop" del contatore monete, poi ri-disegna. */
   private afterPurchase() {
+    this.persist();
     ShopScene.sfx?.playFuelPickup();
     this.moneyText.setText(t('shop.money', { n: this.money }));
     this.tweens.killTweensOf(this.moneyText);
