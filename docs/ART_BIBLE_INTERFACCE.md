@@ -46,7 +46,8 @@ I tre pilastri del titolo (coesione · game feel · rifinitura) tradotti sulla U
 | **Avviso "⚠ GIGANTE!"** | `GameScene` (spawn gigante) |
 | **Overlay esito** (missione completata · game over · boss sconfitto) | `GameScene` → `missionComplete()`, `gameOver()`, sezioni boss |
 | **Negozio / garage** (header, potenziamenti, armi, sopravvissuti, veicoli) | `src/scenes/ShopScene.ts` |
-| **Impostazioni & pausa** (volume, effetti schermo, risoluzione, schermo intero, daltonismo, indietro/riprendi) | `src/scenes/SettingsScene.ts` |
+| **Impostazioni** (volume, effetti schermo, risoluzione, schermo intero, daltonismo, indietro/riprendi) | `src/scenes/SettingsScene.ts` |
+| **Menu di pausa** (ESC in partita: Impostazioni / Riprendi / Esci al menu) | `src/scenes/PauseScene.ts` |
 | **Preferenze persistenti** (volume, screenFx → localStorage) | `src/Settings.ts` |
 | **Galleria di debug** (titolo, card modelli, pulsanti test) | `src/scenes/DebugScene.ts` |
 | **Transizioni + overlay filmico** (fade, vignetta, grana, scanline, aberrazione, flash) | `src/Juice.ts` → `go`/`fadeIn`/`addOverlay`/`jitterGrain`/`flash` |
@@ -334,7 +335,16 @@ Niente icone importate: usiamo **caratteri** coerenti, sempre con lo stesso sign
 
 ### 4.6 IMPOSTAZIONI & PAUSA — `SettingsScene` · *un componente, due usi*
 
-**Ruolo:** doppio: da **MENU** è scena a sé ("◂ INDIETRO" torna al menu); da **PARTITA** (ESC) è **overlay di pausa** sopra la scena congelata ("▶ RIPRENDI" + "Esci al menu"). Gestisce **volume**, **effetti schermo**, **risoluzione**, **schermo intero** e **daltonismo** (persistiti in `Settings`/localStorage).
+**Ruolo:** doppio: da **MENU** è scena a sé ("◂ INDIETRO" torna al menu); da **PARTITA** è raggiunta dal **menu di pausa** (`PauseScene`, vedi §4.7) tramite "Impostazioni", come **overlay** sopra la scena congelata ("▶ RIPRENDI" riprende il gioco). Gestisce **volume**, **effetti schermo**, **risoluzione**, **schermo intero** e **daltonismo** (persistiti in `Settings`/localStorage).
+
+### 4.7 MENU DI PAUSA — `PauseScene` · *ESC durante la partita*
+
+**Ruolo:** premendo **ESC** in partita la `GameScene` si mette in pausa e si apre questo overlay leggero con **tre pulsanti** nello stesso stile del "RIPRENDI" (riempimento `0x14141f`, hover `0x1d1d2e`, bordo `#2a3a66`, testo `#9ab6ff`), `300×52`:
+- **Impostazioni** → apre la `SettingsScene` completa (la partita resta in pausa sotto).
+- **▶ RIPRENDI · ESC** → riprende la partita (evento RESUME → riavvia il motore audio).
+- **Esci al menu principale** (testo rosso tenue) → abbandona la run e torna al `MenuScene`.
+
+**Layout:** velo `UI.bg` alpha `0.72` + scatola `400×320` (`UI.panel` alpha 0.96, bordo `UI.stroke`); sopra l'etichetta `❚❚ PAUSA · ESC per riprendere`. Nessun overlay filmico proprio (quello del gioco è già sotto). Riusa le chiavi i18n `common.settings` / `settings.resume` / `settings.exitToMenu` (nessuna stringa nuova).
 
 **Layout (modale centrato):**
 - Velo `0x080810` (alpha 0.8 in pausa, 1 da menu) + scatola `540×480` `0x0e0e1a` (alpha 0.96 in pausa) bordo `0x222244`.

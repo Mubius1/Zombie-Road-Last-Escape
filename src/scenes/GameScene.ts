@@ -583,9 +583,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.numberKeys = [KC.ONE, KC.TWO, KC.THREE, KC.FOUR, KC.FIVE]
       .map(k => this.input.keyboard!.addKey(k));
 
-    // ESC: metti in pausa e apri le impostazioni
+    // ESC: metti in pausa e apri il menu di pausa (Impostazioni / Riprendi / Esci al menu)
     const kb = this.input.keyboard!;
-    kb.on('keydown-ESC', () => this.openPauseSettings());
+    kb.on('keydown-ESC', () => this.openPauseMenu());
 
     // Tasti debug
     kb.on('keydown-ZERO', () => this.scene.start('DebugScene'));
@@ -634,12 +634,12 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.crosshair.setPosition(this.aimX, this.aimY);
   }
 
-  private openPauseSettings() {
+  private openPauseMenu() {
     if (!this.alive || this.missionDone) return; // non in game over / fine missione
     if (this.scene.isPaused()) return;            // già in pausa
     this.sfx?.stopEngine();                        // silenzia il motore durante la pausa
     this.scene.pause();
-    this.scene.launch('SettingsScene', { from: 'GameScene' });
+    this.scene.launch('PauseScene');
   }
 
   // ─── Update ──────────────────────────────────────────────────────────────────
