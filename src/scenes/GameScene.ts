@@ -9,7 +9,7 @@ import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { resetRunState, getRun, setRun } from '../RunState';
 import SaveData from '../SaveData';
 import { buildEntityTextures } from '../EntityTextures';
-import { buildVehicleTexture } from '../VehicleTextures';
+import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import HudController from '../HudController';
 import BossController, { BossHost } from '../BossController';
 import { t } from '../i18n';
@@ -57,12 +57,6 @@ const OIL_SLOW_MULT = 0.5;          // moltiplicatore della velocità verticale 
 const MAX_AIM = Phaser.Math.DegToRad(82); // arco frontale di mira (±82° da destra)
 const KNOCK = 220;        // impulso di rinculo dei colpi (px/s, decade) — solo game-feel
 const KNOCK_DECAY = 0.84; // decadimento del rinculo per frame
-// Offset X della torretta dal centro veicolo = dove il MOZZO è disegnato in VehicleTextures (la canna
-// non è più cotta nella texture: è l'overlay rotante 'aim_turret', che pivota da qui).
-const TURRET_DX: Record<string, number> = {
-  civilian_car: 8, pickup: -22, armored_van: 0, military_suv: -3,
-  armored_truck: -13, heavy_military: -17, experimental: -3,
-};
 
 interface EnvConfig {
   name: string;
@@ -561,22 +555,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   /** Pausa la partita e apre le Impostazioni in overlay (ESC le richiude e riprende). */
   /** Torretta rotante (overlay sopra il veicolo: ruotare il corpo cambierebbe la hitbox) + mirino. */
   private buildAim() {
-    const OS = OVERSAMPLE;
-    if (!this.textures.exists('aim_turret')) {
-      const g = this.make.graphics({ add: false } as object) as Phaser.GameObjects.Graphics & { generateTexture(k: string, w: number, h: number): void };
-      g.setScale(OS);
-      const orig = g.generateTexture.bind(g);
-      (g as unknown as { generateTexture: (k: string, w: number, h: number) => void }).generateTexture = (k, w, h) => orig(k, w * OS, h * OS);
-      g.fillStyle(0x23232a, 1); g.fillRect(0, 1, 32, 8);
-      g.fillStyle(0x44454f, 1); g.fillRect(0, 2, 32, 6);
-      g.fillStyle(0x6a6c78, 1); g.fillRect(2, 3, 27, 2);
-      g.fillStyle(0x23232a, 1); g.fillRect(28, 0, 6, 10);   // volata
-      g.fillStyle(0x33343c, 1); g.fillCircle(3, 5, 7);       // mozzo (copre il pivot)
-      g.fillStyle(0x55576a, 1); g.fillCircle(3, 5, 5);
-      g.fillStyle(0x8899ff, 0.8); g.fillCircle(3, 5, 2);
-      g.generateTexture('aim_turret', 34, 10);
-      g.destroy();
-    }
+    buildTurretTextures(this); // torretta per arma: aim_turret_<weapon> (vedi VehicleTextures)
     if (!this.textures.exists('aim_crosshair')) {
       const g = this.make.graphics({ add: false } as object) as Phaser.GameObjects.Graphics & { generateTexture(k: string, w: number, h: number): void };
       g.lineStyle(2, 0x88ccff, 0.95); g.strokeCircle(12, 12, 9);
@@ -586,10 +565,13 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       g.generateTexture('aim_crosshair', 24, 24);
       g.destroy();
     }
-    this.turret = this.add.image(this.vehicle.x + this.turretDx, this.vehicle.y, 'aim_turret')
-      .setScale(1 / OVERSAMPLE).setOrigin(0.10, 0.5).setDepth(11);
+    this.turret = this.add.image(this.vehicle.x + this.turretDx, this.vehicle.y, this.turretTex())
+      .setScale(1 / OVERSAMPLE).setOrigin(0.11, 0.5).setDepth(11);
     this.crosshair = this.add.image(this.aimX, this.aimY, 'aim_crosshair').setDepth(50);
   }
+
+  /** Chiave texture della torretta per l'arma corrente (aim_turret_<weapon>). */
+  private turretTex(): string { return 'aim_turret_' + this.currentWeapon; }
 
   /** Mira: puntatore → spazio design (la camera è in zoom) → angolo torretta clampato all'arco frontale. */
   private updateAim() {
@@ -655,6 +637,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (!this.ownedWeapons.includes(key) || key === this.currentWeapon) return;
     this.currentWeapon = key;
     setRun(this.registry, 'currentWeapon', key);
+    this.turret?.setTexture(this.turretTex()); // la torretta cambia forma con l'arma
     this.hud.setWeapon(key); // nome + selettore + pop cosmetico
   }
 

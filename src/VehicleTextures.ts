@@ -325,3 +325,82 @@ export function buildVehicleTexture(scene: Phaser.Scene, vehicleKey: string) {
   g.generateTexture(key, 100, 44);
   g.destroy();
 }
+
+/** Offset X del perno torretta dal centro veicolo (= dove il mozzo è disegnato in buildVehicleTexture).
+ *  Posiziona l'overlay torretta in gioco (rotante) e nelle anteprime negozio/debug (statica). */
+export const TURRET_DX: Record<string, number> = {
+  civilian_car: 8, pickup: -22, armored_van: 0, military_suv: -3,
+  armored_truck: -13, heavy_military: -17, experimental: -3,
+};
+
+/**
+ * Texture della TORRETTA per arma (overlay rotante 'aim_turret_<weapon>'): la canna non è più cotta
+ * nella texture del veicolo (vedi buildVehicleTexture), così può ruotare verso il mouse e CAMBIARE
+ * forma in base all'arma equipaggiata. Pivot ≈ mozzo a sinistra (origine ~0.11,0.5). Sovracampionata.
+ * Usata da GameScene (rotante) e da negozio/debug (statica, canna a destra).
+ */
+export function buildTurretTextures(scene: Phaser.Scene) {
+  if (scene.textures.exists('aim_turret_mg')) return;
+  const OS = OVERSAMPLE;
+  const make = (key: string, draw: (g: Phaser.GameObjects.Graphics) => void) => {
+    const g = scene.make.graphics({ add: false } as any) as Phaser.GameObjects.Graphics & { generateTexture(k: string, w: number, h: number): void };
+    g.setScale(OS);
+    const orig = g.generateTexture.bind(g);
+    (g as any).generateTexture = (k: string, w: number, h: number) => orig(k, w * OS, h * OS);
+    draw(g);
+    g.generateTexture(key, 36, 14);
+    g.destroy();
+  };
+  const MD = 0x26262c, M = 0x44454f, ML = 0x6a6c78;
+  const hub = (g: Phaser.GameObjects.Graphics) => {
+    g.fillStyle(MD, 1); g.fillCircle(4, 7, 6);
+    g.fillStyle(M, 1);  g.fillCircle(4, 7, 4);
+    g.fillStyle(ML, 1); g.fillCircle(3, 6, 1.6);
+    g.fillStyle(0x8899ff, 0.85); g.fillCircle(4, 7, 1.6);
+  };
+  // Mitragliatrice: canna media singola.
+  make('aim_turret_mg', g => {
+    g.fillStyle(MD, 1); g.fillRect(2, 5, 30, 4);
+    g.fillStyle(M, 1);  g.fillRect(2, 5, 30, 3);
+    g.fillStyle(ML, 1); g.fillRect(3, 6, 25, 1);
+    g.fillStyle(MD, 1); g.fillRect(30, 4, 5, 6); // volata
+    hub(g);
+  });
+  // Doppia MG: DUE canne parallele.
+  make('aim_turret_double_mg', g => {
+    for (const yy of [2.5, 8.5]) {
+      g.fillStyle(MD, 1); g.fillRect(2, yy, 28, 3);
+      g.fillStyle(M, 1);  g.fillRect(2, yy, 28, 2);
+      g.fillStyle(MD, 1); g.fillRect(28, yy - 0.5, 5, 4); // volata
+    }
+    hub(g);
+  });
+  // Fucile Auto: canna lunga e sottile + tacca di mira.
+  make('aim_turret_rifle', g => {
+    g.fillStyle(MD, 1); g.fillRect(2, 6, 33, 3);
+    g.fillStyle(M, 1);  g.fillRect(2, 6, 33, 2);
+    g.fillStyle(ML, 1); g.fillRect(3, 6.5, 28, 1);
+    g.fillStyle(MD, 1); g.fillRect(11, 4, 3, 2);  // mirino
+    g.fillStyle(MD, 1); g.fillRect(34, 5, 2, 5);  // volata
+    hub(g);
+  });
+  // Razzi: lanciatore tozzo + testata rossa che sporge.
+  make('aim_turret_rockets', g => {
+    g.fillStyle(MD, 1); g.fillRect(2, 3, 25, 8);
+    g.fillStyle(M, 1);  g.fillRect(3, 4, 23, 6);
+    g.fillStyle(0x14141a, 1); g.fillCircle(26, 7, 3.2);          // bocca del tubo
+    g.fillStyle(0xcc2200, 1); g.fillTriangle(27, 4.5, 27, 9.5, 34, 7); // ogiva
+    g.fillStyle(0xff5533, 1); g.fillTriangle(28, 5.5, 28, 8.5, 33, 7);
+    hub(g);
+  });
+  // Lanciafiamme: ugello largo e svasato + fiammella pilota.
+  make('aim_turret_flamethrower', g => {
+    g.fillStyle(MD, 1); g.fillRect(2, 5, 16, 5);
+    g.fillStyle(M, 1);  g.fillRect(3, 5.5, 14, 4);
+    g.fillStyle(MD, 1); g.fillTriangle(18, 3, 18, 11, 32, 5.5);  // svaso
+    g.fillStyle(M, 1);  g.fillTriangle(19, 4.5, 19, 9.5, 30, 6);
+    g.fillStyle(0xff6622, 0.7); g.fillCircle(30, 6.5, 2.2);      // pilota
+    g.fillStyle(0xffcc44, 0.85); g.fillCircle(31, 6.5, 1);
+    hub(g);
+  });
+}

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { VEHICLES, VEHICLE_KEYS, SURVIVORS, SurvivorData, Upgrades, WEAPONS, WEAPON_KEYS, WeaponType } from '../GameData';
 import { buildEntityTextures } from '../EntityTextures';
-import { buildVehicleTexture } from '../VehicleTextures';
+import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import Juice from '../Juice';
 import Settings from '../Settings';
 import SoundManager from '../SoundManager';
@@ -101,6 +101,7 @@ export default class ShopScene extends Phaser.Scene {
     if (this.textures.exists('vehicle_experimental')) return; // già generate da una partita
     buildEntityTextures(this);
     VEHICLE_KEYS.forEach(k => buildVehicleTexture(this, k));
+    buildTurretTextures(this); // torretta statica per le anteprime
   }
 
   private drawUI() {
@@ -279,8 +280,10 @@ export default class ShopScene extends Phaser.Scene {
         stroke: selected ? UI.greenSig : UI.stroke, strokeAlpha: selected ? 0.9 : 0.5,
       }).setInteractive(true);
 
-      // Anteprima reale: lo sprite del veicolo (sbiadito se non posseduto)
+      // Anteprima reale: sprite veicolo (sbiadito se non posseduto) + torretta statica (canna mg, in avanti)
       this.add.image(vx + 50, py + 30, `vehicle_${key}`).setScale(0.7 / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
+      this.add.image(vx + 50 + (TURRET_DX[key] ?? 8) * 0.7, py + 30, 'aim_turret_mg')
+        .setOrigin(0.11, 0.5).setScale(0.7 / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
       Ui.text(this, vx + 50, py + 50, t(v.name), {
         fontSize: '10px', color: owned ? UI.text : '#444444', wordWrap: { width: 100 }, align: 'center',
       }).setOrigin(0.5, 0);

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { BOSS_CONFIG, BOSS_ORDER } from '../World';
 import { buildEntityTextures } from '../EntityTextures';
-import { buildVehicleTexture } from '../VehicleTextures';
+import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import { VEHICLES, VEHICLE_KEYS, WEAPONS, WEAPON_KEYS, WeaponType, SURVIVORS } from '../GameData';
 import Juice from '../Juice';
 import Ui, { UI } from '../Ui';
@@ -45,6 +45,7 @@ export default class DebugScene extends Phaser.Scene {
     // Genera TUTTE le texture (tutti i veicoli + entità)
     buildEntityTextures(this);
     VEHICLE_KEYS.forEach(k => buildVehicleTexture(this, k));
+    buildTurretTextures(this); // torretta statica per la galleria
 
     this.add.rectangle(this.designW / 2, H / 2, this.designW, H, UI.bgDeep);
     Ui.text(this, this.designW / 2, 6, t('debug.title'), {
@@ -89,6 +90,7 @@ export default class DebugScene extends Phaser.Scene {
       const cell = this.cell(cx, top + 22, 98, 48, true);
       cell.on('pointerdown', () => this.testVehicle(key));
       this.add.image(cx, top + 22, `vehicle_${key}`).setOrigin(0.5).setScale(1 / OVERSAMPLE);
+      this.add.image(cx + (TURRET_DX[key] ?? 8), top + 22, 'aim_turret_mg').setOrigin(0.11, 0.5).setScale(1 / OVERSAMPLE);
       Ui.text(this, cx, top + 48, t(VEHICLES[key].name), {
         fontSize: '8px', color: '#bbbbcc', align: 'center', wordWrap: { width: 100 },
       }).setOrigin(0.5, 0);
