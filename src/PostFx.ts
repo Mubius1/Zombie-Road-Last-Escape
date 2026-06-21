@@ -23,6 +23,13 @@ export const POSTFX_FILM = 'Film';
  */
 export const PIPELINES: Record<string, unknown> = { [POSTFX_FILM]: FilmPipeline };
 
+/**
+ * Bloom morbido sugli emissivi (FX integrata, multi-pass a mezza risoluzione → economica).
+ * Tenue di default: l'art bible vuole bloom "sugli emissivi", non una foschia generale.
+ * (color, offsetX, offsetY, blurStrength, strength, steps)
+ */
+const BLOOM = { color: 0xffffff, offX: 1, offY: 1, blur: 1.1, strength: 0.5, steps: 6 } as const;
+
 /** True se il renderer attivo è WebGL (necessario per qualsiasi shader/post-FX). */
 function isWebGL(scene: Phaser.Scene): boolean {
   return scene.game.renderer.type === Phaser.WEBGL;
@@ -38,6 +45,10 @@ export function attachPostFx(scene: Phaser.Scene, vignette = 1): boolean {
   if (!isWebGL(scene)) return false;
 
   const cam = scene.cameras.main;
+
+  // Bloom PRIMA della pipeline Film: si aggiunge per primo allo stack post → viene
+  // applicato per primo, così il grading di Film tona il frame già "bloomato".
+  cam.postFX.addBloom(BLOOM.color, BLOOM.offX, BLOOM.offY, BLOOM.blur, BLOOM.strength, BLOOM.steps);
   cam.setPostPipeline(FilmPipeline);
 
   // Ogni camera riceve la propria istanza di pipeline → impostiamo la vignetta per-camera.

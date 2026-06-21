@@ -78,7 +78,7 @@ Come per i nemici (silhouette → movimento → texture), la strada ha un suo or
 
 ## 2. Vincoli tecnici (non negoziabili)
 
-- **Solo primitive + TileSprite:** `fillRect`, `fillRoundedRect`, `fillEllipse`, `fillCircle`, `fillTriangle`, `lineBetween`, `fillGradientStyle`, `Phaser.GameObjects.TileSprite`. Niente shader, niente blur per-pixel.
+- **Geometria con primitive + TileSprite:** `fillRect`, `fillRoundedRect`, `fillEllipse`, `fillCircle`, `fillTriangle`, `lineBetween`, `fillGradientStyle`, `Phaser.GameObjects.TileSprite`. Niente shader **per la geometria**, niente blur per-pixel costoso. Il **post-processing** filmico (grading/grana/vignetta/aberrazione/bloom) vive invece in shader GLSL inline a livello camera (`src/PostFx.ts`).
 - **Texture-once, scroll-cheap.** L'asfalto è una **texture bakeata una sola volta** (`generateTexture`) e mostrata come **`TileSprite`** che scorre muovendo `tilePositionX`. **Mai** ridisegnare la strada ogni frame. La texture deve **tilare in orizzontale senza giunta** (continuità ai bordi).
 - **Profondità = strati che scorrono a velocità diverse** (parallasse). Ogni strato è 1 oggetto (TileSprite o graphics duplicato in loop), non N oggetti per frame.
 - **Decal = fire-and-forget, in pool, con cap.** I segni sull'asfalto si auto-distruggono via tween e **scorrono con la strada** (stessa `SCROLL_SPEED`). **Mai** un decal persistente non riciclato. Budget rigido (vedi §7).

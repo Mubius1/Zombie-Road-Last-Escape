@@ -4,7 +4,7 @@ Arcade survival top-down: guidi un veicolo lungo una strada infinita che scorre 
 
 - **Genere:** arcade survival top-down (la strada scorre, il veicolo si muove su/giù).
 - **Stack:** [Phaser 3.90](https://phaser.io/) + TypeScript + [Vite](https://vitejs.dev/). UI in **italiano**.
-- **Grafica:** **100% procedurale** (Phaser Graphics API → `generateTexture`). **Nessun PNG, nessun asset esterno.**
+- **Grafica:** **100% procedurale** — geometria via Phaser Graphics API → `generateTexture`; post-processing via shader GLSL inline. **Nessun PNG, nessun asset esterno.**
 - **Audio:** procedurale (Web Audio API) in `src/SoundManager.ts`.
 
 ---

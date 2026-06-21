@@ -9,7 +9,7 @@
 ## 1. Stack & pipeline di build
 
 - **Engine:** Phaser 3.90 · **Linguaggio:** TypeScript (strict) · **Bundler/dev server:** Vite.
-- **Grafica:** 100% procedurale (Graphics API → `generateTexture`). Nessun PNG, nessun asset esterno.
+- **Grafica:** 100% procedurale — geometria via Graphics API → `generateTexture`; post-processing via shader GLSL inline (`src/pipelines/`, vedi `src/PostFx.ts`). Nessun PNG, nessun asset esterno.
 - **Audio:** 100% procedurale (Web Audio API). Vedi [`ART_BIBLE_AUDIO.md`](./ART_BIBLE_AUDIO.md).
 - **UI/testi:** in italiano.
 

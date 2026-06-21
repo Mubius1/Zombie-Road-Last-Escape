@@ -75,7 +75,7 @@ A risoluzione di gioco un proiettile è alto **5 px** e vola, un pickup è **22�
 - **VFX = fire-and-forget.** Muzzle-flash, bloom e scintille si auto-distruggono via tween. **Mai** un emitter persistente per proiettile.
 - **Cosmetico ≠ gameplay.** Le `setBodySize`/hitbox dei proiettili e del veicolo sono **fisse**; bagliori, scia, ombra ed effetti **non toccano** il bilanciamento. Un'arma "pesa" di più per i suoi numeri (`damage`/`cooldown`/`speed`), non perché la texture è più grande.
 - **Contenere il disegno nella texture** (sforare bleeda). Il veicolo si disegna entro `100×44`; gli oggetti entro le dimensioni dichiarate.
-- **Performance budget:** decine di proiettili + nemici a **60 fps**. Niente effetti per-pixel, niente shader, niente blur.
+- **Performance budget:** decine di proiettili + nemici a **60 fps**. Niente effetti per-pixel sugli sprite, niente blur sugli oggetti. Il post-processing filmico è a livello camera (una passata GLSL + bloom), vedi `src/PostFx.ts`.
 
 ---
 
