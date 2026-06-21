@@ -46,17 +46,29 @@ export default class Shadows {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.stamp.destroy(); this.rt.destroy(); });
   }
 
-  /** Ellisse nera morbida (alone accumulato), una sola volta. */
+  /**
+   * Ombra a due toni (una sola volta): **penombra** morbida e larga (la proiezione) +
+   * **core AO** più stretto e scuro al punto di contatto. È ciò che radica davvero
+   * l'oggetto: senza il core l'ellisse "galleggia"; col solo core è un disco piatto.
+   */
   static buildTexture(scene: Phaser.Scene) {
     if (scene.textures.exists(TEX_KEY)) return;
     const g = scene.make.graphics({ add: false } as any);
-    // Cerchi concentrici accumulati → centro pieno, bordo sfumato (come fx_light ma nero).
     const cx = TEX_W / 2, cy = TEX_H / 2;
+
+    // Penombra: alone largo accumulato a bassissima alpha → bordo molto sfumato.
     const steps = TEX_H / 2;
     for (let i = steps; i >= 1; i--) {
       const t = i / steps;
-      g.fillStyle(0x000000, 0.05);
+      g.fillStyle(0x000000, 0.035);
       g.fillEllipse(cx, cy, TEX_W * t, TEX_H * t);
+    }
+    // Core AO: ellisse più piccola e più densa al centro (contatto a terra).
+    const coreSteps = Math.floor(TEX_H * 0.32);
+    for (let i = coreSteps; i >= 1; i--) {
+      const t = i / coreSteps;
+      g.fillStyle(0x000000, 0.06);
+      g.fillEllipse(cx, cy, TEX_W * 0.6 * t, TEX_H * 0.6 * t);
     }
     (g as Phaser.GameObjects.Graphics & { generateTexture(k: string, w: number, h: number): void })
       .generateTexture(TEX_KEY, TEX_W, TEX_H);
@@ -72,7 +84,10 @@ export default class Shadows {
       const h = e.displayHeight;
       if (w <= 0) continue;
       const s = (w * WIDEN) / TEX_W;
-      this.stamp.setScale(s).setAlpha(ALPHA);
+      // Veicolo e boss "pesano" di più a terra → ombra leggermente più marcata (gerarchia).
+      const key = e.texture?.key ?? '';
+      const heavy = key.indexOf('vehicle_') === 0 || key.indexOf('boss_') === 0;
+      this.stamp.setScale(s).setAlpha(heavy ? ALPHA * 1.25 : ALPHA);
       this.rt.batchDraw(this.stamp, e.x + w * OFF_X_FRAC, e.y + h * OFF_Y_FRAC);
     }
     this.rt.endDraw();
