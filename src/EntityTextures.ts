@@ -607,7 +607,7 @@ export function buildEntityTextures(scene: Phaser.Scene) {
     const emb=0x6e4a3a, embHi=0x9a6a4a, bone=0xd9cba6, maw=0x140604, eye=0xff3a1e;
     for (let f = 0; f < 3; f++) {
       const ox = f * 56, ph = f - 1; const X = (x: number) => ox + x; const p2 = ph * 2;
-      g.fillStyle(0x000000,0.34); g.fillEllipse(X(28),67,50,9);
+      g.fillStyle(0x000000,0.34); g.fillEllipse(X(28),65,50,9);
       // piedi tozzi affondati
       g.fillStyle(0x120c08); g.fillEllipse(X(18-ph),64,12,7); g.fillEllipse(X(38+ph),64,12,7);
       g.fillStyle(memSh); g.fillRoundedRect(X(13-ph),52,12,12,5); g.fillRoundedRect(X(31+ph),52,12,12,5);
@@ -631,18 +631,18 @@ export function buildEntityTextures(scene: Phaser.Scene) {
       // vene emissive che si diramano
       g.fillStyle(vein,0.6); g.fillRect(X(27),30,1,24); g.fillRect(X(18),40,12,1); g.fillRect(X(27),48,14,1);
       // BOCCA-UTERO che PARTORISCE: la testa rompe il PROFILO inferiore (gancio in silhouette)
-      g.fillStyle(memSh); g.fillEllipse(X(28),63,24,16);          // labbra del parto che sporgono dal ventre
-      g.fillStyle(maw);   g.fillEllipse(X(28),64,17,11);
-      g.fillStyle(emb);   g.fillCircle(X(28),66,6);               // testa emergente SOTTO la linea del ventre
-      g.fillStyle(embHi); g.fillCircle(X(26),64,2.4);
-      g.fillStyle(eye);   g.fillCircle(X(26),66,1.3); g.fillCircle(X(30),66,1.3);
-      g.fillStyle(bone);  [22,26,30,34].forEach(x => g.fillTriangle(X(x),60,X(x+2),60,X(x+1),63));
-      g.fillStyle(emb);   g.fillEllipse(X(16),67,7,4);            // bracciolo dell'embrione che spunta
-      g.fillStyle(embHi); g.fillCircle(X(13),67,2);
+      g.fillStyle(memSh); g.fillEllipse(X(28),59,24,16);          // labbra del parto che sporgono dal ventre
+      g.fillStyle(maw);   g.fillEllipse(X(28),60,17,11);
+      g.fillStyle(emb);   g.fillCircle(X(28),62,6);               // testa emergente SOTTO la linea del ventre
+      g.fillStyle(embHi); g.fillCircle(X(26),60,2.4);
+      g.fillStyle(eye);   g.fillCircle(X(26),62,1.3); g.fillCircle(X(30),62,1.3);
+      g.fillStyle(bone);  [22,26,30,34].forEach(x => g.fillTriangle(X(x),56,X(x+2),56,X(x+1),59));
+      g.fillStyle(emb);   g.fillEllipse(X(16),63,7,4);            // bracciolo dell'embrione che spunta
+      g.fillStyle(embHi); g.fillCircle(X(13),63,2);
       // braccia ASIMMETRICHE: sx grande protesa in basso, dx ridotta a moncone (rompe il read "umanoide a 2 braccia")
       const laY = 33 + p2, raY = 24 - p2;
-      g.fillStyle(memSh); g.fillEllipse(X(5),laY,15,10); g.fillStyle(mem); g.fillEllipse(X(6),laY-1,11,7);
-      g.fillStyle(memSh); g.fillCircle(X(3),laY+6,4); g.fillStyle(mem); g.fillCircle(X(3),laY+6,2.4);
+      g.fillStyle(memSh); g.fillEllipse(X(8),laY,15,10); g.fillStyle(mem); g.fillEllipse(X(9),laY-1,11,7);
+      g.fillStyle(memSh); g.fillCircle(X(6),laY+6,4); g.fillStyle(mem); g.fillCircle(X(6),laY+6,2.4);
       g.fillStyle(memSh); g.fillEllipse(X(50),raY,10,7); g.fillStyle(mem); g.fillEllipse(X(50),raY-1,7,4);
       // torso superiore + TUMORE-spalla (asimmetria)
       g.fillStyle(memSh); g.fillRoundedRect(X(12),16,32,20,9);
@@ -676,11 +676,11 @@ export function buildEntityTextures(scene: Phaser.Scene) {
     const g = OS_G(288,44);
     const wf=0x9a5a2e, wfHi=0xc87a3a, wfSh=0x5a2e14, ring=0x3a1d0e, livid=0x5a4e63;
     const maw=0x1a0a06, glow=0xff7722, hot=0xffd06a, bone=0xd9c8a0, eye=0xff8a3a, slime=0xc89a5a;
-    const seg: [number,number][] = [[34,17],[48,16],[60,14],[71,12],[80,10],[88,7]];
+    const seg: [number,number][] = [[34,17],[48,16],[60,14],[71,12],[80,10],[86,7]];
     for (let f = 0; f < 3; f++) {
       const ox = f * 96, ph = f - 1; const X = (x: number) => ox + x;
-      const wy = (i: number) => 23 + Math.sin(i * 0.8 + ph * 1.2) * 4; // ondulazione viaggiante
-      g.fillStyle(0x000000,0.28); g.fillEllipse(X(54),40,84,7);
+      const wy = (i: number) => 21 + Math.sin(i * 0.8 + ph * 1.2) * 4; // ondulazione viaggiante (baseline alzata: testa Ø36 contenuta nel frame h44)
+      g.fillStyle(0x000000,0.28); g.fillEllipse(X(54),40,80,7);
       // dal fondo (coda) verso la testa: la testa copre i segmenti dietro
       for (let i = seg.length - 1; i >= 0; i--) {
         const [sx,r] = seg[i]; const sy = wy(i+1);
@@ -691,33 +691,33 @@ export function buildEntityTextures(scene: Phaser.Scene) {
         g.fillStyle(livid,0.4); g.fillEllipse(X(sx),sy+r*0.6,r*0.7,r*0.4);
       }
       g.fillStyle(slime,0.3); g.fillEllipse(X(44),wy(2)-6,6,3); g.fillEllipse(X(64),wy(3)-5,5,2);
-      // TESTA + FAUCI radiali (gancio)
+      // TESTA + FAUCI radiali (gancio) — centrata a x18 così il bordo sx (Ø36) cade a x=0, non più tagliato
       const hy = wy(0);
-      g.fillStyle(wfSh); g.fillEllipse(X(16),hy+1,36,36);
-      g.fillStyle(wf);   g.fillEllipse(X(16),hy,32,32);
-      g.fillStyle(wfHi); g.fillEllipse(X(9),hy-8,11,8);
-      g.fillStyle(wfSh); g.fillEllipse(X(20),hy+9,16,11);
+      g.fillStyle(wfSh); g.fillEllipse(X(18),hy+1,36,36);
+      g.fillStyle(wf);   g.fillEllipse(X(18),hy,32,32);
+      g.fillStyle(wfHi); g.fillEllipse(X(11),hy-8,11,8);
+      g.fillStyle(wfSh); g.fillEllipse(X(22),hy+9,16,11);
       // gola spalancata
-      g.fillStyle(maw); g.fillCircle(X(13),hy,13);
-      g.fillStyle(0x3a1206); g.fillCircle(X(13),hy,9);
-      g.fillStyle(glow,0.8); g.fillCircle(X(13),hy,5);
-      g.fillStyle(hot,0.9); g.fillCircle(X(12),hy-1,2.4);
+      g.fillStyle(maw); g.fillCircle(X(15),hy,13);
+      g.fillStyle(0x3a1206); g.fillCircle(X(15),hy,9);
+      g.fillStyle(glow,0.8); g.fillCircle(X(15),hy,5);
+      g.fillStyle(hot,0.9); g.fillCircle(X(14),hy-1,2.4);
       // denti radiali (anello di zanne verso il centro)
       const teeth = 10;
       g.fillStyle(bone);
       for (let k = 0; k < teeth; k++) {
         const a = (k / teeth) * Math.PI * 2;
-        const cx = 13 + Math.cos(a) * 12, cy = hy + Math.sin(a) * 12;
-        const ixp = 13 + Math.cos(a) * 6, iyp = hy + Math.sin(a) * 6;
+        const cx = 15 + Math.cos(a) * 12, cy = hy + Math.sin(a) * 12;
+        const ixp = 15 + Math.cos(a) * 6, iyp = hy + Math.sin(a) * 6;
         const px = Math.cos(a + 0.25) * 2, py = Math.sin(a + 0.25) * 2;
         g.fillTriangle(X(cx-px),cy-py,X(cx+px),cy+py,X(ixp),iyp);
       }
       // occhietti semplici sui lati della testa
-      g.fillStyle(0x180800); g.fillCircle(X(24),hy-9,3.4); g.fillCircle(X(26),hy+8,3);
-      g.fillStyle(eye); g.fillCircle(X(24),hy-9,1.8); g.fillCircle(X(26),hy+8,1.6);
-      g.fillStyle(hot); g.fillCircle(X(23),hy-10,0.8);
+      g.fillStyle(0x180800); g.fillCircle(X(26),hy-9,3.4); g.fillCircle(X(28),hy+8,3);
+      g.fillStyle(eye); g.fillCircle(X(26),hy-9,1.8); g.fillCircle(X(28),hy+8,1.6);
+      g.fillStyle(hot); g.fillCircle(X(25),hy-10,0.8);
       // bava che cola
-      g.fillStyle(slime,0.6); g.fillEllipse(X(11),hy+13,2,4);
+      g.fillStyle(slime,0.6); g.fillEllipse(X(13),hy+13,2,4);
     }
     g.generateTexture('boss_giant_worm',288,44); AF('boss_giant_worm',96,44,3); g.destroy();
   }

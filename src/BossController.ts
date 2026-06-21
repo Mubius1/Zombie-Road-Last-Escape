@@ -104,11 +104,12 @@ export default class BossController {
     boss.play(`walk_${texKey}`);
     boss.setData('bossType', bossType);
     boss.setData('hp', this.maxHp);
-    const t1init = bossType === 'armored_colossus' ? 3000
-                 : bossType === 'giant_worm'       ? 4000
-                 : bossType === 'radioactive_beast' ? 2500
-                 : 8000;
-    boss.setData('timer1', t1init);
+    // PRIMO attacco rapido e leggibile. Col timer iniziale al valore pieno dell'intervallo il boss
+    // restava passivo per un ciclo intero all'apparizione (mega_mutant: ~8s) mentre avanzava — e
+    // durante il duello gli spawn ordinari sono sospesi (GameScene.updateZombieSpawning/Giant), quindi
+    // la strada era vuota → sembrava che "i boss non attaccassero". Diamo il primo colpo ~1.2s dopo lo
+    // spawn (coincide con la fine del banner "BOSS"); la cadenza a regime resta nei reset per-tipo di update().
+    boss.setData('timer1', 1200);
     boss.setData('lastVehicleHit', 0);
     (boss.body as Phaser.Physics.Arcade.Body).setSize(cfg.bodyW, cfg.bodyH);
     this.sprite = boss;
