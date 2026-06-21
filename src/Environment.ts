@@ -358,8 +358,6 @@ export default class Environment {
     this.near.tilePositionX += sx * 0.55;
     asphaltParams.scroll = this.asphalt.tilePositionX; // alimenta lo shader di superficie
 
-
-
     for (let i = this.decals.length - 1; i >= 0; i--) {
       const d = this.decals[i];
       if (!d.active) { this.decals.splice(i, 1); continue; }

@@ -6,9 +6,10 @@ import Phaser from 'phaser';
  * possa contenere e — soprattutto — **scorre col manto** (uniform `uScroll` = tilePositionX),
  * così la ripetizione del tile non si nota. Una chiazza fredda di "umido" rompe il piatto.
  *
- * Object-pipeline (applicata via `tilesprite.setPostPipeline`): gli uniform si impostano in
- * `onPreRender(controller, shader)` passando `shader` — pattern verificato sulle FX integrate
- * di Phaser (VignetteFXPipeline). Blast radius limitato alla strada. GLSL ES 1.00 inline.
+ * Object-pipeline (applicata via `tilesprite.setPostPipeline`): `onPreRender()` viene
+ * invocata ogni frame dall'evento PRE_RENDER del renderer (senza argomenti, come per le
+ * pipeline di camera) e imposta gli uniform sul currentShader. Blast radius limitato alla
+ * strada. GLSL ES 1.00 inline, `highp` per non perdere precisione su `uScroll` (cresce a lungo).
  */
 
 /** Parametri vivi (un solo asfalto a schermo → singleton ok). `scroll` = asphalt.tilePositionX. */
@@ -16,7 +17,7 @@ export const asphaltParams = { intensity: 1, scroll: 0 };
 
 const frag = `
 #define SHADER_NAME ASPHALT_FS
-precision mediump float;
+precision highp float;
 
 uniform sampler2D uMainSampler;
 uniform float uScroll;
@@ -76,9 +77,10 @@ export default class AsphaltPipeline extends Phaser.Renderer.WebGL.Pipelines.Pos
     } as Phaser.Types.Renderer.WebGL.WebGLPipelineConfig);
   }
 
-  // Object-pipeline: uniform impostati con l'argomento `shader` (pattern Phaser FX).
-  onPreRender(_controller?: unknown, shader?: Phaser.Renderer.WebGL.WebGLShader): void {
-    this.set1f('uScroll', asphaltParams.scroll, shader);
-    this.set1f('uIntensity', asphaltParams.intensity, shader);
+  // onPreRender() è chiamata ogni frame (evento PRE_RENDER, nessun argomento): gli uniform
+  // vanno sul currentShader, come per la pipeline di camera.
+  onPreRender(): void {
+    this.set1f('uScroll', asphaltParams.scroll);
+    this.set1f('uIntensity', asphaltParams.intensity);
   }
 }

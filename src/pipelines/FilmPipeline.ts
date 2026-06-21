@@ -74,7 +74,6 @@ const frag = `
 precision mediump float;
 
 uniform sampler2D uMainSampler;
-uniform vec2  uResolution;
 uniform float uTime;
 uniform float uIntensity;
 uniform float uVignette;
@@ -171,7 +170,6 @@ export default class FilmPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFX
     const p = filmParams;
     p.shock *= 0.88; // lo shock di impatto decade da solo
     this.set1f('uTime', this.elapsed);
-    this.set2f('uResolution', this.renderer.width, this.renderer.height);
     this.set1f('uIntensity', p.intensity);
     this.set1f('uVignette', this.vignette);
     this.set1f('uContrast', p.contrast);

@@ -349,7 +349,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // Post-processing filmico via shader (WebGL); su Canvas ripiega sull'overlay di Juice.
     this.grain = Settings.screenFx ? enterScreen(this, 1) : null;
     // Ombre di contatto a terra: radicano le entità (look 2.5D), ridisegnate per frame.
-    this.shadows = new Shadows(this, this.designW, H);
+    // Gated da screenFx (master "visivi avanzati"): con FX off niente RT a schermo per frame.
+    if (Settings.screenFx) this.shadows = new Shadows(this, this.designW, H);
     // Cinetica: azzera gli effetti di velocità quando si lascia la scena (menu puliti).
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => resetKinetics());
     Juice.fadeIn(this);
@@ -362,6 +363,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       // guard lo stesso tasto farebbe partire ANCHE scene.restart(), che riesegue create()
       // (nuovo SoundManager + startEngine) e rianima la GameScene dietro al negozio.
       if (!this.alive && Phaser.Input.Keyboard.JustDown(this.spaceKey)) Juice.fadeAndRun(this, () => this.scene.restart());
+      rampSpeed(0);                     // niente streak di velocità congelato sulle schermate di esito
       return;
     }
     if (this.frozen) return;            // hit-stop: tutto fermo, grana di pellicola inclusa (REG3)
@@ -374,6 +376,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // triggerMissionComplete() tagliando la schermata "BOSS SCONFITTO"; (REG2) gli zombi residui non si
     // muovono né si agganciano più sopra l'overlay. La fine missione resta gestita dal delayedCall di kill().
     if (this.boss.defeated) {
+      rampSpeed(0);                     // lo streak di velocità non resta acceso sotto "BOSS SCONFITTO"
       this.crosshair.setVisible(false); // niente mirino sopra l'overlay "BOSS SCONFITTO"
       this.updateStripes(dt);
       this.environment?.update(dt, this.vehicle.x, this.vehicle.y);
