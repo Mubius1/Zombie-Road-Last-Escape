@@ -68,12 +68,9 @@ export function buildVehicleTexture(scene: Phaser.Scene, vehicleKey: string) {
     g.fillStyle(0xcc1111); g.fillRoundedRect(8,10,4,5,1); g.fillRoundedRect(8,29,4,5,1);
     g.fillStyle(0xff4444); g.fillRect(9,11,2,3); g.fillRect(9,30,2,3);
     g.fillStyle(lighter); g.fillRoundedRect(89,16,4,12,2);
+    // Mozzo torretta (la canna è l'overlay rotante 'aim_turret', vedi GameScene.buildAim).
     g.fillStyle(metalD); g.fillCircle(58,22,9); g.fillStyle(metal); g.fillCircle(58,22,7);
     g.fillStyle(metalL); g.fillCircle(56,20,2.5); g.fillStyle(metalD); g.fillCircle(58,22,2);
-    g.fillStyle(metalD); g.fillRect(58,18,42,8); g.fillStyle(metal); g.fillRect(58,19,42,6);
-    g.fillStyle(metalL); g.fillRect(58,20,38,2);
-    g.fillStyle(metalD); g.fillRect(90,17,10,10);
-    g.fillStyle(0x000000); g.fillRect(91,19,8,2); g.fillRect(91,23,8,2);
     g.fillStyle(0xffffff,0.10); g.fillRoundedRect(16,7,58,3,2);
 
   } else if (vehicleKey === 'pickup') {
@@ -114,12 +111,9 @@ export function buildVehicleTexture(scene: Phaser.Scene, vehicleKey: string) {
     g.fillStyle(0xff4444); g.fillRect(8,11,2,3); g.fillRect(8,30,2,3);
     g.fillStyle(lighter); g.fillRoundedRect(92,15,4,14,2);
     // mitragliatrice montata sul pianale
+    // Mozzo torretta sul pianale (canna = overlay rotante 'aim_turret').
     g.fillStyle(metalD); g.fillCircle(28,22,8); g.fillStyle(metal); g.fillCircle(28,22,6);
     g.fillStyle(metalL); g.fillCircle(26,20,2); g.fillStyle(metalD); g.fillCircle(28,22,2);
-    g.fillStyle(metalD); g.fillRect(28,19,22,6); g.fillStyle(metal); g.fillRect(28,20,22,4);
-    g.fillStyle(metalL); g.fillRect(29,21,18,2);
-    g.fillStyle(metalD); g.fillRect(48,18,4,8);
-    g.fillStyle(0x000000); g.fillRect(49,20,2,2); g.fillRect(49,24,2,2);
     g.fillStyle(0xffffff,0.10); g.fillRoundedRect(53,6,38,3,2);
 
   } else if (vehicleKey === 'armored_van') {
@@ -154,12 +148,9 @@ export function buildVehicleTexture(scene: Phaser.Scene, vehicleKey: string) {
     // torretta blindata (con scatola protettiva)
     g.fillStyle(darker); g.fillRect(36,8,28,28);
     g.fillStyle(base);   g.fillRect(37,9,26,26);
+    // Mozzo torretta blindata (canna = overlay rotante 'aim_turret').
     g.fillStyle(metalD); g.fillCircle(50,22,11); g.fillStyle(metal); g.fillCircle(50,22,9);
     g.fillStyle(metalL); g.fillCircle(48,20,3); g.fillStyle(metalD); g.fillCircle(50,22,2);
-    g.fillStyle(metalD); g.fillRect(50,17,46,10); g.fillStyle(metal); g.fillRect(50,18,46,8);
-    g.fillStyle(metalL); g.fillRect(50,19,42,3);
-    g.fillStyle(metalD); g.fillRect(90,16,7,12); g.fillRect(94,15,4,14);
-    g.fillStyle(0x000000); g.fillRect(95,18,2,2); g.fillRect(95,23,2,2);
     g.fillStyle(0xffffff,0.10); g.fillRect(9,5,78,3);
 
   } else if (vehicleKey === 'military_suv') {
@@ -196,12 +187,9 @@ export function buildVehicleTexture(scene: Phaser.Scene, vehicleKey: string) {
     g.fillStyle(metalD); g.fillRect(18,3,2,5); g.fillStyle(metalL); g.fillRect(19,2,1,3);
     g.fillStyle(metalD); g.fillRect(6,11,3,22);
     // torretta
+    // Mozzo torretta (canna = overlay rotante 'aim_turret').
     g.fillStyle(metalD); g.fillCircle(47,22,11); g.fillStyle(metal); g.fillCircle(47,22,9);
     g.fillStyle(metalL); g.fillCircle(45,20,3); g.fillStyle(metalD); g.fillCircle(47,22,2);
-    g.fillStyle(metalD); g.fillRect(47,17,49,10); g.fillStyle(metal); g.fillRect(47,18,49,8);
-    g.fillStyle(metalL); g.fillRect(47,19,44,3);
-    g.fillStyle(metalD); g.fillRect(89,16,8,12); g.fillRect(93,15,5,14);
-    g.fillStyle(0x000000); g.fillRect(94,18,3,2); g.fillRect(94,23,3,2);
     g.fillStyle(0xffffff,0.10); g.fillRoundedRect(15,4,68,3,2);
 
   } else if (vehicleKey === 'armored_truck') {
@@ -235,12 +223,9 @@ export function buildVehicleTexture(scene: Phaser.Scene, vehicleKey: string) {
     // torretta corazzata con scatola protettiva visibile
     g.fillStyle(darker); g.fillRect(22,7,30,30);
     g.fillStyle(base);   g.fillRect(23,8,28,28);
+    // Mozzo torretta corazzata (canna = overlay rotante 'aim_turret').
     g.fillStyle(metalD); g.fillCircle(37,22,11); g.fillStyle(metal); g.fillCircle(37,22,9);
     g.fillStyle(metalL); g.fillCircle(35,20,3); g.fillStyle(metalD); g.fillCircle(37,22,2);
-    g.fillStyle(metalD); g.fillRect(37,16,56,12); g.fillStyle(metal); g.fillRect(37,17,56,10);
-    g.fillStyle(metalL); g.fillRect(37,18,52,4);
-    g.fillStyle(metalD); g.fillRect(87,15,10,14); g.fillRect(92,13,6,18);
-    g.fillStyle(0x000000); g.fillRect(93,17,4,2); g.fillRect(93,24,4,2);
     g.fillStyle(0xffffff,0.08); g.fillRect(8,3,80,3);
 
   } else if (vehicleKey === 'heavy_military') {
@@ -280,16 +265,9 @@ export function buildVehicleTexture(scene: Phaser.Scene, vehicleKey: string) {
     // DOPPIO CANNONE
     g.fillStyle(darker); g.fillRect(20,10,26,24);
     g.fillStyle(base);   g.fillRect(21,11,24,22);
+    // Mozzo torretta (la doppia canna è ora l'overlay rotante 'aim_turret' a canna singola).
     g.fillStyle(metalD); g.fillCircle(33,22,11); g.fillStyle(metal); g.fillCircle(33,22,9);
     g.fillStyle(metalL); g.fillCircle(31,20,3.5); g.fillStyle(metalD); g.fillCircle(33,22,2);
-    g.fillStyle(metalD); g.fillRect(33,13,60,7); g.fillStyle(metal); g.fillRect(33,14,60,5);
-    g.fillStyle(metalL); g.fillRect(33,14,56,2);
-    g.fillStyle(metalD); g.fillRect(87,12,10,9);
-    g.fillStyle(0x000000); g.fillRect(88,14,7,2);
-    g.fillStyle(metalD); g.fillRect(33,24,60,7); g.fillStyle(metal); g.fillRect(33,25,60,5);
-    g.fillStyle(metalL); g.fillRect(33,25,56,2);
-    g.fillStyle(metalD); g.fillRect(87,23,10,9);
-    g.fillStyle(0x000000); g.fillRect(88,25,7,2);
     g.fillStyle(0xffffff,0.07); g.fillRect(6,2,82,3);
 
   } else {
@@ -340,12 +318,7 @@ export function buildVehicleTexture(scene: Phaser.Scene, vehicleKey: string) {
     g.fillStyle(0x9955ee); g.fillCircle(45,20,3.5);
     g.fillStyle(0x8833ff,0.9); g.fillCircle(47,22,5);
     g.fillStyle(0xffffff,0.8); g.fillCircle(47,22,2);
-    g.fillStyle(0x330066); g.fillRect(47,18,46,8);
-    g.fillStyle(0x550099); g.fillRect(47,19,46,6);
-    g.fillStyle(0x8833ff,0.7); g.fillRect(49,20,40,4);
-    g.fillStyle(0x330066); g.fillRect(87,17,9,10);
-    g.fillStyle(0xffffff,0.9); g.fillRect(90,19,6,6);
-    g.fillStyle(0x8833ff,0.3); g.fillRect(49,17,38,10);
+    // Canna = overlay rotante 'aim_turret' (vedi GameScene.buildAim); qui resta solo il nucleo a energia.
     g.fillStyle(0xffffff,0.12); g.fillRoundedRect(17,6,52,3,2);
   }
 

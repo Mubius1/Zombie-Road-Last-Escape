@@ -57,6 +57,12 @@ const OIL_SLOW_MULT = 0.5;          // moltiplicatore della velocità verticale 
 const MAX_AIM = Phaser.Math.DegToRad(82); // arco frontale di mira (±82° da destra)
 const KNOCK = 220;        // impulso di rinculo dei colpi (px/s, decade) — solo game-feel
 const KNOCK_DECAY = 0.84; // decadimento del rinculo per frame
+// Offset X della torretta dal centro veicolo = dove il MOZZO è disegnato in VehicleTextures (la canna
+// non è più cotta nella texture: è l'overlay rotante 'aim_turret', che pivota da qui).
+const TURRET_DX: Record<string, number> = {
+  civilian_car: 8, pickup: -22, armored_van: 0, military_suv: -3,
+  armored_truck: -13, heavy_military: -17, experimental: -3,
+};
 
 interface EnvConfig {
   name: string;
@@ -209,6 +215,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private turret!: Phaser.GameObjects.Image;
   private crosshair!: Phaser.GameObjects.Image;
   private recoil = 0;
+  private turretDx = 8; // offset x del perno torretta per il veicolo corrente (vedi TURRET_DX)
 
   private combo = 0;
   private comboTimer = 0;
@@ -269,6 +276,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.overdrive = 0; this.overdriveActiveUntil = 0; this.overdriveGlow = null;
     this.oilUntil = 0; this.lastHazardY = ROAD_CENTER;
     this.aimAngle = 0; this.aimX = this.designW; this.aimY = ROAD_CENTER; this.recoil = 0;
+    this.turretDx = TURRET_DX[this.vehicleKey] ?? 8;
     this.boss = new BossController(this); // stato boss fresco + gruppi fisici (usati da buildColliders)
 
     const def = { engine: 100, wheels: 100, tank: 100, turret: 100, armor: 100 };
@@ -578,7 +586,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       g.generateTexture('aim_crosshair', 24, 24);
       g.destroy();
     }
-    this.turret = this.add.image(this.vehicle.x + 24, this.vehicle.y, 'aim_turret')
+    this.turret = this.add.image(this.vehicle.x + this.turretDx, this.vehicle.y, 'aim_turret')
       .setScale(1 / OVERSAMPLE).setOrigin(0.10, 0.5).setDepth(11);
     this.crosshair = this.add.image(this.aimX, this.aimY, 'aim_crosshair').setDepth(50);
   }
@@ -588,7 +596,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     const p = this.input.activePointer;
     this.cameras.main.getWorldPoint(p.x, p.y, this._aim);
     this.aimX = this._aim.x; this.aimY = this._aim.y;
-    const ox = this.vehicle.x + 24, oy = this.vehicle.y;
+    const ox = this.vehicle.x + this.turretDx, oy = this.vehicle.y;
     const raw = Math.atan2(this.aimY - oy, this.aimX - ox);
     this.aimAngle = Phaser.Math.Clamp(raw, -MAX_AIM, MAX_AIM);
     const rec = this.recoil; this.recoil = Math.max(0, this.recoil - 0.6);
@@ -1246,7 +1254,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private fireWeapon() {
     const w = WEAPONS[this.currentWeapon];
     const a = this.aimAngle;                                   // verso il mirino (combat reboot)
-    const len = 30, ox = this.vehicle.x + 24, oy = this.vehicle.y;
+    const len = 30, ox = this.vehicle.x + this.turretDx, oy = this.vehicle.y;
     const mx = ox + Math.cos(a) * len, my = oy + Math.sin(a) * len; // bocca della canna
     const FAR = 9999;                                          // gittata "infinita" (cull a bordo schermo)
     switch (this.currentWeapon) {
@@ -1304,7 +1312,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private fireAutoShot(y: number) {
     // Sopravvissuto Soldato: colpo automatico orizzontale verso la corsia del nemico più vicino.
-    this.spawnBullet(this.vehicle.x + 24, y, 0, 1, BULLET_SPEED, 0x00ffff, 9999);
+    this.spawnBullet(this.vehicle.x + this.turretDx, y, 0, 1, BULLET_SPEED, 0x00ffff, 9999);
     this.sfx?.playShot();
   }
 
