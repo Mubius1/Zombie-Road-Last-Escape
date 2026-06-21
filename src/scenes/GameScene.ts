@@ -349,6 +349,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // triggerMissionComplete() tagliando la schermata "BOSS SCONFITTO"; (REG2) gli zombi residui non si
     // muovono né si agganciano più sopra l'overlay. La fine missione resta gestita dal delayedCall di kill().
     if (this.boss.defeated) {
+      this.crosshair.setVisible(false); // niente mirino sopra l'overlay "BOSS SCONFITTO"
       this.updateStripes(dt);
       this.environment?.update(dt, this.vehicle.x, this.vehicle.y);
       this.cleanOffScreen();
@@ -621,8 +622,11 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   }
 
   private updateFiring(time: number) {
-    // Fuoco col MOUSE (tieni premuto) o SPAZIO, verso il mirino.
-    if ((this.input.activePointer.isDown || this.spaceKey.isDown) && time - this.lastFire > this.getEffectiveCooldown()) {
+    // Fuoco col MOUSE (tieni premuto) o SPAZIO, verso il mirino. Il mouse NON spara se è sopra un
+    // elemento UI cliccabile (es. selettore armi dell'HUD): altrimenti cliccare l'HUD farebbe partire un colpo.
+    const mouseFire = this.input.activePointer.isDown &&
+      this.input.hitTestPointer(this.input.activePointer).length === 0;
+    if ((mouseFire || this.spaceKey.isDown) && time - this.lastFire > this.getEffectiveCooldown()) {
       this.lastFire = time;
       this.fireWeapon();
     }
@@ -943,7 +947,10 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     clean(this.toxicClouds,-80,  this.designW+80);
     clean(this.spitProjectiles, -40, this.designW+60);
     clean(this.hazards,    -80,  this.designW+80);
-    clean(this.rockets,         -20,  this.designW+60);
+    // Razzi: ora viaggiano anche in diagonale (mira) → cull su TUTTI i lati, non solo X.
+    (this.rockets.getChildren() as Phaser.Physics.Arcade.Sprite[]).forEach(s => {
+      if (s.active && (s.x < -20 || s.x > this.designW + 60 || s.y < -40 || s.y > H + 40)) s.destroy();
+    });
     clean(this.boss.projectiles, -80,  this.designW+80);
     // Bullets: vanno in ogni direzione (mira) → cull su tutti i bordi + gittata per-proiettile (lanciafiamme corto).
     (this.bullets.getChildren() as Phaser.Physics.Arcade.Sprite[]).forEach(s => {
@@ -1023,7 +1030,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       const kx = (z.getData('kx') as number) ?? 0, ky = (z.getData('ky') as number) ?? 0;
       if (kx !== 0 || ky !== 0) {
         z.x += kx * delta / 1000; z.y += ky * delta / 1000;
-        z.setData('kx', kx * KNOCK_DECAY); z.setData('ky', ky * KNOCK_DECAY);
+        z.y = Phaser.Math.Clamp(z.y, ROAD_TOP + 12, ROAD_BOTTOM - 12); // non spingerlo fuori corsia (mira su/giù)
+        const dDecay = Math.pow(KNOCK_DECAY, delta / 16.67);           // decadimento indipendente dal frame-rate
+        z.setData('kx', kx * dDecay); z.setData('ky', ky * dDecay);
       }
     }
   }
@@ -1651,6 +1660,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.sfx?.stopEngine();
     this.zombies.setVelocityX(0); this.zombies.setVelocityY(0); // anche Y per il Caricatore in carica (A2)
     this.fuelCans.setVelocityX(0);
+    this.bullets.setVelocityX(0); this.bullets.setVelocityY(0);
+    this.crosshair?.setVisible(false); this.turret?.setVisible(false); // niente mirino sopra l'overlay di fine missione
     this.spitProjectiles.setVelocityX(0); this.spitProjectiles.setVelocityY(0);
     this.hazards.setVelocityX(0);
     this.clearAttachedZombies();
@@ -1708,9 +1719,10 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.sfx?.playGameOver();
     this.sfx?.stopEngine();
     this.vehicle.setTint(0xff2200);
+    this.crosshair?.setVisible(false); this.turret?.setVisible(false); // niente mirino sopra "GAME OVER"
     this.cameras.main.shake(500, 0.018);
     this.zombies.setVelocityX(0); this.zombies.setVelocityY(0); // anche Y: il Caricatore in carica ha velocityY persistente (A2)
-    this.bullets.setVelocityX(0);
+    this.bullets.setVelocityX(0); this.bullets.setVelocityY(0); // anche Y: i colpi mirati hanno velocità diagonale
     this.fuelCans.setVelocityX(0);
     this.boss.projectiles.setVelocityX(0); // niente proiettili boss sospesi sopra l'overlay (X9)
     this.boss.group.setVelocityX(0);
