@@ -333,9 +333,18 @@ Niente icone importate: usiamo **caratteri** coerenti, sempre con lo stesso sign
 
 ---
 
-### 4.6 IMPOSTAZIONI & PAUSA — `SettingsScene` · *un componente, due usi*
+### 4.6 IMPOSTAZIONI — `SettingsScene` · *hub a categorie (struttura AAA)*
 
-**Ruolo:** doppio: da **MENU** è scena a sé ("◂ INDIETRO" torna al menu); da **PARTITA** è raggiunta dal **menu di pausa** (`PauseScene`, vedi §4.7) tramite "Impostazioni", come **overlay** sopra la scena congelata ("▶ RIPRENDI" riprende il gioco). Gestisce **volume**, **effetti schermo**, **risoluzione**, **schermo intero** e **daltonismo** (persistiti in `Settings`/localStorage).
+**Ruolo:** scena unica organizzata come **hub a categorie**. Da **MENU** è scena a sé; da **PARTITA** è raggiunta dal menu di pausa (`PauseScene`, §4.7) come **overlay** sopra la scena congelata. Navigazione interna via `scene.restart({ page, nav })` — **niente fade** tra le categorie (snappy); **ESC** torna indietro di un livello (categoria → hub → riprendi/menu). Tutto persistito in `Settings`/localStorage.
+
+**Hub:** velo + scatola `540×576`; titolo **"IMPOSTAZIONI"** `34px`; tre pulsanti `320×56` (stile blu `0x14141f` / hover `0x1d1d2e` / bordo `#2a3a66` / testo `#9ab6ff`): **GRAFICA · AUDIO · GENERALE**. In basso "▶ RIPRENDI · ESC" (+ "Esci al menu") in pausa, oppure "◂ INDIETRO" dal menu.
+
+**Categorie** (titolo `34px` + footer "‹ Categorie" che torna all'hub):
+- **GRAFICA** — Risoluzione · Schermo intero · Effetti schermo (filmico) · **Bloom** · **Ombre 2.5D** · **Dettaglio asfalto**. I 3 toggle nuovi pilotano `Settings.bloom`/`shadows`/`asphaltDetail` → gating in `PostFx`/`Shadows`/`AsphaltPipeline` (applicato all'avvio della partita / ingresso scena).
+- **AUDIO** — Volume (barra 10 celle + 🔇 Muto + anteprima sonora).
+- **GENERALE** — Lingua · Daltonismo (accessibilità).
+
+**Token controlli** (invariati): toggle `130×38` ON `0x16301a` bordo verde / OFF `0x222238` bordo blu, testo ATTIVO/DISATTIVO; barra volume celle `38×30` accese `0x3acb3a`; frecce `◂ ▸` `24px` `#9ab6ff`.
 
 ### 4.7 MENU DI PAUSA — `PauseScene` · *ESC durante la partita*
 
@@ -346,14 +355,6 @@ Niente icone importate: usiamo **caratteri** coerenti, sempre con lo stesso sign
 
 **Layout:** velo `UI.bg` alpha `0.72` + scatola `400×320` (`UI.panel` alpha 0.96, bordo `UI.stroke`); sopra l'etichetta `❚❚ PAUSA · ESC per riprendere`. Nessun overlay filmico proprio (quello del gioco è già sotto). Riusa le chiavi i18n `common.settings` / `settings.resume` / `settings.exitToMenu` (nessuna stringa nuova).
 
-**Layout (modale centrato):**
-- Velo `0x080810` (alpha 0.8 in pausa, 1 da menu) + scatola `540×480` `0x0e0e1a` (alpha 0.96 in pausa) bordo `0x222244`.
-- In pausa, sopra: `❚❚ PAUSA · ESC per riprendere` `13px` bold `#9ab6ff`. Titolo **"IMPOSTAZIONI"** `34px` bold `#9ab6ff`.
-- **VOLUME AUDIO** (label `15px` bold `#ffcc44`): **barra a 10 celle** `38×30` (fondo `0x1a1a24`, bordo `0x33344a`); celle accese `0x3acb3a` (verde), spente `0x1a1a24`; etichetta `%`/"Muto" a destra `#dddddd`; **🔇 Muto** `14px` `#888899` (→ `#ff6666` quando attivo). Click su una cella imposta il volume e **suona un'anteprima**.
-- **EFFETTI SCHERMO** (label `15px` bold `#88ddff`, sub `"Vignetta · grana · scanline CRT"` `11px` `#556677`): toggle `130×38` — ON `0x16301a` bordo `0x44cc44` testo `ATTIVI #88ff88`; OFF `0x301616` bordo `0x995544` testo `DISATTIVI #ffaa88`. Il toggle fa `scene.restart` per riapplicare/rimuovere l'overlay all'istante.
-- **RISOLUZIONE** (label `15px` bold `#ffaa00`): valore/aspetto al centro con frecce `◂ ▸` (`24px` `#9ab6ff`) per ciclare i preset; in pausa è di sola lettura (si cambia dal menu).
-- **SCHERMO INTERO** (label `15px` bold `#88ddff`): toggle `130×38` ON/OFF (`ATTIVO`/`ATTIVA`); l'attivazione effettiva richiede il click (vincolo browser).
-- **DALTONISMO** (label `15px` bold `#88ddff`, sub `"Barre di stato blu/giallo (no rosso↔verde)"`): toggle `130×38` ON/OFF — quando attivo le barre HP/componenti dell'HUD usano una palette daltonico-safe (vedi `Settings.colorblind`).
 - **Indietro/Riprendi** (basso): box `240×46` `0x14141f` bordo `0x88aaff`, testo `20px` bold `#9ab6ff` (`▶ RIPRENDI · ESC` o `◂ INDIETRO`). In pausa, sotto: "Esci al menu principale" `12px` `#886677` (→ `#ffaaaa` hover).
 
 **Reazione:** hover su tutti i pulsanti (cambio fill/colore); ESC = indietro/riprendi; **anteprima sonora** al cambio volume (`playPreview` riproduce `playZombieKill` al volume scelto). Da menu: `Juice.fadeIn` + overlay filmico opzionale.

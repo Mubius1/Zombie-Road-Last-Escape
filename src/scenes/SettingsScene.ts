@@ -20,8 +20,12 @@ const VOL_STEPS = 10;
  *  · Volume audio  — barra a 10 segmenti + muto, con anteprima sonora.
  *  · Effetti schermo — overlay filmico (vignetta + grana + scanline) on/off.
  */
+type SettingsPage = 'hub' | 'graphics' | 'audio' | 'general';
+
 export default class SettingsScene extends Phaser.Scene {
   private fromKey = 'MenuScene';
+  private page: SettingsPage = 'hub';   // hub a categorie (struttura AAA)
+  private nav = false;                  // true = navigazione tra categorie → niente fade
   private grain: Phaser.GameObjects.TileSprite | null = null;
   private volCells: Phaser.GameObjects.Rectangle[] = [];
   private volLabel!: Phaser.GameObjects.Text;
@@ -32,8 +36,10 @@ export default class SettingsScene extends Phaser.Scene {
 
   constructor() { super({ key: 'SettingsScene' }); }
 
-  init(data: { from?: string }) {
+  init(data: { from?: string; page?: SettingsPage; nav?: boolean }) {
     this.fromKey = data?.from ?? 'MenuScene';
+    this.page = data?.page ?? 'hub';
+    this.nav = !!data?.nav;
   }
 
   create() {
@@ -48,27 +54,23 @@ export default class SettingsScene extends Phaser.Scene {
       fill: UI.panel, fillAlpha: inGame ? 0.96 : 1, stroke: UI.stroke, strokeWidth: 2,
     });
 
-    if (inGame) {
-      // Etichetta PAUSA leggibile (era UI.faint, troppo spenta) + scorciatoia ESC esplicita (U9).
+    // Etichetta PAUSA solo sull'hub (le pagine categoria hanno il proprio titolo).
+    if (inGame && this.page === 'hub') {
       Ui.text(this, this.designW / 2, H / 2 - 236, t('settings.paused'), {
         fontSize: '13px', fontStyle: 'bold', color: UI.blue,
       }).setOrigin(0.5);
     }
-    Ui.text(this, this.designW / 2, H / 2 - 212, t('common.settings'), {
-      fontSize: '34px', fontStyle: 'bold', color: UI.blue,
-    }).setOrigin(0.5);
 
-    this.buildVolume(H / 2 - 160);
-    this.buildScreenFx(H / 2 - 92);
-    this.buildResolution(H / 2 - 28, inGame);
-    this.buildFullscreen(H / 2 + 36);
-    this.buildColorblind(H / 2 + 100);
-    this.buildLanguage(H / 2 + 164);
-    this.buildBack(inGame);
+    switch (this.page) {
+      case 'graphics': this.buildGraphicsPage(inGame); break;
+      case 'audio':    this.buildAudioPage(); break;
+      case 'general':  this.buildGeneralPage(); break;
+      default:         this.buildHub(inGame);
+    }
 
-    // L'overlay filmico proprio serve solo a scena piena (dal menu);
-    // in pausa quello del gioco è già sotto.
-    Juice.fadeIn(this);
+    // L'overlay filmico proprio serve solo a scena piena (dal menu); in pausa quello del
+    // gioco è già sotto. Niente fade quando si naviga tra categorie (snappy).
+    if (!this.nav) Juice.fadeIn(this);
     if (!inGame && Settings.screenFx) this.grain = enterScreen(this, MENU_VIGNETTE);
 
     // L'anteprima audio è per-istanza: a ogni restart (toggle fx/risoluzione/lingua) va smontata,
@@ -149,7 +151,7 @@ export default class SettingsScene extends Phaser.Scene {
     btn.on('pointerout',  () => btn.setFillStyle(on ? 0x16301a : 0x301616));
     btn.on('pointerdown', () => {
       Settings.screenFx = !Settings.screenFx;
-      this.scene.restart({ from: this.fromKey }); // riapplica/rimuove l'overlay all'istante
+      this.scene.restart({ from: this.fromKey, page: this.page, nav: true }); // riapplica/rimuove l'overlay all'istante
     });
   }
 
@@ -191,7 +193,7 @@ export default class SettingsScene extends Phaser.Scene {
     Settings.resolution = next;
     const r = RESOLUTIONS[next];
     this.scale.setGameSize(r.w, r.h);     // cambia la risoluzione interna nativa
-    this.scene.restart({ from: this.fromKey }); // ridisegna il layout alla nuova dimensione
+    this.scene.restart({ from: this.fromKey, page: this.page, nav: true }); // ridisegna il layout alla nuova dimensione
   }
 
   // ─── Schermo intero ───────────────────────────────────────────────────────────
@@ -284,7 +286,7 @@ export default class SettingsScene extends Phaser.Scene {
     if (this.fromKey === 'GameScene') {
       (this.scene.get('GameScene') as Phaser.Scene & { refreshLanguage?: () => void }).refreshLanguage?.();
     }
-    this.scene.restart({ from: this.fromKey }); // ridisegna l'intera schermata nella nuova lingua
+    this.scene.restart({ from: this.fromKey, page: this.page, nav: true }); // ridisegna l'intera schermata nella nuova lingua
   }
 
   // ─── Indietro / Riprendi ──────────────────────────────────────────────────────
@@ -319,5 +321,94 @@ export default class SettingsScene extends Phaser.Scene {
   private exitToMenu() {
     this.scene.stop('GameScene'); // abbandona la partita in corso
     Juice.go(this, 'MenuScene');
+  }
+
+  // ─── Hub a categorie (struttura AAA) ────────────────────────────────────────────
+
+  /** Hub: titolo + tre categorie (Grafica · Audio · Generale) + Riprendi/Indietro. */
+  private buildHub(inGame: boolean) {
+    const cx = this.designW / 2;
+    Ui.text(this, cx, H / 2 - 212, t('common.settings'), {
+      fontSize: '34px', fontStyle: 'bold', color: UI.blue,
+    }).setOrigin(0.5);
+
+    const cat = { fill: 0x14141f, hover: 0x1d1d2e, border: UI.blueLine, color: UI.blue } as const;
+    Ui.button(this, cx, H / 2 - 74, 320, 56, t('settings.catGraphics'), { ...cat, onClick: () => this.goPage('graphics') });
+    Ui.button(this, cx, H / 2,      320, 56, t('settings.catAudio'),    { ...cat, onClick: () => this.goPage('audio') });
+    Ui.button(this, cx, H / 2 + 74, 320, 56, t('settings.catGeneral'),  { ...cat, onClick: () => this.goPage('general') });
+
+    this.buildBack(inGame); // Riprendi/ESC (in pausa) o Indietro (dal menu) + "Esci al menu"
+  }
+
+  /** Pagina GRAFICA: risoluzione, schermo intero, effetti filmici, bloom, ombre, asfalto. */
+  private buildGraphicsPage(inGame: boolean) {
+    this.pageHeader(t('settings.catGraphics'));
+    this.buildResolution(H / 2 - 150, inGame);
+    this.buildFullscreen(H / 2 - 88);
+    this.buildScreenFx(H / 2 - 26);
+    this.buildToggle(H / 2 + 36,  t('settings.bloom'),   t('settings.bloomDesc'),   () => Settings.bloom,         v => { Settings.bloom = v; });
+    this.buildToggle(H / 2 + 98,  t('settings.shadows'), t('settings.shadowsDesc'), () => Settings.shadows,       v => { Settings.shadows = v; });
+    this.buildToggle(H / 2 + 160, t('settings.asphalt'), t('settings.asphaltDesc'), () => Settings.asphaltDetail, v => { Settings.asphaltDetail = v; });
+    this.pageFooter();
+  }
+
+  /** Pagina AUDIO: volume + anteprima sonora. */
+  private buildAudioPage() {
+    this.pageHeader(t('settings.catAudio'));
+    this.buildVolume(H / 2 - 20);
+    this.pageFooter();
+  }
+
+  /** Pagina GENERALE: lingua + accessibilità (daltonismo). */
+  private buildGeneralPage() {
+    this.pageHeader(t('settings.catGeneral'));
+    this.buildLanguage(H / 2 - 60);
+    this.buildColorblind(H / 2 + 20);
+    this.pageFooter();
+  }
+
+  /** Titolo di categoria + ESC torna all'hub (back di un livello). */
+  private pageHeader(title: string) {
+    Ui.text(this, this.designW / 2, H / 2 - 212, title, {
+      fontSize: '34px', fontStyle: 'bold', color: UI.blue,
+    }).setOrigin(0.5);
+    this.input.keyboard?.on('keydown-ESC', () => this.goPage('hub'));
+  }
+
+  /** Pulsante "‹ Categorie" → hub (stessa posizione di INDIETRO/RIPRENDI). */
+  private pageFooter() {
+    Ui.button(this, this.designW / 2, H / 2 + 236, 240, 46, t('settings.backHub'), {
+      fill: 0x14141f, hover: 0x1d1d2e, border: UI.blueLine, color: UI.blue,
+      onClick: () => this.goPage('hub'),
+    });
+  }
+
+  /** Toggle booleano generico (opzioni Grafica): aggiornamento in-place, niente restart. */
+  private buildToggle(y: number, label: string, desc: string, get: () => boolean, set: (v: boolean) => void) {
+    const cx = this.designW / 2;
+    Ui.text(this, cx - 230, y - 12, label, { fontSize: '15px', fontStyle: 'bold', color: UI.cyan });
+    Ui.text(this, cx - 230, y + 8, desc, { fontSize: '11px', color: UI.faint });
+
+    const fillOn = 0x16301a, fillOff = 0x222238;
+    let on = get();
+    const btn = this.add.rectangle(cx + 190, y + 2, 130, 38, on ? fillOn : fillOff)
+      .setStrokeStyle(2, on ? UI.hpHigh : UI.blueLine, 0.8)
+      .setInteractive({ useHandCursor: true });
+    const lbl = Ui.text(this, cx + 190, y + 2, on ? t('settings.cbOn') : t('settings.cbOff'), {
+      fontSize: '15px', fontStyle: 'bold', color: on ? UI.greenSoft : UI.blue,
+    }).setOrigin(0.5);
+
+    btn.on('pointerover', () => btn.setFillStyle(get() ? 0x1d3d22 : 0x2c2c48));
+    btn.on('pointerout',  () => btn.setFillStyle(get() ? fillOn : fillOff));
+    btn.on('pointerdown', () => {
+      on = !get(); set(on);
+      btn.setFillStyle(on ? fillOn : fillOff).setStrokeStyle(2, on ? UI.hpHigh : UI.blueLine, 0.8);
+      lbl.setText(on ? t('settings.cbOn') : t('settings.cbOff')).setColor(on ? UI.greenSoft : UI.blue);
+    });
+  }
+
+  /** Naviga a una pagina/hub: restart della stessa scena senza fade (snappy). */
+  private goPage(page: SettingsPage) {
+    this.scene.restart({ from: this.fromKey, page, nav: true });
   }
 }

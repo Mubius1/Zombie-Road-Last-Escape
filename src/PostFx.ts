@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import Juice from './Juice';
+import Settings from './Settings';
 import FilmPipeline, { filmParams } from './pipelines/FilmPipeline';
 import AsphaltPipeline from './pipelines/AsphaltPipeline';
 
@@ -52,9 +53,11 @@ export function attachPostFx(scene: Phaser.Scene, vignette = 1): boolean {
 
   const cam = scene.cameras.main;
 
-  // Bloom PRIMA della pipeline Film: si aggiunge per primo allo stack post → viene
+  // Bloom (opzione Grafica) PRIMA della pipeline Film: aggiunto per primo allo stack post →
   // applicato per primo, così il grading di Film tona il frame già "bloomato".
-  cam.postFX.addBloom(BLOOM.color, BLOOM.offX, BLOOM.offY, BLOOM.blur, BLOOM.strength, BLOOM.steps);
+  if (Settings.bloom) {
+    cam.postFX.addBloom(BLOOM.color, BLOOM.offX, BLOOM.offY, BLOOM.blur, BLOOM.strength, BLOOM.steps);
+  }
   cam.setPostPipeline(FilmPipeline);
 
   // Ogni camera riceve la propria istanza di pipeline → impostiamo la vignetta per-camera.

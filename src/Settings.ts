@@ -30,6 +30,12 @@ export interface SettingsData {
   volume: number;
   /** Overlay filmico (vignetta + grana + scanline + aberrazione cromatica). */
   screenFx: boolean;
+  /** Bloom (bagliore additivo sugli elementi luminosi). WebGL. */
+  bloom: boolean;
+  /** Ombre di contatto a terra (radicamento 2.5D). WebGL. */
+  shadows: boolean;
+  /** Dettaglio di superficie FBM sull'asfalto (shader). WebGL. */
+  asphaltDetail: boolean;
   /** Indice della risoluzione scelta nei preset di Config.RESOLUTIONS (0 = baseline 800×600). */
   resolution: number;
   /** Preferenza schermo intero (l'attivazione effettiva richiede un click — vincolo browser). */
@@ -41,7 +47,7 @@ export interface SettingsData {
 }
 
 const STORAGE_KEY = 'zombieRoad.settings.v1';
-const DEFAULTS: SettingsData = { volume: 1, screenFx: true, resolution: 0, fullscreen: false, colorblind: false, language: 'it' };
+const DEFAULTS: SettingsData = { volume: 1, screenFx: true, bloom: true, shadows: true, asphaltDetail: true, resolution: 0, fullscreen: false, colorblind: false, language: 'it' };
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
@@ -54,6 +60,9 @@ function loadSettings(): SettingsData {
     return {
       volume:     typeof p.volume === 'number'     ? clamp01(p.volume)         : DEFAULTS.volume,
       screenFx:   typeof p.screenFx === 'boolean'  ? p.screenFx                : DEFAULTS.screenFx,
+      bloom:        typeof p.bloom === 'boolean'         ? p.bloom         : DEFAULTS.bloom,
+      shadows:      typeof p.shadows === 'boolean'       ? p.shadows       : DEFAULTS.shadows,
+      asphaltDetail: typeof p.asphaltDetail === 'boolean' ? p.asphaltDetail : DEFAULTS.asphaltDetail,
       resolution: typeof p.resolution === 'number' ? Math.max(0, p.resolution | 0) : DEFAULTS.resolution,
       fullscreen: typeof p.fullscreen === 'boolean' ? p.fullscreen             : DEFAULTS.fullscreen,
       colorblind: typeof p.colorblind === 'boolean' ? p.colorblind             : DEFAULTS.colorblind,
@@ -72,6 +81,15 @@ export default class Settings {
 
   static get screenFx(): boolean { return this.data.screenFx; }
   static set screenFx(v: boolean) { this.data.screenFx = v; this.save(); }
+
+  static get bloom(): boolean { return this.data.bloom; }
+  static set bloom(v: boolean) { this.data.bloom = v; this.save(); }
+
+  static get shadows(): boolean { return this.data.shadows; }
+  static set shadows(v: boolean) { this.data.shadows = v; this.save(); }
+
+  static get asphaltDetail(): boolean { return this.data.asphaltDetail; }
+  static set asphaltDetail(v: boolean) { this.data.asphaltDetail = v; this.save(); }
 
   static get resolution(): number { return this.data.resolution; }
   static set resolution(v: number) { this.data.resolution = Math.max(0, v | 0); this.save(); }

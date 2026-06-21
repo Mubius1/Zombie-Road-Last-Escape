@@ -42,6 +42,17 @@ const it: Record<string, string> = {
   'settings.resume': '▶  RIPRENDI  ·  ESC',
   'settings.back': '◂  INDIETRO',
   'settings.exitToMenu': 'Esci al menu principale',
+  // Hub a categorie (struttura AAA)
+  'settings.catGraphics': 'GRAFICA',
+  'settings.catAudio': 'AUDIO',
+  'settings.catGeneral': 'GENERALE',
+  'settings.backHub': '‹  Categorie',
+  'settings.bloom': 'BLOOM',
+  'settings.bloomDesc': 'Bagliore sugli elementi luminosi',
+  'settings.shadows': 'OMBRE 2.5D',
+  'settings.shadowsDesc': 'Ombre di contatto a terra',
+  'settings.asphalt': 'DETTAGLIO ASFALTO',
+  'settings.asphaltDesc': 'Grana e umido sulla strada',
 
   // ── Negozio / Garage ─────────────────────────────────────────────────────────────
   'shop.title': 'GARAGE  —  Fine Missione {n}',

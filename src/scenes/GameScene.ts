@@ -349,8 +349,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // Post-processing filmico via shader (WebGL); su Canvas ripiega sull'overlay di Juice.
     this.grain = Settings.screenFx ? enterScreen(this, 1) : null;
     // Ombre di contatto a terra: radicano le entità (look 2.5D), ridisegnate per frame.
-    // Gated da screenFx (master "visivi avanzati"): con FX off niente RT a schermo per frame.
-    if (Settings.screenFx) this.shadows = new Shadows(this, this.designW, H);
+    // Opzione Grafica dedicata: con ombre off niente RenderTexture a schermo per frame.
+    if (Settings.shadows) this.shadows = new Shadows(this, this.designW, H);
     // Cinetica: azzera gli effetti di velocità quando si lascia la scena (menu puliti).
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => resetKinetics());
     Juice.fadeIn(this);

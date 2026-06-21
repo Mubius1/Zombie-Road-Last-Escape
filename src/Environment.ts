@@ -333,8 +333,8 @@ export default class Environment {
 
     // §4 asfalto tileato (copre il rettangolo piatto + le linee di bordo)
     this.asphalt = this.scene.add.tileSprite(W / 2, roadCenter, W, roadBottom - roadTop, `env_asphalt_${this.idx}`).setDepth(0.5);
-    // Dettaglio FBM in shader sulla strada (WebGL + screenFx): scorre col manto, rompe la ripetizione.
-    if (Settings.screenFx && this.scene.game.renderer.type === Phaser.WEBGL) {
+    // Dettaglio FBM in shader sulla strada (opzione Grafica + WebGL): scorre col manto.
+    if (Settings.asphaltDetail && this.scene.game.renderer.type === Phaser.WEBGL) {
       this.asphalt.setPostPipeline(AsphaltPipeline);
     }
 
