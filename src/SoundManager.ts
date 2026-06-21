@@ -63,16 +63,49 @@ export default class SoundManager {
     src.start(); src.stop(this.ctx.currentTime + dur);
   }
 
+  /** Colpo NON letale su un nemico: thwack secco e corto ("l'ho preso"). Pitch variato per non affaticare a fuoco rapido. */
+  playHit() {
+    const t0 = this.ctx.currentTime;
+    const f = 600 + Math.random() * 260;
+    // corpo: rumore bandpass medio (carne colpita)
+    const src = this.noise(0.05);
+    const flt = this.ctx.createBiquadFilter(); flt.type = 'bandpass'; flt.frequency.value = f; flt.Q.value = 0.8;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.30, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.06);
+    src.connect(flt); flt.connect(g); g.connect(this.master);
+    src.start(t0); src.stop(t0 + 0.07);
+    // click d'impatto del proiettile
+    const osc = this.ctx.createOscillator(); osc.type = 'triangle';
+    osc.frequency.setValueAtTime(f * 0.7, t0);
+    osc.frequency.exponentialRampToValueAtTime(150, t0 + 0.04);
+    const g2 = this.ctx.createGain();
+    g2.gain.setValueAtTime(0.16, t0);
+    g2.gain.exponentialRampToValueAtTime(0.001, t0 + 0.05);
+    osc.connect(g2); g2.connect(this.master);
+    osc.start(t0); osc.stop(t0 + 0.06);
+  }
+
+  /** Nemico ABBATTUTO: gesto discendente ("muore") + splat di rumore (la carne che cede) → più "ciccia". */
   playZombieKill() {
+    const t0 = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(160, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.18);
+    osc.frequency.setValueAtTime(180, t0);
+    osc.frequency.exponentialRampToValueAtTime(40, t0 + 0.16);
     const g = this.ctx.createGain();
-    g.gain.setValueAtTime(0.32, this.ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.18);
+    g.gain.setValueAtTime(0.30, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18);
     osc.connect(g); g.connect(this.master);
-    osc.start(); osc.stop(this.ctx.currentTime + 0.2);
+    osc.start(t0); osc.stop(t0 + 0.2);
+    // splat: rumore lowpass breve (impatto carnoso) sotto il tono
+    const src = this.noise(0.12);
+    const flt = this.ctx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 600;
+    const ng = this.ctx.createGain();
+    ng.gain.setValueAtTime(0.26, t0);
+    ng.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12);
+    src.connect(flt); flt.connect(ng); ng.connect(this.master);
+    src.start(t0); src.stop(t0 + 0.14);
   }
 
   playZombieAttach() {

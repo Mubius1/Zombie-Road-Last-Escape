@@ -213,6 +213,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private crosshair!: Phaser.GameObjects.Image;
   private recoil = 0;
   private turretDx = 8; // offset x del perno torretta per il veicolo corrente (vedi TURRET_DX)
+  private lastHitSfxAt = 0; // throttle del suono di colpo (evita cacofonia a fuoco rapido)
 
   private combo = 0;
   private comboTimer = 0;
@@ -873,9 +874,11 @@ export default class GameScene extends Phaser.Scene implements BossHost {
           if (az.hp <= 0) {
             this.addKillScore(5);
             this.spawnHitParticles(az.sprite.x, az.sprite.y);
+            this.sfx?.playZombieKill();
             az.sprite.destroy();
             this.attachedZombies.splice(i,1);
           } else {
+            this.playHitSfx();
             az.sprite.setTint(0xffffff);
             this.time.delayedCall(80, () => { if (az.sprite?.active) az.sprite.setTint(0xff8800); });
           }
@@ -1327,6 +1330,13 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   // ─── Collision handlers ──────────────────────────────────────────────────────
 
+  /** Suono di colpo con throttle: evita cacofonia a fuoco rapido / più colpi nello stesso frame. */
+  private playHitSfx() {
+    if (this.time.now - this.lastHitSfxAt < 45) return;
+    this.lastHitSfxAt = this.time.now;
+    this.sfx?.playHit();
+  }
+
   private onBulletHitZombie(bullet: Phaser.Physics.Arcade.Sprite, zombie: Phaser.Physics.Arcade.Sprite) {
     if (!bullet.active || !zombie.active) return;
     const dmg = (bullet.getData('damage') as number) ?? 1;
@@ -1349,6 +1359,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       if (type === 'charger') this.tweens.killTweensOf(zombie); // niente tween di telegrafo orfano (A2)
       zombie.destroy();
     } else {
+      this.playHitSfx(); // feedback "l'ho preso" sul nemico che sopravvive
       zombie.setData('hp', hp);
       zombie.setTint(0xffffff);
       this.time.delayedCall(80, () => {
