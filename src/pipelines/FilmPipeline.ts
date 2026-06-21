@@ -47,6 +47,10 @@ export interface FilmParams {
   grain: number;
   /** Scanline CRT (oscuramento righe alterne; molto tenue). */
   scanline: number;
+  /** Velocità 0..1: streak radiale SOLO ai bordi (centro nitido → leggibilità salva). */
+  speed: number;
+  /** Shock transitorio di aberrazione su impatti grossi; decade da solo ogni frame. */
+  shock: number;
 }
 
 export const filmParams: FilmParams = {
@@ -59,6 +63,8 @@ export const filmParams: FilmParams = {
   aberration: 0.006,
   grain: 0.045,
   scanline: 0.035,
+  speed: 0,
+  shock: 0,
 };
 
 // GLSL ES 1.00 (WebGL1). uMainSampler + uResolution sono forniti da Phaser; gli altri li
@@ -80,6 +86,7 @@ uniform float uExposure;
 uniform float uAberration;
 uniform float uGrain;
 uniform float uScanline;
+uniform float uSpeed;
 
 varying vec2 outTexCoord;
 
@@ -107,6 +114,17 @@ void main () {
     texture2D(uMainSampler, uv).g,
     texture2D(uMainSampler, uv - off).b
   );
+
+  // ── Streak radiale di velocità: SOLO ai bordi (centro nitido → leggibilità) ──
+  if (uSpeed > 0.001) {
+    float edge = smoothstep(0.22, 0.55, length(ctr));
+    float amt = uSpeed * edge * 0.018;
+    vec3 streak = texture2D(uMainSampler, uv - ctr * amt).rgb
+                + texture2D(uMainSampler, uv - ctr * amt * 2.0).rgb
+                + texture2D(uMainSampler, uv - ctr * amt * 3.0).rgb
+                + texture2D(uMainSampler, uv - ctr * amt * 4.0).rgb;
+    src = mix(src, streak * 0.25, uSpeed * edge);
+  }
 
   // ── Grading ──
   vec3 c = src;
@@ -151,6 +169,7 @@ export default class FilmPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFX
   onPreRender(): void {
     this.elapsed += this.game.loop.delta / 1000;
     const p = filmParams;
+    p.shock *= 0.88; // lo shock di impatto decade da solo
     this.set1f('uTime', this.elapsed);
     this.set2f('uResolution', this.renderer.width, this.renderer.height);
     this.set1f('uIntensity', p.intensity);
@@ -160,8 +179,9 @@ export default class FilmPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFX
     this.set1f('uWarmth', p.warmth);
     this.set1f('uTone', p.tone);
     this.set1f('uExposure', p.exposure);
-    this.set1f('uAberration', p.aberration);
+    this.set1f('uAberration', p.aberration + p.shock); // base + kick transitorio
     this.set1f('uGrain', p.grain);
     this.set1f('uScanline', p.scanline);
+    this.set1f('uSpeed', p.speed);
   }
 }

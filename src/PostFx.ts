@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import Juice from './Juice';
-import FilmPipeline from './pipelines/FilmPipeline';
+import FilmPipeline, { filmParams } from './pipelines/FilmPipeline';
 import AsphaltPipeline from './pipelines/AsphaltPipeline';
 
 /**
@@ -75,4 +75,27 @@ export function attachPostFx(scene: Phaser.Scene, vignette = 1): boolean {
 export function enterScreen(scene: Phaser.Scene, vignette = 1): Phaser.GameObjects.TileSprite | null {
   if (attachPostFx(scene, vignette)) return null;
   return Juice.addOverlay(scene, 18, vignette);
+}
+
+/**
+ * Kick transitorio di aberrazione cromatica su impatti grossi (esplosioni, scatto).
+ * Imposta lo "shock" che il FilmPipeline fa decadere da solo ogni frame. No-op visivo
+ * se lo shader non è attivo (Canvas / screenFx off). Cinetica readability-safe.
+ */
+export function pulse(amount = 0.018): void {
+  filmParams.shock = Math.max(filmParams.shock, amount);
+}
+
+/**
+ * Avvicina dolcemente la "velocità" (0..1) verso `target`: guida lo streak radiale ai
+ * bordi (scatto/overdrive). Da chiamare ogni frame; lo smoothing evita scatti netti.
+ */
+export function rampSpeed(target: number, k = 0.18): void {
+  filmParams.speed += (Phaser.Math.Clamp(target, 0, 1) - filmParams.speed) * k;
+}
+
+/** Azzera gli effetti cinetici (alla chiusura della scena di gioco → menu puliti). */
+export function resetKinetics(): void {
+  filmParams.speed = 0;
+  filmParams.shock = 0;
 }

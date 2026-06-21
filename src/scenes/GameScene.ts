@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { VEHICLES, Upgrades, WeaponType, WEAPONS, WEAPON_KEYS } from '../GameData';
 import SoundManager from '../SoundManager';
 import Juice from '../Juice';
-import { enterScreen } from '../PostFx';
+import { enterScreen, pulse, rampSpeed, resetKinetics } from '../PostFx';
 import Shadows from '../Shadows';
 import Environment from '../Environment';
 import Settings from '../Settings';
@@ -350,6 +350,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.grain = Settings.screenFx ? enterScreen(this, 1) : null;
     // Ombre di contatto a terra: radicano le entità (look 2.5D), ridisegnate per frame.
     this.shadows = new Shadows(this, this.designW, H);
+    // Cinetica: azzera gli effetti di velocità quando si lascia la scena (menu puliti).
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => resetKinetics());
     Juice.fadeIn(this);
   }
 
@@ -387,6 +389,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.updateWeaponSwitch();
     this.updateDash(time);
     this.updateOverdrive(time);
+    // Cinetica: streak radiale ai bordi durante scatto (pieno) e overdrive (parziale).
+    rampSpeed(time < this.dashGraceUntil ? 1 : this.overdriveOn() ? 0.5 : 0);
     this.updateCombo(delta);
     this.updateFuel(dt);
     this.updateDistance(dt);
@@ -690,6 +694,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private performDash(time: number) {
     this.dashReadyAt    = time + DASH_COOLDOWN;
     this.dashGraceUntil = time + DASH_GRACE;
+    pulse(0.016); // kick cinetico allo scatto
 
     // Stacca e sbalza via tutti gli zombi aggrappati (solo visivo: nessun punteggio)
     const thrown = this.attachedZombies.length;
@@ -734,6 +739,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private activateOverdrive(time: number) {
     this.overdriveActiveUntil = time + OVERDRIVE_DURATION;
+    pulse(0.022); // kick cinetico all'attivazione del Sovraccarico
 
     // Onda d'urto: sbalza via gli aggrappati (come lo scatto) e danneggia i nemici davanti al veicolo.
     for (const az of this.attachedZombies) {
