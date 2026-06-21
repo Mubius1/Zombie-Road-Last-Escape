@@ -82,7 +82,7 @@ const de: Record<string, string> = {
   'hud.comboMult': 'COMBO {n}  ×{m}',
   'hud.attached': '[{n} anhaftend]',
   'hud.godMode': '◆ GOD MODE  (G aus · B Boss · N Ende · H rep.)',
-  'hud.controls': '↑↓/WS Bewegen · LEER Schießen · 1-5/Q Waffe · SHIFT Dash · F Overdrive',
+  'hud.controls': '↑↓/WS Bewegen · MAUS zielen · KLICK feuern · 1-5/Q Waffe · SHIFT Dash · F Overdrive',
   'hud.debugHint': '0=Debug',
 
   'comp.engine': 'MOTOR',

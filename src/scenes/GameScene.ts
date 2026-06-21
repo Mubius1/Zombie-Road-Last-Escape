@@ -53,6 +53,10 @@ const SPITTER_PROJECTILE_SPEED = 260; // velocità del proiettile tossico (lento
 const HAZARD_SPAWN_INTERVAL = 4500; // ms tra un ostacolo e l'altro
 const OIL_SLOW_DURATION = 1500;     // ms di controllo verticale ridotto dopo l'olio
 const OIL_SLOW_MULT = 0.5;          // moltiplicatore della velocità verticale durante l'olio
+// ── Mira col mouse (combat reboot): la torretta punta il puntatore; i colpi danno knockback. ──
+const MAX_AIM = Phaser.Math.DegToRad(82); // arco frontale di mira (±82° da destra)
+const KNOCK = 220;        // impulso di rinculo dei colpi (px/s, decade) — solo game-feel
+const KNOCK_DECAY = 0.84; // decadimento del rinculo per frame
 
 interface EnvConfig {
   name: string;
@@ -197,6 +201,15 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private fKey!: Phaser.Input.Keyboard.Key; // Sovraccarico (Overdrive, A3)
   private numberKeys: Phaser.Input.Keyboard.Key[] = [];
 
+  // Mira col mouse (combat reboot): torretta rotante (overlay) + mirino + rinculo.
+  private aimAngle = 0;
+  private aimX = DESIGN_W;
+  private aimY = ROAD_CENTER;
+  private readonly _aim = new Phaser.Math.Vector2();
+  private turret!: Phaser.GameObjects.Image;
+  private crosshair!: Phaser.GameObjects.Image;
+  private recoil = 0;
+
   private combo = 0;
   private comboTimer = 0;
   private dashReadyAt = 0;
@@ -255,6 +268,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.dashReadyAt = 0; this.dashGraceUntil = 0;
     this.overdrive = 0; this.overdriveActiveUntil = 0; this.overdriveGlow = null;
     this.oilUntil = 0; this.lastHazardY = ROAD_CENTER;
+    this.aimAngle = 0; this.aimX = this.designW; this.aimY = ROAD_CENTER; this.recoil = 0;
     this.boss = new BossController(this); // stato boss fresco + gruppi fisici (usati da buildColliders)
 
     const def = { engine: 100, wheels: 100, tank: 100, turret: 100, armor: 100 };
@@ -271,6 +285,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.buildTextures();
     this.buildWorld();
     this.buildVehicle();
+    this.buildAim();
     this.buildGroups();
     this.buildColliders();
     this.buildHUD(missionNum);
@@ -342,6 +357,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     }
 
     this.updateVehicle(dt);
+    this.updateAim();
     this.updateFiring(time);
     this.updateWeaponSwitch();
     this.updateDash(time);
@@ -534,6 +550,51 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   }
 
   /** Pausa la partita e apre le Impostazioni in overlay (ESC le richiude e riprende). */
+  /** Torretta rotante (overlay sopra il veicolo: ruotare il corpo cambierebbe la hitbox) + mirino. */
+  private buildAim() {
+    const OS = OVERSAMPLE;
+    if (!this.textures.exists('aim_turret')) {
+      const g = this.make.graphics({ add: false } as object) as Phaser.GameObjects.Graphics & { generateTexture(k: string, w: number, h: number): void };
+      g.setScale(OS);
+      const orig = g.generateTexture.bind(g);
+      (g as unknown as { generateTexture: (k: string, w: number, h: number) => void }).generateTexture = (k, w, h) => orig(k, w * OS, h * OS);
+      g.fillStyle(0x23232a, 1); g.fillRect(0, 1, 32, 8);
+      g.fillStyle(0x44454f, 1); g.fillRect(0, 2, 32, 6);
+      g.fillStyle(0x6a6c78, 1); g.fillRect(2, 3, 27, 2);
+      g.fillStyle(0x23232a, 1); g.fillRect(28, 0, 6, 10);   // volata
+      g.fillStyle(0x33343c, 1); g.fillCircle(3, 5, 7);       // mozzo (copre il pivot)
+      g.fillStyle(0x55576a, 1); g.fillCircle(3, 5, 5);
+      g.fillStyle(0x8899ff, 0.8); g.fillCircle(3, 5, 2);
+      g.generateTexture('aim_turret', 34, 10);
+      g.destroy();
+    }
+    if (!this.textures.exists('aim_crosshair')) {
+      const g = this.make.graphics({ add: false } as object) as Phaser.GameObjects.Graphics & { generateTexture(k: string, w: number, h: number): void };
+      g.lineStyle(2, 0x88ccff, 0.95); g.strokeCircle(12, 12, 9);
+      g.lineBetween(12, 0, 12, 6); g.lineBetween(12, 18, 12, 24);
+      g.lineBetween(0, 12, 6, 12); g.lineBetween(18, 12, 24, 12);
+      g.fillStyle(0xff5555, 1); g.fillCircle(12, 12, 1.6);
+      g.generateTexture('aim_crosshair', 24, 24);
+      g.destroy();
+    }
+    this.turret = this.add.image(this.vehicle.x + 24, this.vehicle.y, 'aim_turret')
+      .setScale(1 / OVERSAMPLE).setOrigin(0.10, 0.5).setDepth(11);
+    this.crosshair = this.add.image(this.aimX, this.aimY, 'aim_crosshair').setDepth(50);
+  }
+
+  /** Mira: puntatore → spazio design (la camera è in zoom) → angolo torretta clampato all'arco frontale. */
+  private updateAim() {
+    const p = this.input.activePointer;
+    this.cameras.main.getWorldPoint(p.x, p.y, this._aim);
+    this.aimX = this._aim.x; this.aimY = this._aim.y;
+    const ox = this.vehicle.x + 24, oy = this.vehicle.y;
+    const raw = Math.atan2(this.aimY - oy, this.aimX - ox);
+    this.aimAngle = Phaser.Math.Clamp(raw, -MAX_AIM, MAX_AIM);
+    const rec = this.recoil; this.recoil = Math.max(0, this.recoil - 0.6);
+    this.turret.setPosition(ox - Math.cos(this.aimAngle) * rec, oy - Math.sin(this.aimAngle) * rec).setRotation(this.aimAngle);
+    this.crosshair.setPosition(this.aimX, this.aimY);
+  }
+
   private openPauseSettings() {
     if (!this.alive || this.missionDone) return; // non in game over / fine missione
     if (this.scene.isPaused()) return;            // già in pausa
@@ -560,7 +621,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   }
 
   private updateFiring(time: number) {
-    if (this.spaceKey.isDown && time - this.lastFire > this.getEffectiveCooldown()) {
+    // Fuoco col MOUSE (tieni premuto) o SPAZIO, verso il mirino.
+    if ((this.input.activePointer.isDown || this.spaceKey.isDown) && time - this.lastFire > this.getEffectiveCooldown()) {
       this.lastFire = time;
       this.fireWeapon();
     }
@@ -883,11 +945,13 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     clean(this.hazards,    -80,  this.designW+80);
     clean(this.rockets,         -20,  this.designW+60);
     clean(this.boss.projectiles, -80,  this.designW+80);
-    // Bullets respect per-projectile maxX (lanciafiamme ha range breve)
+    // Bullets: vanno in ogni direzione (mira) → cull su tutti i bordi + gittata per-proiettile (lanciafiamme corto).
     (this.bullets.getChildren() as Phaser.Physics.Arcade.Sprite[]).forEach(s => {
       if (!s.active) return;
-      const maxX = (s.getData('maxX') as number) ?? this.designW + 40;
-      if (s.x < -20 || s.x > maxX) this.killBullet(s);
+      const sx = (s.getData('sx') as number) ?? 0, sy = (s.getData('sy') as number) ?? 0;
+      const maxDist = (s.getData('maxDist') as number) ?? 9999;
+      if (s.x < -40 || s.x > this.designW + 40 || s.y < -40 || s.y > H + 40 ||
+          Phaser.Math.Distance.Between(sx, sy, s.x, s.y) > maxDist) this.killBullet(s);
     });
   }
 
@@ -954,6 +1018,13 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       if (type === 'charger') this.updateChargerMotion(z, time);
       // Sputatore (A2): artiglieria tossica — spara bile sulla corsia a intervalli.
       if (type === 'spitter') this.updateSpitterMotion(z, time, delta);
+
+      // Knockback decadente dei colpi (combat reboot): solo posizione, non tocca le velocità del motion.
+      const kx = (z.getData('kx') as number) ?? 0, ky = (z.getData('ky') as number) ?? 0;
+      if (kx !== 0 || ky !== 0) {
+        z.x += kx * delta / 1000; z.y += ky * delta / 1000;
+        z.setData('kx', kx * KNOCK_DECAY); z.setData('ky', ky * KNOCK_DECAY);
+      }
     }
   }
 
@@ -1165,41 +1236,47 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private fireWeapon() {
     const w = WEAPONS[this.currentWeapon];
-    const vx = this.vehicle.x + 50, vy = this.vehicle.y;
+    const a = this.aimAngle;                                   // verso il mirino (combat reboot)
+    const len = 30, ox = this.vehicle.x + 24, oy = this.vehicle.y;
+    const mx = ox + Math.cos(a) * len, my = oy + Math.sin(a) * len; // bocca della canna
+    const FAR = 9999;                                          // gittata "infinita" (cull a bordo schermo)
     switch (this.currentWeapon) {
       case 'mg':
       case 'rifle':
-        this.spawnBullet(vx, vy, w.damage, w.speed, w.color, this.designW + 40);
+        this.spawnBullet(mx, my, a, w.damage, w.speed, w.color, FAR);
         break;
-      case 'double_mg':
-        // Due linee distanziate (±14) per coprire più corsia — vedi BALANCE §7.
-        this.spawnBullet(vx, vy - 14, w.damage, w.speed, w.color, this.designW + 40);
-        this.spawnBullet(vx, vy + 14, w.damage, w.speed, w.color, this.designW + 40);
+      case 'double_mg': {
+        // Due linee parallele, offset PERPENDICOLARE alla mira (±14) — vedi BALANCE §7.
+        const px = -Math.sin(a) * 14, py = Math.cos(a) * 14;
+        this.spawnBullet(mx + px, my + py, a, w.damage, w.speed, w.color, FAR);
+        this.spawnBullet(mx - px, my - py, a, w.damage, w.speed, w.color, FAR);
         break;
+      }
       case 'flamethrower':
-        // Danno derivato dalla tabella WEAPONS (non più cablato a 1) → ribilanciabile da BALANCE §7.
-        this.spawnBullet(vx, vy + Phaser.Math.Between(-6, 6), w.damage, w.speed, w.color, vx - 50 + w.range);
+        // Sventaglio breve attorno alla mira; gittata = range dell'arma (BALANCE §7).
+        this.spawnBullet(mx, my, a + Phaser.Math.FloatBetween(-0.12, 0.12), w.damage, w.speed, w.color, w.range);
         break;
       case 'rockets':
-        this.spawnRocket(vx, vy);
+        this.spawnRocket(mx, my, a);
         break;
     }
-    if (this.currentWeapon !== 'flamethrower') Juice.muzzleFlash(this, vx, vy, w.color);
+    this.recoil = 4;
+    if (this.currentWeapon !== 'flamethrower') Juice.muzzleFlash(this, mx, my, w.color);
     this.sfx?.playShot();
   }
 
-  private spawnBullet(x: number, y: number, damage: number, speed: number, color: number, maxX: number) {
-    // Object pooling (P1): riusa un proiettile "morto" del gruppo invece di allocarne uno nuovo a
-    // ogni colpo (lo sparo è l'oggetto più frequente del gioco). get() ne ripesca uno dal pool o,
-    // se il pool è vuoto, lo crea; enableBody lo riposiziona e riattiva corpo+sprite. killBullet() lo
-    // restituisce al pool (disableBody) invece di distruggerlo → niente churn di create/destroy/GC.
+  private spawnBullet(x: number, y: number, angle: number, damage: number, speed: number, color: number, maxDist: number) {
+    // Object pooling (P1): riusa un proiettile "morto" del gruppo invece di allocarne uno nuovo a ogni
+    // colpo. killBullet() lo restituisce al pool (disableBody) invece di distruggerlo → niente churn GC.
     const b = this.bullets.get(x, y, 'bullet') as Phaser.Physics.Arcade.Sprite | null;
     if (!b) return;
     b.enableBody(true, x, y, true, true);
-    // Texture sovracampionata (OS_G) → torna a scala design; hitbox auto = 18×5 invariata.
-    b.setScale(1 / OVERSAMPLE).setVelocityX(speed).setDepth(8).setTint(color);
+    // Texture sovracampionata (OS_G) → scala design; hitbox auto = 18×5. Ruota lo sprite nella direzione di volo.
+    b.setScale(1 / OVERSAMPLE).setDepth(8).setTint(color).setRotation(angle);
+    this.physics.velocityFromRotation(angle, speed, (b.body as Phaser.Physics.Arcade.Body).velocity);
     b.setData('damage', damage);
-    b.setData('maxX', maxX);
+    b.setData('ang', angle);           // per il knockback
+    b.setData('sx', x); b.setData('sy', y); b.setData('maxDist', maxDist); // cull a distanza (gittata armi)
   }
 
   /** Restituisce un proiettile al pool (P1): corpo disabilitato + sprite nascosto/disattivato,
@@ -1208,15 +1285,17 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     b.disableBody(true, true);
   }
 
-  private spawnRocket(x: number, y: number) {
+  private spawnRocket(x: number, y: number, angle: number) {
     const r = this.rockets.create(x, y, 'rocket') as Phaser.Physics.Arcade.Sprite;
-    r.setScale(1 / OVERSAMPLE).setVelocityX(WEAPONS.rockets.speed).setDepth(8);
+    r.setScale(1 / OVERSAMPLE).setDepth(8).setRotation(angle);
+    this.physics.velocityFromRotation(angle, WEAPONS.rockets.speed, (r.body as Phaser.Physics.Arcade.Body).velocity);
     // body in unità design: source ×OVERSAMPLE compensa lo scale 1/OVERSAMPLE → 22×8.
     (r.body as Phaser.Physics.Arcade.Body).setSize(22 * OVERSAMPLE, 8 * OVERSAMPLE);
   }
 
   private fireAutoShot(y: number) {
-    this.spawnBullet(this.vehicle.x + 50, y, 1, BULLET_SPEED, 0x00ffff, this.designW + 40);
+    // Sopravvissuto Soldato: colpo automatico orizzontale verso la corsia del nemico più vicino.
+    this.spawnBullet(this.vehicle.x + 24, y, 0, 1, BULLET_SPEED, 0x00ffff, 9999);
     this.sfx?.playShot();
   }
 
@@ -1238,6 +1317,11 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.killBullet(bullet);
     const type = zombie.getData('type') as ZombieType;
     if (type === 'armored') this.emitSparks(zombie.x, zombie.y);
+    // Knockback (game-feel "peso"): spinta lungo il colpo, scalata sugli HP (i tank quasi non rinculano).
+    const ka = (bullet.getData('ang') as number) ?? 0;
+    const kf = Phaser.Math.Clamp(2 / ZOMBIE_STATS[type].hp, 0.18, 1);
+    zombie.setData('kx', ((zombie.getData('kx') as number) ?? 0) + Math.cos(ka) * KNOCK * kf);
+    zombie.setData('ky', ((zombie.getData('ky') as number) ?? 0) + Math.sin(ka) * KNOCK * kf);
     const hp   = (zombie.getData('hp') as number) - dmg;
     if (hp <= 0) {
       this.addKillScore(ZOMBIE_STATS[type].score);

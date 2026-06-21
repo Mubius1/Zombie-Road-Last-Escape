@@ -95,7 +95,7 @@ const it: Record<string, string> = {
   'hud.comboMult': 'COMBO {n}  ×{m}',
   'hud.attached': '[{n} aggrappati]',
   'hud.godMode': '◆ GOD MODE  (G off · B boss · N fine · H ripara)',
-  'hud.controls': '↑↓/WS Muovi · SPAZIO Spara · 1-5/Q Arma · SHIFT Scatto · F Sovracc.',
+  'hud.controls': '↑↓/WS Muovi · MOUSE mira · CLIC spara · 1-5/Q Arma · SHIFT Scatto · F Sovracc.',
   'hud.debugHint': '0=Debug',
 
   // ── Componenti del veicolo (HUD) ─────────────────────────────────────────────────

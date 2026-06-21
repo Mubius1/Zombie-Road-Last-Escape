@@ -82,7 +82,7 @@ const fr: Record<string, string> = {
   'hud.comboMult': 'COMBO {n}  ×{m}',
   'hud.attached': '[{n} accrochés]',
   'hud.godMode': '◆ GOD MODE  (G off · B boss · N fin · H répare)',
-  'hud.controls': '↑↓/WS Bouger · ESPACE Tirer · 1-5/Q Arme · SHIFT Dash · F Surrégime',
+  'hud.controls': '↑↓/WS Bouger · SOURIS vise · CLIC tire · 1-5/Q Arme · SHIFT Dash · F Surrégime',
   'hud.debugHint': '0=Debug',
 
   'comp.engine': 'MOTEUR',
