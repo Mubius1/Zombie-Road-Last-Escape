@@ -1272,7 +1272,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (!b) return;
     b.enableBody(true, x, y, true, true);
     // Texture sovracampionata (OS_G) → scala design; hitbox auto = 18×5. Ruota lo sprite nella direzione di volo.
-    b.setScale(1 / OVERSAMPLE).setDepth(8).setTint(color).setRotation(angle);
+    // Depth 12: SOPRA veicolo (10) e torretta (11) → la bocca può stare sul corpo del mezzo senza che il colpo
+    // sparisca "sotto" il veicolo (con la mira la canna arretrata punta sopra la scocca).
+    b.setScale(1 / OVERSAMPLE).setDepth(12).setTint(color).setRotation(angle);
     this.physics.velocityFromRotation(angle, speed, (b.body as Phaser.Physics.Arcade.Body).velocity);
     b.setData('damage', damage);
     b.setData('ang', angle);           // per il knockback
@@ -1287,7 +1289,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private spawnRocket(x: number, y: number, angle: number) {
     const r = this.rockets.create(x, y, 'rocket') as Phaser.Physics.Arcade.Sprite;
-    r.setScale(1 / OVERSAMPLE).setDepth(8).setRotation(angle);
+    r.setScale(1 / OVERSAMPLE).setDepth(12).setRotation(angle); // sopra veicolo/torretta (come i proiettili)
     this.physics.velocityFromRotation(angle, WEAPONS.rockets.speed, (r.body as Phaser.Physics.Arcade.Body).velocity);
     // body in unità design: source ×OVERSAMPLE compensa lo scale 1/OVERSAMPLE → 22×8.
     (r.body as Phaser.Physics.Arcade.Body).setSize(22 * OVERSAMPLE, 8 * OVERSAMPLE);
