@@ -16,7 +16,7 @@ Questo documento è la **fonte di verità** del *design del gioco*: cosa fa il g
 **Pilastri di design**
 
 1. **Tensione a doppia risorsa.** Non muori solo perché ti colpiscono: muori anche se finisci il **carburante**. Ogni secondo conta; fermarsi non è un'opzione.
-2. **Corsa roguelike.** Una "corsa" è una catena di missioni. La morte **azzera tutto** (soldi, veicolo, armi, sopravvissuti, potenziamenti): la posta è alta, ogni acquisto pesa.
+2. **Campagna a checkpoint.** Una "corsa" è una catena di missioni che il gioco **salva a ogni missione** (su disco, anche tra sessioni del browser → "CONTINUA"). La morte **non azzera tutto**: rigiochi la missione corrente pagando un **pedaggio** (−25% monete), tenendo veicolo/armi/sopravvissuti/potenziamenti. Solo **Nuova Partita** ricomincia da capo. La posta resta (morire costa), ma il progresso del viaggio non si perde — **non è un roguelike**.
 3. **Degrado significativo.** I componenti del veicolo si danneggiano e questo **cambia come si guida** (più lento, spara peggio, beve più carburante) — non è solo una barra che cala.
 4. **Mira attiva.** Spari **dove punti**: il combat è un verbo che il giocatore esercita di continuo, non un automatismo di sfondo. Lo Scatto e l'Overdrive aggiungono verbi tattici sopra alla mira.
 5. **Leggibilità arcade.** Lettura immediata della minaccia, feedback tattile su ogni colpo (vedi Standard di Produzione AAA nell'art bible zombi).
@@ -216,7 +216,7 @@ Tra le missioni, nel **GARAGE** (`ShopScene`):
 
 ## §10 · Condizioni di vittoria e sconfitta
 
-- **Sconfitta (game over):** salute **o** carburante a 0. La corsa termina e **tutto si azzera** — missione torna a 1, monete a 0, niente sopravvissuti/potenziamenti, di nuovo Auto Civile con sola Mitragliatrice. È una **morte permanente della corsa** (impronta roguelike).
+- **Sconfitta (game over):** salute **o** carburante a 0. La corsa **non** termina: si **rigioca la missione corrente** ripristinando il checkpoint d'inizio missione (veicolo/armi/sopravvissuti/potenziamenti intatti) e pagando un **pedaggio** di recupero (**−25% monete**, `DEATH_MONEY_PENALTY`, vedi [BALANCE §2](BALANCE.md#2--economia--flusso-delle-monete)). Il gioco salva a ogni missione, anche **tra sessioni** ("CONTINUA"). Solo **Nuova Partita** azzera davvero il progresso. *(Il pedaggio è un costo "morbido": chiudere/ricaricare prima di morire lo evita — scelta deliberata per una campagna forgiving, non un roguelike.)*
 - **Vittoria (di ciclo):** completare il **ciclo delle 7 regioni** (missione 7, 14, 21, …) mostra una schermata **"🏆 VITTORIA · Ciclo N"** e un lampo dorato; poi il gioco **continua in endless+** con lo scaling NG+ (HP nemici/boss crescenti per ciclo, vedi [BALANCE §5](BALANCE.md#5--nemici)). Non è una fine secca: è un traguardo ripetibile che dà un picco e una ragione per spingersi oltre.
 - **Record persistente:** missione più lontana e punteggio di missione massimo sono salvati in `localStorage` (`SaveData`) e mostrati nel menu — sopravvivono al game over e alla chiusura del browser.
 
@@ -224,9 +224,9 @@ Tra le missioni, nel **GARAGE** (`ShopScene`):
 
 ## §11 · Stato persistente (registry)
 
-Lo stato della corsa vive nel `registry` di Phaser (in memoria, non su disco): `missionNumber`, `money`, `vehicle`, `ownedVehicles`, `survivors`, `upgrades`, `components`, `currentWeapon`, `ownedWeapons`, `lastScore`. Il game over li resetta.
+Lo stato della corsa vive nel `registry` di Phaser durante il gioco: `missionNumber`, `money`, `vehicle`, `ownedVehicles`, `survivors`, `upgrades`, `components`, `currentWeapon`, `ownedWeapons`, `lastScore`.
 
-L'**unico stato che sopravvive tra le sessioni** è il **record** (`SaveData` → localStorage): `bestMission` e `bestScore`, aggiornati a fine missione e al game over, mostrati nel menu. (Le preferenze — volume, effetti, risoluzione, daltonismo — vivono separate in `Settings`.)
+A ogni missione (e dopo ogni ricompensa/acquisto) quello stato viene **salvato su disco** come **checkpoint** (`SaveData.run` → localStorage): è ciò che **"CONTINUA"** ripristina, anche **tra sessioni** del browser. Il game over non lo cancella — lo ripristina col pedaggio (§10); solo **Nuova Partita** lo azzera. Sopravvivono inoltre i **record** (`bestMission`/`bestScore`, mostrati nel menu). (Le preferenze — volume, effetti, risoluzione, daltonismo — vivono separate in `Settings`.)
 
 ---
 
@@ -235,9 +235,9 @@ L'**unico stato che sopravvive tra le sessioni** è il **record** (`SaveData` �
 > 🗺️ Il piano per affrontare rigiocabilità e game-feel (profondità del core loop, scelte di run, distintività di boss/regioni, meta-progressione) vive in [`ROADMAP_RIGIOCABILITA.md`](ROADMAP_RIGIOCABILITA.md). Le voci qui sotto sono indicizzate lì (§12.2/§12.4 → Track D, §12.5 → Track C).
 
 1. ✅ **Condizione di vittoria** — *implementata*: vittoria al completamento del ciclo di 7 regioni, poi endless+ (vedi §10).
-2. 🟡 **Persistenza** — *parziale*: il **record** (missione/punteggio max) è salvato in `localStorage` (`SaveData`). Lo sblocco permanente di veicoli resta da valutare.
+2. ✅ **Persistenza** — *implementata*: oltre al **record**, l'intera **corsa** si salva a ogni missione (`SaveData.run` → localStorage) → "CONTINUA" cross-sessione (§11). Lo sblocco permanente di veicoli (meta) resta un *extra* possibile (Track D).
 3. ✅ **Curva di difficoltà oltre il ciclo** — *implementata*: scaling NG+ degli HP di nemici e boss per ciclo (`diffMult`, [BALANCE §5](BALANCE.md#5--nemici)). Danno/velocità ancora costanti (leva HP-only).
-4. ⬜ **Costo della morte** — *aperta*: valutare una valuta meta che sopravvive (sblocchi permanenti) oltre al record.
+4. ✅ **Costo della morte** — *risolta*: il gioco è una **campagna a checkpoint** (non roguelike). La morte rigioca la missione con un pedaggio (−25% monete) invece di azzerare; il progresso si salva a ogni missione, anche cross-sessione (§10/§11). Una valuta meta resta possibile come *extra* (Track D), non più necessaria per la retention.
 5. 🟡 **Differenziazione dei boss** — *parziale*: aggiunta una **2ª fase** sotto il 40% HP (attacchi più fitti + telegrafo). Pattern d'attacco completamente distinti per tipo restano un'estensione possibile.
 
 ---

@@ -8,6 +8,8 @@
 
 > 🔁 **AGGIORNAMENTO — il fun-gate (tappa 1) ha FALSIFICATO l'ipotesi di §0, ed era l'esito desiderabile.** Track A (Overdrive/Caricatore/Sputatore/Hazard) è stato implementato per intero, ma al playtest il combat **restava passivo**: il vero collo di bottiglia non erano i *sistemi mancanti*, era il **verbo** — il **fuoco automatico in avanti** lasciava il giocatore a *guardare* l'autofire. La risposta è stata un **COMBAT REBOOT a mira col mouse** (branch `aim-combat`), che il fun-gate ha **VALIDATO**: ora la torretta punta il puntatore (clamp ±82°) e si spara attivamente verso il mirino. Il problema "il giocatore non fa niente" è stato risolto **cambiando il verbo, non aggiungendo altri sistemi**. Il mouse-aim è la **nuova fondazione del combat**; i sistemi di Track A restano e **convivono** con esso (gli zombi a risposta e gli hazard ora chiedono mira *e* posizione). Dettaglio del reboot in [ARCHITETTURA §8.1](ARCHITETTURA.md#81-combat-a-mira-col-mouse-perché-overlay-perché-getworldpoint); la §0 qui sotto è la diagnosi **originale** (autofire), conservata per contesto storico.
 
+> 🗺️ **AGGIORNAMENTO 2 — il gioco NON è un roguelike: è una CAMPAGNA A CHECKPOINT.** Decisione del designer (giugno 2026): la morte non azzera più la corsa. Il gioco **salva a ogni missione** (su disco, anche cross-sessione → "CONTINUA") e al game over **rigioca la missione corrente** pagando un pedaggio (−25% monete), invece di ripartire da zero. Solo "Nuova Partita" azzera. **Conseguenza su questa roadmap: Track D (meta-progressione) si ridimensiona** — il progresso del viaggio già persiste, quindi una valuta meta non è più la spina dorsale della retention (resta un *extra* opzionale per sblocchi-sidegrade). Il vincolo "unlock = sidegrade, non potere" si **allenta** (non c'è più un pilastro "la morte azzera tutto" da proteggere): resta buona norma anti-power-creep, non un dogma. La rigiocabilità si appoggia ora alla **varietà** (Track B/C). Vedi [GAME_DESIGN §10/§11](GAME_DESIGN.md#10--condizioni-di-vittoria-e-sconfitta).
+
 ## §0 · Diagnosi: due problemi distinti, un ordine obbligato
 
 Sono emersi due problemi, di natura diversa — e l'ordine in cui si affrontano conta più della lista stessa.
@@ -42,7 +44,7 @@ Il gioco ha sistemi ricchi *attorno* al combat (degrado componenti, carburante, 
 
 1. **Loop prima di meta.** Si valida il divertimento minuto-per-minuto prima di costruire la retention.
 2. **Più verbi, più decisioni/secondo.** L'obiettivo di Track A è trasformare "guarda l'autofire" in "gestisci risorse e posizione sotto pressione".
-3. **Gli sblocchi sono sidegrade, non potere piatto.** La meta-progressione (Track D) deve sbloccare *opzioni* (veicoli/armi disponibili, perk di partenza), non stat gratuite — altrimenti tradisce il pilastro roguelike "la morte azzera tutto" ([GAME_DESIGN §10](GAME_DESIGN.md#10--condizioni-di-vittoria-e-sconfitta)).
+3. **Gli sblocchi sono sidegrade, non potere piatto.** La meta-progressione (Track D) — *se* costruita — dovrebbe sbloccare *opzioni* (veicoli/armi disponibili, perk di partenza), non stat gratuite. *(Nota post-checkpoint: il gioco non è più un roguelike "la morte azzera tutto" → questo vincolo si **allenta**, ma resta buona norma per non banalizzare la sfida.)*
 4. **Anti-deriva sempre verde.** Ogni numero nuovo nasce in una tabella 🔒 di [`BALANCE.md`](BALANCE.md) (o costante validata), ogni texture/colore nuovo in una art bible → `npm run validate` deve restare verde a ogni passo (vedi [CLAUDE.md Regola n.2/n.3](../CLAUDE.md)).
 5. **Ogni tappa è spedibile e testabile da sola.** Niente big-bang: ogni voce della roadmap è un incremento che si può giocare e committare indipendentemente.
 
@@ -239,9 +241,11 @@ Creo `src/Rng.ts` (PRNG tipo Mulberry32), con un'istanza globale selezionabile: 
 
 ### D1 · Valuta meta persistente + unlock
 
-Estendo [`SaveData.ts`](../src/SaveData.ts) (`SaveDataShape` oggi contiene solo `bestMission` / `bestScore`) con `metaCurrency` e `unlocks: Record<string, boolean>`. La meta-valuta si guadagna dalle run (frazione del punteggio + traguardi: missione raggiunta, boss ucciso, prima volta in una regione) e **sopravvive al game over** (a differenza delle monete di run, azzerate). Si spende in un meta-negozio (nuova `MetaShopScene` dal menu).
+> ⚠️ **Ridimensionata dal passaggio a campagna a checkpoint:** il progresso di corsa **già persiste** (le monete non si azzerano più al game over), quindi la meta-valuta **non è più necessaria** per la retention — resta un *extra* opzionale per sblocchi-sidegrade.
 
-> 🔒 **Vincolo di design (critico):** gli unlock devono restare **opzioni/sidegrade** (veicoli/armi che poi compri in-run, perk di partenza), **non** stat gratuite — altrimenti si rompe il pilastro roguelike "la morte azzera tutto" ([GAME_DESIGN §10](GAME_DESIGN.md#10--condizioni-di-vittoria-e-sconfitta)). Chiude le domande aperte [§12.2 / §12.4](GAME_DESIGN.md#12--domande-aperte--ganci-di-roadmap).
+Se costruita: estendo [`SaveData.ts`](../src/SaveData.ts) — che oggi contiene `bestMission`/`bestScore` **e** lo snapshot `run` (checkpoint) — con `metaCurrency` e `unlocks: Record<string, boolean>`. La meta-valuta si guadagna da **traguardi** (boss ucciso, prima volta in una regione) e si spende in un meta-negozio (nuova `MetaShopScene` dal menu).
+
+> **Vincolo di design (consigliato):** gli unlock dovrebbero restare **opzioni/sidegrade** (veicoli/armi che poi compri in-run, perk di partenza), non stat gratuite — buona norma anti-power-creep. *(Col modello a checkpoint non c'è più un pilastro roguelike "la morte azzera tutto" da proteggere, quindi non è più un vincolo critico — vedi banner in testa.)*
 
 **File da toccare:**
 - [`src/SaveData.ts`](../src/SaveData.ts) — estendere `SaveDataShape`; API `addMeta` / `spendMeta` / `unlock` / `isUnlocked` (sul modello di `SaveData.record`).
@@ -315,7 +319,7 @@ Questa roadmap, da sola, **non tocca codice** → tutti i validatori restano ver
 - **Il "fun-gate" (tappa 1) può falsificare l'ipotesi di §0.** È un esito *desiderabile*: meglio scoprirlo dopo un giorno di lavoro che dopo aver costruito tutta la retention.
 - **Determinismo daily:** contenuto identico, non replay frame-perfect (vedi D0).
 - **Leaderboard online = backend** → fuori scope offline; ripiego sul codice-punteggio condivisibile.
-- **Unlock = sidegrade, non potere** → vincolo non negoziabile per non rompere il roguelike (D1).
+- **Unlock = sidegrade, non potere** → buona norma anti-power-creep (D1). *(Non più "non negoziabile": col passaggio a campagna a checkpoint non c'è un roguelike da proteggere — vedi banner in testa a questo documento.)*
 - **Pressione sui validatori:** ogni tappa aggiunge righe alle tabelle 🔒 e schede alle art bible; non saltare l'aggiornamento o `npm run build` fallisce (è il comportamento voluto, [CLAUDE.md Regola n.2](../CLAUDE.md)).
 
 ---

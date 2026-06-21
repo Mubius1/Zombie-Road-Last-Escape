@@ -100,7 +100,7 @@ Fonte: costanti in testa a `GameScene.ts`. La colonna **Valore** è validata (un
 ### Pozzi di spesa (tutti al Negozio)
 Riparazioni, potenziamenti, armi, veicoli (§7–§8). I **sopravvissuti sono gratis**.
 
-> **Reset alla morte.** Il game over riporta `money=0`, `missionNumber=1`, veicolo/armi/sopravvissuti/potenziamenti allo stato iniziale. Non c'è valuta meta persistente (vedi [GAME_DESIGN §12](GAME_DESIGN.md#12--domande-aperte--ganci-di-roadmap)).
+> **Morte = checkpoint, non reset.** Il gioco è una **campagna a checkpoint**: a ogni missione (e dopo ricompense/acquisti) lo stato si salva su disco (`SaveData.run`). Al game over **non** si azzera — si ripristina il checkpoint d'inizio missione (build intatto) e si paga un **pedaggio** `DEATH_MONEY_PENALTY = 0.25` (−25% monete, clampato a ≥0, auto-limitante). Solo **Nuova Partita** azzera (`money=0`, `missionNumber=1`, stato iniziale). Il pedaggio è un valore di *feel* **non validato** (in taratura). *Save-scum:* chiudere prima di morire evita il pedaggio → accettato di proposito (campagna forgiving, non roguelike).
 
 ### Combo → moltiplicatore di punteggio
 `mult = clamp(1 + ⌊(combo − 1)/3⌋, 1, 5)` — accorciato da `/5` a `/3` (G3): prima il ×5 chiedeva 21 kill di fila (di fatto irraggiungibile), ora 13.
