@@ -38,6 +38,8 @@ I tre pilastri del titolo (coesione · game feel · rifinitura) tradotti sul suo
 | **Tutti i suoni** (sintesi, filtri, inviluppi) | [`src/SoundManager.ts`](../src/SoundManager.ts) |
 | **Master gain / volume** | `SoundManager.master`, `BASE_VOLUME`, `setVolume()` |
 | **Limiter brick-wall** | `SoundManager.limiter` (`DynamicsCompressorNode`; `master → limiter → ctx.destination`) |
+| **Riverbero spari (bus)** | `SoundManager.shotVerb`/`shotWet` (`ConvolverNode` + send; IR procedurale `makeImpulse()`) |
+| **Saturazione spari (grit)** | `SoundManager.driveCurve` (`makeDriveCurve()`) applicata nel `WaveShaperNode` di `crackTail()` |
 | **Generatore di rumore bianco** | `SoundManager.noise(duration)` |
 | **Loop del motore** | `startEngine()` / `setEngineLoad(factor)` / `stopEngine()` |
 | **Istanza in partita** + start/stop + gating volume | [`GameScene.create()`](../src/scenes/GameScene.ts) (`this.sfx = new SoundManager(...)`) |
@@ -64,7 +66,7 @@ Come per i nemici (silhouette → movimento → texture), un suono si legge in t
 
 ## 2. Vincoli tecnici (non negoziabili)
 
-- **Solo Web Audio API.** `OscillatorNode` (`sine`/`sawtooth`), `AudioBufferSourceNode` (rumore), `BiquadFilterNode` (`highpass`/`bandpass`/`lowpass`), `GainNode`. **Niente** `<audio>`, niente sample importati, niente librerie audio.
+- **Solo Web Audio API.** `OscillatorNode` (`sine`/`sawtooth`/`triangle`), `AudioBufferSourceNode` (rumore), `BiquadFilterNode` (`highpass`/`bandpass`/`lowpass`), `GainNode`, `WaveShaperNode` (saturazione/grit) e `ConvolverNode` (riverbero). **Niente** `<audio>`, niente sample importati, niente librerie audio. **Anche le IR del riverbero sono PROCEDURALI** (`makeImpulse()` = rumore che decade): un Convolver con impulso sintetizzato a runtime resta 100% generato, non è un sample caricato.
 - **Un solo `AudioContext`**, quello di Phaser (`WebAudioSoundManager.context`). Non crearne di nuovi: il browser ne limita il numero e richiede un gesto utente per sbloccarli. `SoundManager` riceve il contesto nel costruttore.
 - **Un solo master.** Tutte le voci passano da `this.master`. Il volume utente si applica **solo** lì, via `setVolume()` (scala `BASE_VOLUME`). Mai regolare il volume modificando i gain delle singole voci.
 - **Spara-e-dimentica.** Ogni effetto crea i suoi nodi, programma `start()`/`stop()` e li lascia raccogliere dal GC. **Non** tenere riferimenti agli effetti one-shot. L'**unica** voce con stato persistente è il motore (`engineOsc`/`engineGain`/`engineLfo`), perché è un loop.
@@ -79,9 +81,9 @@ Come per i nemici (silhouette → movimento → texture), un suono si legge in t
 
 | Timbro | Sorgente | Significato | Usato da |
 |---|---|---|---|
-| **Rumore filtrato — acuto** | `noise` + `highpass` | scarica secca, attrito | sparo (2500 Hz), sfrigolio tossico (1400 Hz) |
-| **Rumore filtrato — medio** | `noise` + `bandpass` | colpo fisico, urto | impatto (350 Hz, Q 0.4) |
-| **Rumore filtrato — grave** | `noise` + `lowpass` | deflagrazione, massa | esplosione (600 Hz) |
+| **Rumore filtrato — acuto** | `noise` + `highpass` | scarica secca, attrito | **crack** dello sparo (MG 1800 Hz · rifle 3000 Hz), sfrigolio tossico (1400 Hz) |
+| **Rumore filtrato — medio** | `noise` + `bandpass` | colpo fisico, urto | impatto (350 Hz, Q 0.4), soffio del lanciafiamme (480–800 Hz) |
+| **Rumore filtrato — grave** | `noise` + `lowpass` | deflagrazione, massa | esplosione (600 Hz), **corpo** dello sparo (180–240 Hz), lancio del razzo (900→200 Hz) |
 | **Tono che precipita** | `sine`/`sawtooth` con ramp di frequenza ↓ | morte, danno, fallimento | uccisione (sine 160→40), aggancio (saw 90→25), game over (saw discendente) |
 | **Arpeggio consonante salente** | più `sine` a frequenze di scala maggiore | ricompensa, successo | carburante (C-E-G), missione completata (C-E-G-C-E) |
 | **Bordone grave che pulsa (chug)** | 2 × `sawtooth` 46–86 Hz detunati → `lowpass` + tremolo d'ampiezza 9–25 Hz + grana di `noise` | il mondo è vivo / motore a scoppio | loop motore |
@@ -116,8 +118,9 @@ Le ricompense e gli esiti usano invece un **attacco lineare morbido** (~0.02–0
 | Voce più forte | esplosione (gain di voce **0.8**) | la deflagrazione domina, come dev'essere. |
 | Voce più debole | sfrigolio tossico (**0.18**), motore (**0.055**) | ambientali, non devono coprire l'azione. |
 | **Limiter master** | `DynamicsCompressor`: soglia **−3 dB**, ratio **20:1**, knee **0**, attacco **3 ms**, rilascio **100 ms** | brick-wall tra `master` e `ctx.destination`. Trasparente ai livelli normali; interviene solo quando le voci sommate superano il fondo scala (morte boss: timbro-firma + ~3 esplosioni + motore). Evita il clipping senza dover riequilibrare ogni picco. È una *protezione*, non un'identità tonale → descritto qui, **non** validato a numero (come gli inviluppi di dettaglio, vedi §4.1). |
+| **Riverbero spari** | `ConvolverNode` con IR **procedurale** (`makeImpulse` 0.18 s, decay 2.6, stereo) · send **wet 0.3** · drive del `WaveShaper` **2.4** | coda d'aria/riflessi sugli spari impulsivi (mg/double/rifle/razzi) — NON sul lanciafiamme (a 70 ms impasterebbe). Catena: voce → `shotVerb` → `shotWet` → `master`. È *identità/effetto*, non un controllo di volume → descritto qui, **non** validato a numero (come il limiter e gli inviluppi). |
 
-**Gerarchia di volume di voce (gain di picco, prima del master):** esplosione 0.8 › impatto 0.55 › **morte boss (timbro-firma 0.3–0.5, layer SOTTO l'esplosione che la accompagna)** › sparo 0.45 › uccisione 0.32 › game over / missione / carburante 0.30–0.28 › aggancio 0.28 › sfrigolio 0.18 › **motore 0.055**. Rispetta quest'ordine quando aggiungi un suono: la sua importanza per il giocatore = la sua posizione qui.
+**Gerarchia di volume di voce (gain di picco, prima del master):** esplosione 0.8 › impatto 0.55 › **morte boss (timbro-firma 0.3–0.5, layer SOTTO l'esplosione che la accompagna)** › **sparo** (lancio razzo 0.42 · crack rifle 0.42 / MG 0.40 / doppia 0.32 + corpo grave 0.24–0.32) › uccisione 0.32 › game over / missione / carburante 0.30–0.28 › aggancio 0.28 › sfrigolio 0.18 › **soffio lanciafiamme 0.16** › **motore 0.055**. Rispetta quest'ordine quando aggiungi un suono: la sua importanza per il giocatore = la sua posizione qui.
 
 ### 4.1 Valori-firma validati 🔒
 
@@ -133,7 +136,7 @@ Sottoinsieme di numeri verificato automaticamente da `npm run validate:audio` co
 | `engine_load_base` | 46 | `setEngineLoad` → `46 + factor·40` (frequenza minima) |
 | `engine_load_span` | 40 | `setEngineLoad` → `46 + factor·40` (escursione → max 86) |
 | `engine_fade_s` | 0.3 | `stopEngine` → costante di dissolvenza `setTargetAtTime(…, 0.3)` |
-| `shot_filter_hz` | 2500 | `playShot` → highpass |
+| `shot_filter_hz` | 1800 | `playShot` → case `mg` → crack highpass (firma dello sparo; gli altri tipi d'arma descritti in §5.1) |
 | `impact_filter_hz` | 350 | `playImpact` → bandpass |
 | `explosion_filter_hz` | 600 | `playExplosion` → lowpass |
 | `explosion_peak` | 0.8 | `playExplosion` → gain di picco (la voce più forte) |
@@ -145,10 +148,26 @@ Sottoinsieme di numeri verificato automaticamente da `npm run validate:audio` co
 
 > Legenda: **F** = forma d'onda/sorgente · **Freq** = frequenza/e (Hz) · **Filtro** = biquad · **Env** = inviluppo di gain (picco → fine, durata) · **Trigger** = quando suona.
 
-### 5.1 SPARO — `playShot()`
-- **F:** rumore bianco · **Filtro:** highpass 2500 Hz · **Env:** 0.45 → 0.001 esponenziale in **0.07 s**.
-- **Trigger:** ogni proiettile sparato (MG, doppia MG, fucile, razzi, lanciafiamme) — `fireWeapon()`/`updateFiring()`.
-- **Intento:** schiocco secco e leggero. Acuto perché si ripete tantissimo: non deve affaticare né mascherare gli impatti.
+### 5.1 SPARO — `playShot(kind)`
+**Un timbro per tipo d'arma** (realismo: ogni bocca da fuoco "spara a modo suo"). Il vecchio sparo era un unico highpass 2500 Hz per tutti — un "tss" magro e secco. Ora le armi da fuoco sono costruite in **3 strati** (vedi i tre difetti del suono sintetico che risolvono):
+
+- **CRACK** — rumore highpass **saturato** (`crackTail` → `WaveShaper` tanh, drive 2.4): lo schiocco, con "grit". Il rumore pulito suona educato/finto; un colpo distorce sé stesso.
+- **PUNCH** — oscillatore `triangle` grave che **precipita** (`gunPunch`): il pugno nel petto. **Tonale**, non rumore (un puff di rumore non "spinge"); energia nei bassi-medi → udibile anche su casse di laptop, dove i 50 Hz puri spariscono.
+- **CODA** — riverbero corto **procedurale** condiviso (`shotVerb`, IR di rumore che decade in 0.18 s, wet 0.3): l'aria/riflessi. Senza, il colpo suona secco come statica — è il difetto n.1 del gunshot sintetico.
+
+`kind` arriva da `this.currentWeapon` in `fireWeapon()`; il colpo automatico del Soldato passa `'mg'`.
+
+| arma | crack (highpass, saturato) | punch (`triangle` ↓) | coda |
+|---|---|---|---|
+| `mg` | hp 1800 Hz · 0.40, 0.05 s — **firma** `shot_filter_hz` | 150→55 Hz · 0.34, 0.09 s | sì |
+| `double_mg` | hp 1700 Hz **doppio** sfalsato 8 ms · 0.30 cad. | 135→48 Hz · 0.36, 0.10 s (più pieno) | sì |
+| `rifle` | hp 3000 Hz più brillante · 0.42, 0.06 s + **snap** `triangle` 520→110 Hz in 0.025 s (0.18) | 200→70 Hz · 0.26, 0.07 s (asciutto) | sì |
+| `rockets` | — (niente schiocco) whoosh `lowpass` 900→200 Hz · 0.42, coda 0.3 s | spinta 150→55 Hz · 0.24, 0.22 s | sì |
+| `flamethrower` | — soffio `bandpass` 480–800 Hz (random/colpo) · 0.16, attacco morbido 0.025 s | — | **no** (a 70 ms impasterebbe) |
+
+- **Trigger:** ogni colpo sparato — `fireWeapon()` (con `this.currentWeapon`) e `fireAutoShot()` (Soldato, `'mg'`).
+- **Intento:** dare peso e identità a ogni arma. Crack + punch + coda = "bang" invece di "tss"; il rifle morde più secco, la doppia è più piena, il razzo *parte* (grave, non acuto), il lanciafiamme *soffia* (continuo, senza schiocco). Resta sotto l'esplosione (0.8) e non maschera gli impatti.
+> **Limite onesto:** col vincolo "niente sample" un colpo sintetico non eguaglia un campione reale registrato. Questa è la resa massima credibile del 100% procedurale (punch tonale + grit + coda); per il fotorealismo servirebbe rilassare il vincolo sui sample.
 
 ### 5.2 UCCISIONE ZOMBI — `playZombieKill()`
 - **F:** sine (tono) + rumore bianco (splat) · **Freq:** sine 180 → **40** (precipita) esponenziale in 0.16 s · **Filtro splat:** lowpass 600 Hz · **Env:** tono 0.30 → 0.001 in **0.18 s**; splat 0.26 → 0.001 in **0.12 s** (sotto il tono).
@@ -219,7 +238,7 @@ Sottoinsieme di numeri verificato automaticamente da `npm run validate:audio` co
 - **Trigger:** un nemico **incassa** un colpo ma **sopravvive** (HP > 0) — `onBulletHitZombie` e `checkBulletsVsAttached` (zombi agganciato). Lato gioco è **throttellato a 45 ms** via `playHitSfx()` (anti-cacofonia a fuoco rapido / più colpi nello stesso frame).
 - **Intento:** *thwack* secco e cortissimo che chiude l'anello "ho premuto → l'ho preso" anche quando il bersaglio non muore (prima era **muto**, feedback assente). La frequenza variata per colpo evita l'affaticamento a raffica. Volutamente più leggero e più alto dell'uccisione (§5.2) e senza gesto discendente: dice "colpito", non "morto".
 
-> **Lifecycle (AU):** il `master` ha un **buffer di rumore condiviso** (`noiseBuffer`, generato una volta) riusato da tutte le voci a rumore; `startEngine()` fa `ctx.resume()` se il contesto è sospeso; `dispose()` (chiamato allo SHUTDOWN di GameScene e SettingsScene) ferma il motore e **scollega master+limiter** da `destination` → nessun nodo orfano sul context condiviso a ogni restart.
+> **Lifecycle (AU):** il `master` ha un **buffer di rumore condiviso** (`noiseBuffer`, generato una volta) riusato da tutte le voci a rumore; `startEngine()` fa `ctx.resume()` se il contesto è sospeso; `dispose()` (chiamato allo SHUTDOWN di GameScene e SettingsScene) ferma il motore e **scollega il bus riverbero (`shotWet`/`shotVerb`) + master + limiter** da `destination` → nessun nodo orfano sul context condiviso a ogni restart.
 
 ---
 

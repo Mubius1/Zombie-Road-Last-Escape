@@ -12,6 +12,9 @@ export default class SoundManager {
   private engineLfo?: OscillatorNode;
   private engineNoise?: AudioBufferSourceNode;
   private engineLowpass?: BiquadFilterNode;
+  private shotVerb: ConvolverNode;   // riverbero CORTO condiviso degli spari (coda d'aria/riflessi)
+  private shotWet: GainNode;         // livello del riverbero spari (mix wet)
+  private driveCurve: Float32Array<ArrayBuffer>;  // curva di saturazione (grit) condivisa dagli schiocchi
 
   constructor(ctx: AudioContext) {
     this.ctx = ctx;
@@ -35,6 +38,39 @@ export default class SoundManager {
     this.noiseBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 2), ctx.sampleRate);
     const nd = this.noiseBuffer.getChannelData(0);
     for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+
+    // Curva di saturazione (tanh) condivisa: dà "grit" allo schiocco — un colpo è così forte da
+    // distorcere sé stesso; il rumore pulito suona "educato"/finto.
+    this.driveCurve = SoundManager.makeDriveCurve(2.4);
+
+    // Riverbero CORTO condiviso degli spari (send bus). Un colpo reale ha una coda d'aria/riflessi:
+    // senza, lo sparo suona secco come statica. Impulso PROCEDURALE (rumore stereo che decade in 0.18 s)
+    // → 100% sintetico, nessun sample esterno (vincolo art bible). Catena: voce → shotVerb → shotWet →
+    // master. Tenuto corto e modesto (wet 0.3) per non impastare il fuoco rapido.
+    this.shotVerb = ctx.createConvolver();
+    this.shotVerb.buffer = this.makeImpulse(0.18, 2.6);
+    this.shotWet = ctx.createGain();
+    this.shotWet.gain.value = 0.3;
+    this.shotVerb.connect(this.shotWet);
+    this.shotWet.connect(this.master);
+  }
+
+  /** Impulso di riverbero PROCEDURALE: rumore stereo che decade esponenzialmente. Niente sample esterni. */
+  private makeImpulse(duration: number, decay: number): AudioBuffer {
+    const len = Math.max(1, Math.floor(this.ctx.sampleRate * duration));
+    const buf = this.ctx.createBuffer(2, len, this.ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+    }
+    return buf;
+  }
+
+  /** Curva tanh per il WaveShaper: satura i picchi (drive `k`) senza tagliare a gradino. */
+  private static makeDriveCurve(k: number): Float32Array<ArrayBuffer> {
+    const n = 256, c = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; c[i] = Math.tanh(x * k); }
+    return c;
   }
 
   /** Se il browser ha sospeso il contesto (tab in background, risparmio energetico mobile), riprendilo (AU6). */
@@ -50,17 +86,115 @@ export default class SoundManager {
 
   // ─── Gameplay sounds ─────────────────────────────────────────────────────────
 
-  playShot() {
-    const dur = 0.07;
-    const src = this.noise(dur);
-    const flt = this.ctx.createBiquadFilter();
-    flt.type = 'highpass';
-    flt.frequency.value = 2500;
+  /**
+   * SPARO — un timbro per tipo d'arma (realismo: ogni bocca da fuoco "spara a modo suo").
+   * Anatomia di un colpo credibile (vs. il vecchio "tss" = solo highpass 2500 Hz):
+   *   • CRACK   — rumore highpass SATURATO (`crackTail`): lo schiocco, con grit di waveshaper.
+   *   • PUNCH   — oscillatore grave che PRECIPITA (`gunPunch`): il pugno nel petto, tonale (non
+   *               rumore: un puff di rumore non "spinge"). Energia nei bassi-medi → udibile anche
+   *               su casse di laptop, dove i 50 Hz puri spariscono.
+   *   • CODA    — riverbero corto procedurale condiviso (`shotVerb`): l'aria/riflessi. Senza, il
+   *               colpo è secco come statica. È questo + il punch a fare il salto di realismo.
+   * I razzi = whoosh d'accensione grave (con coda); il lanciafiamme = soffio continuo morbido,
+   * niente schiocco né coda (a 70 ms si impasterebbe). Tutte le voci → master, inviluppo esplicito
+   * (→ 0.001), picco ≤ esplosione (0.8). Spara-e-dimentica: nessun riferimento tenuto.
+   * NB: il primo `frequency.value` (crack MG, 1800 Hz) è la firma validata `shot_filter_hz` (§4.1).
+   */
+  playShot(kind: 'mg' | 'double_mg' | 'rifle' | 'rockets' | 'flamethrower' = 'mg') {
+    const t0 = this.ctx.currentTime;
+    switch (kind) {
+      case 'mg': {
+        const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1800; // firma `shot_filter_hz`
+        this.crackTail(this.noise(0.07), hp, 0.4, 0.05, t0);
+        this.gunPunch(t0, 150, 55, 0.34, 0.09);   // pugno grave (rimpiazza il vecchio puff di rumore)
+        break;
+      }
+      case 'double_mg': {
+        // Due canne: doppio schiocco sfalsato 8 ms + pugno più pieno e grave.
+        [0, 0.008].forEach((dt) => {
+          const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1700;
+          this.crackTail(this.noise(0.07), hp, 0.3, 0.05, t0 + dt);
+        });
+        this.gunPunch(t0, 135, 48, 0.36, 0.1);
+        break;
+      }
+      case 'rifle': {
+        // Alta potenza: schiocco più brillante + "tac" tonale velocissimo + pugno asciutto.
+        const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3000;
+        this.crackTail(this.noise(0.07), hp, 0.42, 0.06, t0);
+        this.gunPunch(t0, 200, 70, 0.26, 0.07);
+        // snap supersonico: triangle che cade in un lampo (il "tac" secco del fucile)
+        const osc = this.ctx.createOscillator(); osc.type = 'triangle';
+        osc.frequency.setValueAtTime(520, t0);
+        osc.frequency.exponentialRampToValueAtTime(110, t0 + 0.025);
+        const og = this.ctx.createGain();
+        og.gain.setValueAtTime(0.18, t0);
+        og.gain.exponentialRampToValueAtTime(0.001, t0 + 0.04);
+        osc.connect(og); this.sendShot(og, false);
+        osc.start(t0); osc.stop(t0 + 0.05);
+        break;
+      }
+      case 'rockets': {
+        // LANCIO: whoosh d'accensione (lowpass che scende, con coda) + spinta tonale grave. Niente schiocco.
+        // (L'esplosione AoE all'impatto resta `playExplosion`.)
+        const wh = this.noise(0.3);
+        const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(900, t0);
+        lp.frequency.exponentialRampToValueAtTime(200, t0 + 0.28);
+        const wg = this.ctx.createGain();
+        wg.gain.setValueAtTime(0.001, t0);
+        wg.gain.linearRampToValueAtTime(0.42, t0 + 0.03);
+        wg.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3);
+        wh.connect(lp); lp.connect(wg); this.sendShot(wg);   // con coda di riverbero
+        wh.start(t0); wh.stop(t0 + 0.32);
+        this.gunPunch(t0, 150, 55, 0.24, 0.22);              // spinta grave del razzo che parte
+        break;
+      }
+      case 'flamethrower': {
+        // SOFFIO continuo del getto: rumore bandpass con attacco morbido (niente transiente).
+        // Fuoco rapido (70 ms) → le code si fondono in un boato continuo; volutamente debole (≈ sfrigolio).
+        const f = 480 + Math.random() * 320;
+        const src = this.noise(0.12);
+        const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 0.6;
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.001, t0);
+        g.gain.linearRampToValueAtTime(0.16, t0 + 0.025);
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12);
+        src.connect(bp); bp.connect(g); g.connect(this.master);  // niente coda: a 70 ms impasterebbe
+        src.start(t0); src.stop(t0 + 0.13);
+        break;
+      }
+    }
+  }
+
+  /** Manda una voce al bus: dritta al master (dry) e, se `wet`, anche al riverbero corto degli spari. */
+  private sendShot(node: AudioNode, wet = true) {
+    node.connect(this.master);
+    if (wet) node.connect(this.shotVerb);
+  }
+
+  /** Coda dello schiocco: sorgente → filtro → saturazione (grit) → inviluppo → bus (dry + riverbero). */
+  private crackTail(src: AudioBufferSourceNode, filter: BiquadFilterNode, peak: number, dur: number, t0: number) {
+    const ws = this.ctx.createWaveShaper(); ws.curve = this.driveCurve;
     const g = this.ctx.createGain();
-    g.gain.setValueAtTime(0.45, this.ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
-    src.connect(flt); flt.connect(g); g.connect(this.master);
-    src.start(); src.stop(this.ctx.currentTime + dur);
+    g.gain.setValueAtTime(peak, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    src.connect(filter); filter.connect(ws); ws.connect(g);
+    this.sendShot(g);
+    src.start(t0); src.stop(t0 + dur + 0.02);
+  }
+
+  /** "Punch" della bocca da fuoco: oscillatore grave che PRECIPITA = pugno nel petto. Triangle (armoniche
+   *  → udibile anche su casse di laptop). Dry, niente riverbero (i bassi in coda impasterebbero). */
+  private gunPunch(t0: number, fStart: number, fEnd: number, peak: number, dur: number) {
+    const osc = this.ctx.createOscillator(); osc.type = 'triangle';
+    osc.frequency.setValueAtTime(fStart, t0);
+    osc.frequency.exponentialRampToValueAtTime(fEnd, t0 + dur * 0.6);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(peak, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    osc.connect(g); this.sendShot(g, false);
+    osc.start(t0); osc.stop(t0 + dur + 0.02);
   }
 
   /** Colpo NON letale su un nemico: thwack secco e corto ("l'ho preso"). Pitch variato per non affaticare a fuoco rapido. */
@@ -476,6 +610,8 @@ export default class SoundManager {
    */
   dispose() {
     this.stopEngine();
+    try { this.shotWet.disconnect(); } catch { /* già scollegato */ }
+    try { this.shotVerb.disconnect(); } catch { /* già scollegato */ }
     try { this.master.disconnect(); } catch { /* già scollegato */ }
     try { this.limiter.disconnect(); } catch { /* già scollegato */ }
   }

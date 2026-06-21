@@ -69,7 +69,7 @@ const CODE = {
   engine_load_base:   () => grab(setEngineLoad(), /=\s*([\d.]+)\s*\+\s*factor\s*\*\s*[\d.]+/, 'load base'),
   engine_load_span:   () => grab(setEngineLoad(), /=\s*[\d.]+\s*\+\s*factor\s*\*\s*([\d.]+)/, 'load span'),
   engine_fade_s:      () => grab(stopEngine(),    /setTargetAtTime\(\s*0\.001\s*,[^,]*,\s*([\d.]+)\s*\)/, 'engine fade'),
-  shot_filter_hz:     () => grab(sliceMethod(audio, 'playShot()'),        /frequency\.value\s*=\s*([\d.]+)/, 'shot filter'),
+  shot_filter_hz:     () => grab(sliceMethod(audio, 'playShot('),         /frequency\.value\s*=\s*([\d.]+)/, 'shot filter'),
   impact_filter_hz:   () => grab(sliceMethod(audio, 'playImpact()'),      /frequency\.value\s*=\s*([\d.]+)/, 'impact filter'),
   explosion_filter_hz:() => grab(sliceMethod(audio, 'playExplosion()'),   /frequency\.value\s*=\s*([\d.]+)/, 'explosion filter'),
   explosion_peak:     () => grab(sliceMethod(audio, 'playExplosion()'),   /gain\.setValueAtTime\(\s*([\d.]+)/, 'explosion peak'),
