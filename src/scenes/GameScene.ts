@@ -3,6 +3,7 @@ import { VEHICLES, Upgrades, WeaponType, WEAPONS, WEAPON_KEYS } from '../GameDat
 import SoundManager from '../SoundManager';
 import Juice from '../Juice';
 import { enterScreen } from '../PostFx';
+import Shadows from '../Shadows';
 import Environment from '../Environment';
 import Settings from '../Settings';
 import Ui, { UI } from '../Ui';
@@ -190,6 +191,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   sfx: SoundManager | null = null;
   private grain: Phaser.GameObjects.TileSprite | null = null;
+  private shadows?: Shadows;            // ombre di contatto (radicamento 2.5D)
   environment: Environment | null = null;
   private frozen = false;
 
@@ -346,6 +348,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     Juice.buildTextures(this);
     // Post-processing filmico via shader (WebGL); su Canvas ripiega sull'overlay di Juice.
     this.grain = Settings.screenFx ? enterScreen(this, 1) : null;
+    // Ombre di contatto a terra: radicano le entità (look 2.5D), ridisegnate per frame.
+    this.shadows = new Shadows(this, this.designW, H);
     Juice.fadeIn(this);
   }
 
@@ -372,6 +376,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       this.updateStripes(dt);
       this.environment?.update(dt, this.vehicle.x, this.vehicle.y);
       this.cleanOffScreen();
+      this.shadows?.update(this.shadowCasters());
       this.updateHUD();
       return;
     }
@@ -396,7 +401,26 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.updateStripes(dt);
     this.environment?.update(dt, this.vehicle.x, this.vehicle.y);
     this.cleanOffScreen();
+    this.shadows?.update(this.shadowCasters());
     this.updateHUD();
+  }
+
+  /**
+   * Entità che proiettano un'ombra di contatto questo frame (vivo + visibile).
+   * L'olio (`hazard_oil`) è già piatto a terra → niente ombra.
+   */
+  private shadowCasters(): Phaser.GameObjects.Sprite[] {
+    const out: Phaser.GameObjects.Sprite[] = [];
+    if (this.vehicle?.active) out.push(this.vehicle);
+    const push = (g: Phaser.Physics.Arcade.Group, skipOil = false) => {
+      for (const s of g.getChildren() as Phaser.Physics.Arcade.Sprite[])
+        if (s.active && s.visible && !(skipOil && s.texture.key === 'hazard_oil')) out.push(s);
+    };
+    push(this.zombies);
+    push(this.fuelCans);
+    push(this.hazards, true);
+    if (this.boss?.group) push(this.boss.group);
+    return out;
   }
 
   // ─── Textures ────────────────────────────────────────────────────────────────
