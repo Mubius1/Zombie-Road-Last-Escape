@@ -57,6 +57,9 @@ const OIL_SLOW_MULT = 0.5;          // moltiplicatore della velocità verticale 
 const MAX_AIM = Phaser.Math.DegToRad(82); // arco frontale di mira (±82° da destra)
 const KNOCK = 220;        // impulso di rinculo dei colpi (px/s, decade) — solo game-feel
 const KNOCK_DECAY = 0.84; // decadimento del rinculo per frame
+// ── Densità "orda" (combat reboot): sferzate periodiche di nemici oltre allo spawn regolare. ──
+const SURGE_INTERVAL = 13000; // ms tra una sferzata e l'altra
+const SURGE_BASE = 3;         // chiamate di spawn extra per sferzata (cresce con la missione, ognuna può essere uno sciame)
 
 interface EnvConfig {
   name: string;
@@ -224,6 +227,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private lastFire = 0;
   private spawnTimer = 0;
   private spawnInterval = 2100;
+  private surgeTimer = SURGE_INTERVAL;
 
   /** Larghezza dello spazio di design (800 in 4:3, maggiore in 16:9 → più strada). */
   designW = DESIGN_W;
@@ -253,8 +257,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.distance = 0;
     this.alive = true;
     this.missionDone = false;
-    this.spawnInterval = Math.max(700, 2100 - (missionNum - 1) * 80);
+    this.spawnInterval = Math.max(380, 1500 - (missionNum - 1) * 75); // densità "orda": più stretto di prima
     this.spawnTimer = 0;
+    this.surgeTimer = SURGE_INTERVAL;
     this.stripes = [];
     this.attachedZombies = [];
     this.mechanicTimer = 0;
@@ -817,8 +822,15 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.spawnTimer -= delta;
     if (this.spawnTimer <= 0) {
       this.spawnZombie();
-      this.spawnInterval = Math.max(500, this.spawnInterval - 3);
+      this.spawnInterval = Math.max(320, this.spawnInterval - 3);
       this.spawnTimer = this.spawnInterval;
+    }
+    // Sferzata: ogni SURGE_INTERVAL un'orda extra (ritmo a picchi, come l'arena).
+    this.surgeTimer -= delta;
+    if (this.surgeTimer <= 0) {
+      this.surgeTimer = SURGE_INTERVAL;
+      const n = Math.min(7, SURGE_BASE + Math.floor((this.missionNumber - 1) / 2));
+      for (let i = 0; i < n; i++) this.spawnZombie();
     }
   }
 
@@ -1156,7 +1168,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     }
 
     const baseY = Phaser.Math.Between(ROAD_TOP+22, ROAD_BOTTOM-22);
-    const count = type === 'common' && Math.random() < 0.25 ? Phaser.Math.Between(2,3) : 1;
+    // Sciami: i fodder arrivano in gruppo (densità "orda"); i tipi speciali restano singoli.
+    const count = (type === 'common' || type === 'runner') ? Phaser.Math.Between(1, 3)
+                : type === 'toxic' ? Phaser.Math.Between(1, 2) : 1;
     for (let i = 0; i < count; i++) {
       const y = Phaser.Math.Clamp(baseY + i*28*(Math.random()>0.5?1:-1), ROAD_TOP+22, ROAD_BOTTOM-22);
       const z = this.zombies.create(this.designW+30+i*20, y, `zombie_${type}`) as Phaser.Physics.Arcade.Sprite;
