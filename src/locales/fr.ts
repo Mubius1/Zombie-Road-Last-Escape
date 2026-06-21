@@ -114,8 +114,9 @@ const fr: Record<string, string> = {
   'game.toShop': '[ ESPACE ] pour la boutique',
   'game.toMenu': '[ M ]  Retour au menu',
   'game.gameOver': 'GAME OVER',
-  'game.progressReset': 'Progression réinitialisée — retour à la Mission 1',
-  'game.restart': '[ ESPACE ] pour recommencer',
+  'game.checkpointResume': 'Reprends à la Mission {n}',
+  'game.deathToll': 'Coût de récupération : −{n}★',
+  'game.restart': '[ ESPACE ] réessayer la mission',
 
   'boss.warn': '⚠  {name}  ⚠',
   'boss.fury': '⚠ FUREUR',

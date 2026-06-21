@@ -3,7 +3,7 @@ import Juice from '../Juice';
 import Ui, { UI } from '../Ui';
 import { buildVehicleTexture } from '../VehicleTextures';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
-import { resetRunState, getRun } from '../RunState';
+import { resetRunState, getRun, restoreRun } from '../RunState';
 import SaveData from '../SaveData';
 import { t } from '../i18n';
 
@@ -184,6 +184,7 @@ export default class MenuScene extends Phaser.Scene {
 
   /** Una corsa è in corso se il registry ha stato oltre i default (es. uscita al menu dalla pausa). */
   private hasProgress(): boolean {
+    if (SaveData.hasRun()) return true;    // checkpoint su disco → "CONTINUA" anche a freddo (cross-sessione)
     const mn = getRun(this.registry, 'missionNumber');
     if (typeof mn !== 'number') return false;
     return mn > 1
@@ -195,13 +196,16 @@ export default class MenuScene extends Phaser.Scene {
   }
 
   private continueGame() {
+    const saved = SaveData.loadRun();      // riprende il checkpoint salvato (anche cross-sessione)
+    if (saved) restoreRun(this.registry, saved);
     Juice.go(this, 'GameScene');
   }
 
   // ─── Azioni ───────────────────────────────────────────────────────────────────
 
   private newGame() {
-    // Azzera completamente il progresso (stessa logica del game over) e parte da capo.
+    // Azzera completamente il progresso: è l'UNICO vero reset (cancella anche il checkpoint salvato).
+    SaveData.clearRun();
     resetRunState(this.registry);
     Juice.go(this, 'GameScene');
   }

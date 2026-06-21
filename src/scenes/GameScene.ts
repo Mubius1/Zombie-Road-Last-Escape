@@ -6,7 +6,7 @@ import Environment from '../Environment';
 import Settings from '../Settings';
 import Ui, { UI } from '../Ui';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
-import { resetRunState, getRun, setRun } from '../RunState';
+import { resetRunState, getRun, setRun, snapshotRun, restoreRun } from '../RunState';
 import SaveData from '../SaveData';
 import { buildEntityTextures } from '../EntityTextures';
 import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
@@ -32,6 +32,7 @@ const ATTACH_DAMAGE_AMOUNT = 14;
 const MISSION_DIST = 18000;
 const GIANT_SPAWN_INTERVAL = 22000;
 const BOSS_TRIGGER = 0.82; // % missione a cui appare il boss
+const DEATH_MONEY_PENALTY = 0.25; // pedaggio di recupero alla morte (campagna a checkpoint, modello B)
 const COMBO_WINDOW = 2500;  // ms: finestra per mantenere la catena di uccisioni
 const DASH_COOLDOWN = 5000; // ms: ricarica dello scatto anti-aggancio
 const DASH_GRACE = 350;     // ms: dopo lo scatto nessun nuovo zombi si aggrappa
@@ -177,6 +178,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private giantTimer = 0;
   private envIndex = 0;
   private missionNumber = 1; // numero di missione corrente (per scaling NG+ e vittoria di ciclo)
+  private deathToll = 0;     // monete perse al pedaggio dell'ultima morte (per l'overlay)
 
   private hud!: HudController;
 
@@ -271,6 +273,10 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.currentWeapon = getRun(this.registry, 'currentWeapon') ?? 'mg';
     this.ownedWeapons  = getRun(this.registry, 'ownedWeapons')  ?? ['mg'];
     if (!this.ownedWeapons.includes(this.currentWeapon)) this.currentWeapon = this.ownedWeapons[0] ?? 'mg';
+
+    // CHECKPOINT (campagna a checkpoint): salva su disco lo stato d'inizio missione → "CONTINUA"
+    // cross-sessione e ripristino alla morte (vedi endGame). Il registry è autorevole qui.
+    SaveData.saveRun(snapshotRun(this.registry));
     this.combo = 0; this.comboTimer = 0;
     this.dashReadyAt = 0; this.dashGraceUntil = 0;
     this.overdrive = 0; this.overdriveActiveUntil = 0; this.overdriveGlow = null;
@@ -1279,7 +1285,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     }
     this.recoil = 4;
     if (this.currentWeapon !== 'flamethrower') Juice.muzzleFlash(this, mx, my, w.color);
-    this.sfx?.playShot();
+    this.sfx?.playShot(this.currentWeapon);
   }
 
   private spawnBullet(x: number, y: number, angle: number, damage: number, speed: number, color: number, maxDist: number) {
@@ -1315,7 +1321,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private fireAutoShot(y: number) {
     // Sopravvissuto Soldato: colpo automatico orizzontale verso la corsia del nemico più vicino.
     this.spawnBullet(this.vehicle.x + this.turretDx, y, 0, 1, BULLET_SPEED, 0x00ffff, 9999);
-    this.sfx?.playShot();
+    this.sfx?.playShot('mg');  // colpo automatico del Soldato = timbro MG
   }
 
   private getNearestZombieY(): number {
@@ -1729,10 +1735,22 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (!this.alive) return;
     this.alive = false;
 
-    SaveData.record(this.missionNumber, this.score); // aggiorna il record prima dell'azzeramento (G5)
+    SaveData.record(this.missionNumber, this.score); // aggiorna il record (G5)
 
-    // Reset tutto al game over (default centralizzati in RunState).
-    resetRunState(this.registry);
+    // CAMPAGNA A CHECKPOINT (non roguelike): la morte NON azzera. Si ripristina lo stato d'inizio
+    // della missione corrente (salvato in create) e si paga un PEDAGGIO di recupero sulle monete
+    // (modello B): forgiving, ma morire costa. Solo "Nuova Partita" cancella davvero il progresso.
+    // Fallback difensivo: se manca il checkpoint (non dovrebbe), reset totale come prima.
+    const cp = SaveData.loadRun();
+    if (cp) {
+      this.deathToll = Math.floor(cp.money * DEATH_MONEY_PENALTY);
+      const recovered = { ...cp, money: Math.max(0, cp.money - this.deathToll) };
+      restoreRun(this.registry, recovered);
+      SaveData.saveRun(recovered); // il checkpoint riflette il pedaggio (auto-limitante: monete ≥ 0)
+    } else {
+      this.deathToll = 0;
+      resetRunState(this.registry);
+    }
 
     this.sfx?.playGameOver();
     this.sfx?.stopEngine();
@@ -1750,18 +1768,20 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
     this.time.delayedCall(700, () => {
       const cx = this.designW/2, cy = H/2;
-      Ui.box(this, cx,cy,440,260,{ fill:UI.black, fillAlpha:0.88, radius:16, stroke:UI.redCrit, strokeAlpha:0.55 }).setDepth(30);
-      Ui.text(this, cx,cy-80,t('game.gameOver'),{
-        fontSize:'50px', color:'#ff3333', fontStyle:'bold',
+      Ui.box(this, cx,cy,440,300,{ fill:UI.black, fillAlpha:0.88, radius:16, stroke:UI.redCrit, strokeAlpha:0.55 }).setDepth(30);
+      Ui.text(this, cx,cy-92,t('game.gameOver'),{
+        fontSize:'46px', color:'#ff3333', fontStyle:'bold',
         stroke:'#880000', strokeThickness:5,
       }).setOrigin(0.5).setDepth(31);
-      Ui.text(this, cx,cy-28,reason,{fontSize:'16px',color:UI.redSoft}).setOrigin(0.5).setDepth(31);
-      Ui.text(this, cx,cy+10,t('game.scoreLine', { n: this.score }),{fontSize:'22px',color:UI.white}).setOrigin(0.5).setDepth(31);
-      Ui.text(this, cx,cy+42,t('game.distanceLine', { n: Math.floor(this.distance/100) }),{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
-      // Comunica che il game over azzera tutto il progresso (prima era silenzioso — U8).
-      Ui.text(this, cx,cy+68,t('game.progressReset'),{fontSize:'12px',color:UI.amberSoft}).setOrigin(0.5).setDepth(31);
-      Ui.text(this, cx,cy+92,t('game.restart'),{fontSize:'14px',color:UI.faint}).setOrigin(0.5).setDepth(31);
-      this.addMenuReturn(cx, cy+116);
+      Ui.text(this, cx,cy-46,reason,{fontSize:'16px',color:UI.redSoft}).setOrigin(0.5).setDepth(31);
+      Ui.text(this, cx,cy-8,t('game.scoreLine', { n: this.score }),{fontSize:'22px',color:UI.white}).setOrigin(0.5).setDepth(31);
+      Ui.text(this, cx,cy+24,t('game.distanceLine', { n: Math.floor(this.distance/100) }),{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
+      // Campagna a checkpoint: da dove si riprende + il pedaggio di recupero pagato (modello B).
+      Ui.text(this, cx,cy+58,t('game.checkpointResume', { n: this.missionNumber }),{fontSize:'14px',color:UI.amberSoft}).setOrigin(0.5).setDepth(31);
+      if (this.deathToll > 0)
+        Ui.text(this, cx,cy+82,t('game.deathToll', { n: this.deathToll }),{fontSize:'12px',color:UI.redSoft}).setOrigin(0.5).setDepth(31);
+      Ui.text(this, cx,cy+108,t('game.restart'),{fontSize:'14px',color:UI.faint}).setOrigin(0.5).setDepth(31);
+      this.addMenuReturn(cx, cy+136);
       this.input.keyboard?.once('keydown-M', () => Juice.go(this, 'MenuScene'));
     });
   }

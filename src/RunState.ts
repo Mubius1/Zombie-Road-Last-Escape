@@ -54,3 +54,37 @@ export function resetRunState(registry: Phaser.Data.DataManager) {
   setRun(registry, 'currentWeapon', 'mg');
   setRun(registry, 'components', null);
 }
+
+/**
+ * Cattura lo stato corrente della run dal registry in un oggetto serializzabile (checkpoint).
+ * Usato per persistere la corsa su disco (SaveData) a inizio missione → "CONTINUA" cross-sessione
+ * e ripristino alla morte (campagna a checkpoint). Inverso: `restoreRun`.
+ */
+export function snapshotRun(registry: Phaser.Data.DataManager): RunData {
+  return {
+    missionNumber: getRun(registry, 'missionNumber') ?? 1,
+    money:         getRun(registry, 'money') ?? 0,
+    survivors:     getRun(registry, 'survivors') ?? [],
+    upgrades:      getRun(registry, 'upgrades') ?? {},
+    vehicle:       getRun(registry, 'vehicle') ?? 'civilian_car',
+    ownedVehicles: getRun(registry, 'ownedVehicles') ?? ['civilian_car'],
+    ownedWeapons:  getRun(registry, 'ownedWeapons') ?? ['mg'],
+    currentWeapon: getRun(registry, 'currentWeapon') ?? 'mg',
+    components:    getRun(registry, 'components') ?? null,
+    lastScore:     getRun(registry, 'lastScore') ?? 0,
+  };
+}
+
+/** Riversa uno snapshot (checkpoint) nel registry — l'inverso di `snapshotRun`. */
+export function restoreRun(registry: Phaser.Data.DataManager, run: RunData): void {
+  setRun(registry, 'missionNumber', run.missionNumber);
+  setRun(registry, 'money',         run.money);
+  setRun(registry, 'survivors',     run.survivors);
+  setRun(registry, 'upgrades',      run.upgrades);
+  setRun(registry, 'vehicle',       run.vehicle);
+  setRun(registry, 'ownedVehicles', run.ownedVehicles);
+  setRun(registry, 'ownedWeapons',  run.ownedWeapons);
+  setRun(registry, 'currentWeapon', run.currentWeapon);
+  setRun(registry, 'components',    run.components);
+  setRun(registry, 'lastScore',     run.lastScore);
+}

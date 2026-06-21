@@ -130,8 +130,9 @@ const it: Record<string, string> = {
   'game.toShop': '[ SPAZIO ] per il negozio',
   'game.toMenu': '[ M ]  Torna al menu',
   'game.gameOver': 'GAME OVER',
-  'game.progressReset': 'Progressione azzerata — si riparte dalla Missione 1',
-  'game.restart': '[ SPAZIO ] per ricominciare',
+  'game.checkpointResume': 'Riprendi dalla Missione {n}',
+  'game.deathToll': 'Costo di recupero: −{n}★',
+  'game.restart': '[ SPAZIO ] riprova la missione',
 
   // ── Boss ─────────────────────────────────────────────────────────────────────────
   'boss.warn': '⚠  {name}  ⚠',

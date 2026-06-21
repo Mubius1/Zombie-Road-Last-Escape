@@ -7,6 +7,7 @@ import Juice from '../Juice';
 import Ui, { UI } from '../Ui';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { resetRunState, getRun, setRun } from '../RunState';
+import SaveData from '../SaveData';
 import { t } from '../i18n';
 
 const H = 600;
@@ -206,6 +207,7 @@ export default class DebugScene extends Phaser.Scene {
   }
 
   private startFresh() {
+    SaveData.clearRun();
     resetRunState(this.registry);
     Juice.go(this, 'GameScene');
   }
