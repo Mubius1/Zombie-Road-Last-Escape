@@ -129,6 +129,10 @@ La carreggiata è una **texture orizzontale tileabile** (es. `road_asphalt`, ~`2
 - **Implementato** (in `buildWorld()`): strisce in **`env.lineColor`**, alpha variabile `0.20–0.36` per segmento, ~1 dash su 6 quasi assente (alpha `0.06`) → strada abbandonata. Scroll via `updateStripes()`.
 - **Ancora aperto:** doppia linea continua di corsia (oggi c'è solo la **linea di bordo** viva, cotta nell'asfalto).
 
+### 4.1b Dettaglio di superficie in shader (FBM) — ✅ fatto
+- **`src/pipelines/AsphaltPipeline.ts`** (object-pipeline su `this.asphalt`, gated da `Settings.screenFx` + WebGL): un **rumore FBM** a 4 ottave aggiunge sporco/weathering a frequenza più alta di quanto il tile da 256 px contenga, **scorrendo col manto** (`asphaltParams.scroll = tilePositionX`) → la ripetizione del tile non si legge. Una chiazza fredda di **umido** (riflesso bluastro dove il rumore è alto) rompe il piatto. Parametri (🎚️): `GRIME 0.12` · `WET 0.06` · freq `NSX 22 / NSY 7`. Solo GLSL inline, nessun asset.
+- **Convivenza:** la texture bakeata (grana/crepe/rappezzi cotti) resta la base; lo shader è un *layer* sopra, leggero (una passata sulla sola strada).
+
 ### 4.2 Ciglio e spallette (L3 / L5) — ✅ fatto (parziale)
 - **Implementato** (`bakeRumble`, cotto nei bordi della texture asfalto → **scorre con la strada**): **transizione a 3 fasce**:
   1. **Linea di bordo viva** (`lineColor`, consumata).

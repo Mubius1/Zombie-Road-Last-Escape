@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import Settings from './Settings';
+import AsphaltPipeline, { asphaltParams } from './pipelines/AsphaltPipeline';
 
 /**
  * Sistema "Ambiente & Strada" — la strada come secondo personaggio.
@@ -7,7 +9,9 @@ import Phaser from 'phaser';
  * l'illuminazione del mondo (gradiente cielo, luce di carreggiata, fari).
  *
  * Tutto 100% procedurale (Graphics → generateTexture/TileSprite), bake-once,
- * fire-and-forget, a 60 fps. Niente PNG, niente shader, niente per-frame redraw.
+ * fire-and-forget, a 60 fps. Niente PNG, niente per-frame redraw. La superficie dell'asfalto
+ * riceve un dettaglio FBM in shader (AsphaltPipeline) che scorre col manto — solo GLSL inline,
+ * nessun asset esterno.
  */
 
 export interface RoadGeom {
@@ -329,6 +333,10 @@ export default class Environment {
 
     // §4 asfalto tileato (copre il rettangolo piatto + le linee di bordo)
     this.asphalt = this.scene.add.tileSprite(W / 2, roadCenter, W, roadBottom - roadTop, `env_asphalt_${this.idx}`).setDepth(0.5);
+    // Dettaglio FBM in shader sulla strada (WebGL + screenFx): scorre col manto, rompe la ripetizione.
+    if (Settings.screenFx && this.scene.game.renderer.type === Phaser.WEBGL) {
+      this.asphalt.setPostPipeline(AsphaltPipeline);
+    }
 
     // §6 luce di carreggiata: incassa i bordi nella notte, centro leggibile (sotto le entità)
     const rl = this.scene.add.graphics().setDepth(2);
@@ -348,6 +356,9 @@ export default class Environment {
     this.asphalt.tilePositionX += sx;
     this.far.tilePositionX  += sx * 0.22;
     this.near.tilePositionX += sx * 0.55;
+    asphaltParams.scroll = this.asphalt.tilePositionX; // alimenta lo shader di superficie
+
+
 
     for (let i = this.decals.length - 1; i >= 0; i--) {
       const d = this.decals[i];

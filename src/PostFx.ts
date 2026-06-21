@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import Juice from './Juice';
 import FilmPipeline from './pipelines/FilmPipeline';
+import AsphaltPipeline from './pipelines/AsphaltPipeline';
 
 /**
  * PostFx — punto unico per il post-processing a livello di camera.
@@ -15,13 +16,18 @@ import FilmPipeline from './pipelines/FilmPipeline';
 
 /** Nome registrato della pipeline filmica (deve combaciare con `FilmPipeline` name). */
 export const POSTFX_FILM = 'Film';
+/** Nome registrato della pipeline di superficie asfalto (object-pipeline sulla strada). */
+export const POSTFX_ASPHALT = 'Asphalt';
 
 /**
  * Mappa nome→classe per GameConfig.pipeline. Phaser instrada automaticamente le
  * sottoclassi di PostFXPipeline al registro delle post-pipeline al boot del renderer.
  * Tipizzato lasco perché la firma di PipelineConfig vuole `typeof WebGLPipeline`.
  */
-export const PIPELINES: Record<string, unknown> = { [POSTFX_FILM]: FilmPipeline };
+export const PIPELINES: Record<string, unknown> = {
+  [POSTFX_FILM]: FilmPipeline,
+  [POSTFX_ASPHALT]: AsphaltPipeline,
+};
 
 /**
  * Bloom morbido sugli emissivi (FX integrata, multi-pass a mezza risoluzione → economica).
