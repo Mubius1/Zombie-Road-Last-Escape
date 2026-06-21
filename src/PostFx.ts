@@ -1,0 +1,61 @@
+import Phaser from 'phaser';
+import Juice from './Juice';
+import FilmPipeline from './pipelines/FilmPipeline';
+
+/**
+ * PostFx — punto unico per il post-processing a livello di camera.
+ *
+ * Registra le pipeline custom (vedi `PIPELINES`, agganciato in game.ts → GameConfig.pipeline)
+ * e le attacca alla camera principale di una scena. Tutto è gated da `Settings.screenFx`
+ * dai chiamanti e da un guard WebGL: se il renderer è Canvas (fallback di `Phaser.AUTO`),
+ * lo shader non è disponibile e si torna all'overlay "finto" di Juice.
+ *
+ * Le FX sono **WebGL-only** (nessuna controparte Canvas) — il guard evita schermate vuote.
+ */
+
+/** Nome registrato della pipeline filmica (deve combaciare con `FilmPipeline` name). */
+export const POSTFX_FILM = 'Film';
+
+/**
+ * Mappa nome→classe per GameConfig.pipeline. Phaser instrada automaticamente le
+ * sottoclassi di PostFXPipeline al registro delle post-pipeline al boot del renderer.
+ * Tipizzato lasco perché la firma di PipelineConfig vuole `typeof WebGLPipeline`.
+ */
+export const PIPELINES: Record<string, unknown> = { [POSTFX_FILM]: FilmPipeline };
+
+/** True se il renderer attivo è WebGL (necessario per qualsiasi shader/post-FX). */
+function isWebGL(scene: Phaser.Scene): boolean {
+  return scene.game.renderer.type === Phaser.WEBGL;
+}
+
+/**
+ * Attacca la catena di post-processing alla camera principale della scena.
+ * Ritorna true se attiva (WebGL); false su Canvas (il chiamante usa il fallback Juice).
+ *
+ * `vignette` regola la forza della vignetta per QUESTA camera (1 = gioco, ~0.45 = menu).
+ */
+export function attachPostFx(scene: Phaser.Scene, vignette = 1): boolean {
+  if (!isWebGL(scene)) return false;
+
+  const cam = scene.cameras.main;
+  cam.setPostPipeline(FilmPipeline);
+
+  // Ogni camera riceve la propria istanza di pipeline → impostiamo la vignetta per-camera.
+  const got = cam.getPostPipeline(FilmPipeline);
+  const film = (Array.isArray(got) ? got[0] : got) as FilmPipeline | undefined;
+  if (film) film.vignette = vignette;
+
+  return true;
+}
+
+/**
+ * Ingresso schermo unificato: prova ad attaccare la pipeline shader; se non disponibile
+ * (Canvas) ripiega sull'overlay procedurale di Juice. Ritorna la grana del fallback
+ * (per `Juice.jitterGrain`) oppure null quando lo shader è attivo (la grana la fa lo shader).
+ *
+ * I chiamanti restano gated da `Settings.screenFx` come prima.
+ */
+export function enterScreen(scene: Phaser.Scene, vignette = 1): Phaser.GameObjects.TileSprite | null {
+  if (attachPostFx(scene, vignette)) return null;
+  return Juice.addOverlay(scene, 18, vignette);
+}

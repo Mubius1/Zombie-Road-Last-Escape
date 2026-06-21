@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import Juice from '../Juice';
 import Settings from '../Settings';
+import { enterScreen } from '../PostFx';
 import SoundManager from '../SoundManager';
 import Ui, { UI, MENU_VIGNETTE } from '../Ui';
 import { setupCamera, DESIGN_W, RESOLUTIONS, currentResolution } from '../Config';
@@ -68,7 +69,7 @@ export default class SettingsScene extends Phaser.Scene {
     // L'overlay filmico proprio serve solo a scena piena (dal menu);
     // in pausa quello del gioco è già sotto.
     Juice.fadeIn(this);
-    if (!inGame && Settings.screenFx) this.grain = Juice.addOverlay(this, 18, MENU_VIGNETTE);
+    if (!inGame && Settings.screenFx) this.grain = enterScreen(this, MENU_VIGNETTE);
 
     // L'anteprima audio è per-istanza: a ogni restart (toggle fx/risoluzione/lingua) va smontata,
     // altrimenti lascia un master+limiter appeso al context condiviso (AU7).

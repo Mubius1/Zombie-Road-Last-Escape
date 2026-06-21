@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { VEHICLES, Upgrades, WeaponType, WEAPONS, WEAPON_KEYS } from '../GameData';
 import SoundManager from '../SoundManager';
 import Juice from '../Juice';
+import { enterScreen } from '../PostFx';
 import Environment from '../Environment';
 import Settings from '../Settings';
 import Ui, { UI } from '../Ui';
@@ -343,7 +344,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // Garantisce le texture del juice (fx_light) anche con overlay disattivato: muzzleFlash/bloom e
     // l'alone del Sovraccarico (A3) le usano a prescindere da screenFx.
     Juice.buildTextures(this);
-    this.grain = Settings.screenFx ? Juice.addOverlay(this) : null;
+    // Post-processing filmico via shader (WebGL); su Canvas ripiega sull'overlay di Juice.
+    this.grain = Settings.screenFx ? enterScreen(this, 1) : null;
     Juice.fadeIn(this);
   }
 

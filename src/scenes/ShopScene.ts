@@ -4,6 +4,7 @@ import { buildEntityTextures } from '../EntityTextures';
 import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import Juice from '../Juice';
 import Settings from '../Settings';
+import { enterScreen } from '../PostFx';
 import SoundManager from '../SoundManager';
 import Ui, { UI, MENU_VIGNETTE } from '../Ui';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
@@ -84,7 +85,7 @@ export default class ShopScene extends Phaser.Scene {
     // Coesione filmica: overlay sempre presente (se attivo), dissolvenza solo al
     // primo ingresso — non ad ogni ri-disegno dopo un acquisto. Vignetta morbida
     // (menu): i pannelli laterali e la fila veicoli vivono ai bordi.
-    if (Settings.screenFx) this.grain = Juice.addOverlay(this, 18, MENU_VIGNETTE);
+    if (Settings.screenFx) this.grain = enterScreen(this, MENU_VIGNETTE);
     if (!this.replay) Juice.fadeIn(this);
   }
 

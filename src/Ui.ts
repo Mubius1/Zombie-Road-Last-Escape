@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import Juice from './Juice';
 import Settings from './Settings';
 import { OVERSAMPLE } from './Config';
+import { enterScreen } from './PostFx';
 
 /**
  * Chrome condiviso dell'interfaccia — fonte di verità unica per font, palette
@@ -253,6 +254,7 @@ export default class Ui {
   static enter(scene: Phaser.Scene, fadeMs = 300): Phaser.GameObjects.TileSprite | null {
     Juice.fadeIn(scene, fadeMs);
     // Vignetta morbida (MENU_VIGNETTE): nei menu i contenuti vivono ai bordi.
-    return Settings.screenFx ? Juice.addOverlay(scene, 18, MENU_VIGNETTE) : null;
+    // Shader filmico se WebGL; altrimenti overlay procedurale di Juice (fallback Canvas).
+    return Settings.screenFx ? enterScreen(scene, MENU_VIGNETTE) : null;
   }
 }
