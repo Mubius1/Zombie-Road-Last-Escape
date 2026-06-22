@@ -157,6 +157,11 @@ const it: Record<string, string> = {
   'route.rest.label': 'Tratta Tranquilla',
   'route.rest.desc': 'Pochi nemici, pochi ostacoli — per rifiatare. Ma poche monete.',
 
+  // ── Eventi in-run (Track B2) ──
+  'event.night': 'ORDA NOTTURNA',
+  'event.roadblock': 'BLOCCO STRADALE',
+  'event.storm': 'TEMPESTA',
+
   'boss.warn': '⚠  {name}  ⚠',
   'boss.fury': '⚠ FURIA',
   'boss.defeated': 'BOSS SCONFITTO!  +{n} monete',

@@ -57,6 +57,14 @@ const SPITTER_PROJECTILE_SPEED = 260; // velocità del proiettile tossico (lento
 const HAZARD_SPAWN_INTERVAL = 4500; // ms tra un ostacolo e l'altro
 const OIL_SLOW_DURATION = 1500;     // ms di controllo verticale ridotto dopo l'olio
 const OIL_SLOW_MULT = 0.5;          // moltiplicatore della velocità verticale durante l'olio
+// ── Eventi in-run (Track B2): picchi situazionali a frazioni di missione (prima del boss all'82%). ──
+const EVENT_FRACTIONS = [0.3, 0.62]; // % missione a cui può scattare un evento
+const EVENT_CHANCE = 0.8;            // probabilità che un evento scatti alla soglia (varietà tra le run)
+const NIGHT_DURATION = 6500;         // ms dell'orda notturna (velo scuro)
+const NIGHT_DIM = 0.4;               // alpha del velo notturno
+const STORM_DURATION = 7000;         // ms della tempesta
+const STORM_DIM = 0.28;              // alpha del velo tempesta
+const STORM_HANDLING_MULT = 0.55;    // sterzo molle durante la tempesta
 // ── Mira col mouse (combat reboot): la torretta punta il puntatore; i colpi danno knockback. ──
 const MAX_AIM = Phaser.Math.DegToRad(82); // arco frontale di mira (±82° da destra)
 const KNOCK = 220;        // impulso di rinculo dei colpi (px/s, decade) — solo game-feel
@@ -153,6 +161,12 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private spitProjectiles!: Phaser.Physics.Arcade.Group; // proiettili dello Sputatore (A2)
   private hazards!: Phaser.Physics.Arcade.Group;         // ostacoli di corsia (A1)
   private oilUntil = 0;                                   // controllo verticale ridotto finché now < oilUntil
+  private stormUntil = 0;                                 // sterzo molle (tempesta B2) finché now < stormUntil
+  private eventThresholds: number[] = [];                 // distanze a cui scattano gli eventi in-run (B2)
+  private nextEventIdx = 0;                               // prossima soglia evento da valutare
+  private eventEndsAt = 0;                                // fine dell'evento a durata in corso (velo)
+  private eventOverlay: Phaser.GameObjects.Rectangle | null = null; // velo a schermo (notte/tempesta)
+  private lastEvent = '';                                 // ultimo evento (per non ripeterlo di fila)
   private lastHazardY = ROAD_CENTER;                      // corsia dell'ultimo hazard (bias taniche)
 
   private attachedZombies: AttachedZombie[] = [];
@@ -294,6 +308,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.dashReadyAt = 0; this.dashGraceUntil = 0;
     this.overdrive = 0; this.overdriveActiveUntil = 0; this.overdriveGlow = null;
     this.oilUntil = 0; this.lastHazardY = ROAD_CENTER;
+    this.stormUntil = 0; this.nextEventIdx = 0; this.lastEvent = '';
+    this.eventOverlay?.destroy(); this.eventOverlay = null;
+    this.eventThresholds = EVENT_FRACTIONS.map(f => f * MISSION_DIST); // Track B2: soglie eventi della missione
     this.aimAngle = 0; this.aimX = this.designW; this.aimY = ROAD_CENTER; this.recoil = 0;
     this.turretDx = TURRET_DX[this.vehicleKey] ?? 8;
     this.boss = new BossController(this); // stato boss fresco + gruppi fisici (usati da buildColliders)
@@ -858,6 +875,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private updateDistance(dt: number) {
     this.distance += SCROLL_SPEED * dt;
+    this.updateEvents(); // Track B2: eventi in-run a soglie di distanza
     if (!this.boss.spawned && this.distance >= MISSION_DIST * BOSS_TRIGGER) {
       this.boss.spawn();
       // Ambient sospeso nel duello (coerente con fuel/spawn): via hazard e proiettili residui, niente malus olio.
@@ -1246,6 +1264,96 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(25);
     this.tweens.add({ targets: warn, alpha: 0, y: H/2 - 50, duration: 1600, onComplete: () => warn.destroy() });
+  }
+
+  // ─── Eventi in-run (Track B2): picchi situazionali a soglie di distanza ─────────
+  /** Scheduler: alle soglie fa scattare un evento casuale (notte/blocco/tempesta) e chiude gli
+   *  eventi a durata (velo/handling) allo scadere. Chiamato ogni frame da updateDistance. */
+  private updateEvents() {
+    if (!this.boss.active && !this.boss.defeated && !this.missionDone
+        && this.nextEventIdx < this.eventThresholds.length
+        && this.distance >= this.eventThresholds[this.nextEventIdx]) {
+      this.nextEventIdx++;
+      if (Math.random() < EVENT_CHANCE) this.triggerRandomEvent();
+    }
+    if (this.eventOverlay && this.time.now >= this.eventEndsAt) this.endTimedEvent();
+  }
+
+  private triggerRandomEvent() {
+    const pool = ['night', 'roadblock', 'storm'].filter(e => e !== this.lastEvent);
+    const ev = pool[Math.floor(Math.random() * pool.length)];
+    this.lastEvent = ev;
+    if (ev === 'night') this.eventNightHorde();
+    else if (ev === 'roadblock') this.eventRoadblock();
+    else this.eventStorm();
+  }
+
+  /** ORDA NOTTURNA: le luci calano e arriva una raffica di nemici. */
+  private eventNightHorde() {
+    this.announceEvent('event.night', '#88aaff');
+    this.sfx?.playBossWarn();
+    this.showEventOverlay(0x0a0e22, NIGHT_DIM, NIGHT_DURATION);
+    const n = Phaser.Math.Between(6, 9);
+    for (let i = 0; i < n; i++) {
+      this.time.delayedCall(i * 170, () => {
+        if (this.alive && !this.missionDone && !this.boss.active) this.spawnZombie();
+      });
+    }
+  }
+
+  /** BLOCCO STRADALE: un muro di relitti con un varco (2 corsie) da centrare. Riusa gli hazard (A1). */
+  private eventRoadblock() {
+    this.announceEvent('event.roadblock', '#ffaa00');
+    this.sfx?.playImpact();
+    const lanes = 5;
+    const gap = Phaser.Math.Between(0, lanes - 2); // corsie aperte: gap e gap+1
+    const top = ROAD_TOP + 28, bottom = ROAD_BOTTOM - 28;
+    for (let i = 0; i < lanes; i++) {
+      if (i === gap || i === gap + 1) continue;
+      const y = top + (bottom - top) * (i / (lanes - 1));
+      const h = this.hazards.create(this.designW + 40, y, 'hazard_wreck') as Phaser.Physics.Arcade.Sprite;
+      h.setVelocityX(-SCROLL_SPEED).setScale(1 / OVERSAMPLE).setDepth(7).setData('kind', 'wreck');
+    }
+  }
+
+  /** TEMPESTA: visibilità ridotta + sterzo molle per un tratto (riusa il debuff dell'olio). */
+  private eventStorm() {
+    this.announceEvent('event.storm', '#66ccff');
+    this.stormUntil = this.time.now + STORM_DURATION;
+    this.showEventOverlay(0x223344, STORM_DIM, STORM_DURATION);
+  }
+
+  /** Banner d'annuncio centrato (modello dello stinger del Gigante). Spazio design (camera statica). */
+  private announceEvent(key: string, color: string) {
+    const b = Ui.text(this, this.designW / 2, 150, t(key), {
+      fontSize: '28px', color, fontStyle: 'bold', stroke: '#000000', strokeThickness: 5,
+    }).setOrigin(0.5).setDepth(26).setScale(0.6).setAlpha(0);
+    this.tweens.add({ targets: b, alpha: 1, scale: 1, duration: 260, ease: 'Back.out' });
+    this.tweens.add({ targets: b, alpha: 0, y: 120, delay: 1700, duration: 600, onComplete: () => b.destroy() });
+  }
+
+  /** Velo a schermo per gli eventi a durata (notte/tempesta). Dimensionato in spazio design. */
+  private showEventOverlay(color: number, alpha: number, duration: number) {
+    this.eventOverlay?.destroy();
+    // Depth 8: sopra strada/hazard (≤7) ma SOTTO nemici (9)/veicolo/proiettili → scurisce il mondo
+    // mantenendo leggibili le minacce (pilastro leggibilità, art bible zombi §"vince leggibile").
+    const ov = this.add.rectangle(this.designW / 2, H / 2, this.designW, H, color).setDepth(8).setAlpha(0);
+    this.eventOverlay = ov;
+    this.eventEndsAt = this.time.now + duration;
+    this.tweens.add({ targets: ov, alpha, duration: 500 });
+  }
+
+  private endTimedEvent() {
+    const ov = this.eventOverlay;
+    this.eventOverlay = null;
+    if (ov) this.tweens.add({ targets: ov, alpha: 0, duration: 700, onComplete: () => ov.destroy() });
+  }
+
+  /** Pulizia eventi (fine missione / game over): rimuove il velo e azzera il debuff tempesta. */
+  private cleanupEvents() {
+    this.eventOverlay?.destroy();
+    this.eventOverlay = null;
+    this.stormUntil = 0;
   }
 
   private spawnFuelCan() {
@@ -1683,7 +1791,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     const w = 0.15 + 0.85 * (this.components.wheels.health / 100);
     const a = Math.max(0.3, 1 - this.attachedZombies.length * 0.12);
     const oil = this.time.now < this.oilUntil ? OIL_SLOW_MULT : 1; // A1: olio → controllo verticale ridotto
-    return 230 * this.vehicleSpeedMult * w * a * oil;
+    const storm = this.time.now < this.stormUntil ? STORM_HANDLING_MULT : 1; // B2: tempesta → sterzo molle
+    return 230 * this.vehicleSpeedMult * w * a * oil * storm;
   }
 
   private getEffectiveCooldown(): number {
@@ -1729,6 +1838,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // chiudere il browser sull'overlay di fine missione o nel negozio non perde la missione (fix review).
     if (!this.debugRun) SaveData.saveRun(snapshotRun(this.registry));
 
+    this.cleanupEvents(); // B2: via velo/debuff a fine missione
     this.sfx?.playMissionComplete();
     this.sfx?.stopEngine();
     this.zombies.setVelocityX(0); this.zombies.setVelocityY(0); // anche Y per il Caricatore in carica (A2)
@@ -1820,6 +1930,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.spitProjectiles.setVelocityX(0); this.spitProjectiles.setVelocityY(0);
     this.hazards.setVelocityX(0);
     this.clearAttachedZombies(); // niente sprite/timer orfani sul veicolo congelato (X3)
+    this.cleanupEvents(); // B2: via velo notte/tempesta e debuff, niente overlay sopra il game over
 
     this.time.delayedCall(700, () => {
       const cx = this.designW/2, cy = H/2;

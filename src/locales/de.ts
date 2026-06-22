@@ -139,6 +139,11 @@ const de: Record<string, string> = {
   'route.rest.label': 'Ruhige Etappe',
   'route.rest.desc': 'Wenige Gegner, wenige Hindernisse — zum Durchatmen. Aber wenig Geld.',
 
+  // ── Missions-Events (Track B2) ──
+  'event.night': 'NACHTHORDE',
+  'event.roadblock': 'STRASSENSPERRE',
+  'event.storm': 'STURM',
+
   'boss.warn': '⚠  {name}  ⚠',
   'boss.fury': '⚠ FURIE',
   'boss.defeated': 'BOSS BESIEGT!  +{n} Münzen',

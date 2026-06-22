@@ -334,7 +334,7 @@ Questa roadmap, da sola, **non tocca codice** → tutti i validatori restano ver
 | A1 | Hazard di corsia | A | ✅ fatto |
 | — | **Combat reboot (mira col mouse)** | **fondazione** | ✅ fatto (branch `aim-combat`) — esito del fun-gate; convive con Track A |
 | B1 | Nodo scelta percorso | B | ✅ fatto (3 nodi: Orda Fitta / Strada Minata / Tratta Tranquilla · `RouteScene` tra negozio e missione) |
-| B2 | Eventi in-run | B | ⬜ da fare |
+| B2 | Eventi in-run | B | ✅ fatto (scheduler a soglie · 3 eventi: Orda Notturna / Blocco Stradale / Tempesta) |
 | C1 | Pattern d'attacco boss | C | ⬜ da fare |
 | C2 | Meccanica per regione | C | ⬜ da fare |
 | D0 | RNG seedabile | D | ⬜ da fare |

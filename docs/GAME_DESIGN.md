@@ -111,6 +111,7 @@ Tutto vive in uno **spazio di design alto 600** (vedi [CLAUDE.md → Risoluzione
 | Sferzata d'orda | ogni `SURGE_INTERVAL = 11 500` ms | onda extra `min(7, 4 + ⌊(missione−1)/2⌋)` spawn; sospesa durante il boss |
 | Gigante | ogni `22 000` ms | spawn speciale fuori dal pool ordinario |
 | Hazard di corsia | ogni `4500` ms | relitto/olio/mina che scorrono col mondo, da schivare (A1) |
+| Eventi in-run (B2) | a ~30% e ~62% (prob. 80%) | picco situazionale, mai prima del boss: **Orda Notturna** (velo scuro + raffica), **Blocco Stradale** (muro di relitti con varco), **Tempesta** (sterzo molle + visibilità ridotta) |
 
 **Densità "orda".** La mira attiva regge una pressione più alta: la strada è **affollata**. Tre leve danno il ritmo:
 - **Intervallo più fitto** — lo spawn ordinario parte molto più stretto di prima (pavimento `290` ms vs `500`), così la massa cresce in fretta.

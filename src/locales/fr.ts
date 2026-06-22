@@ -139,6 +139,11 @@ const fr: Record<string, string> = {
   'route.rest.label': 'Tronçon Calme',
   'route.rest.desc': "Peu d'ennemis, peu d'obstacles — une pause. Mais peu d'argent.",
 
+  // ── Événements en mission (Track B2) ──
+  'event.night': 'HORDE NOCTURNE',
+  'event.roadblock': 'BARRAGE',
+  'event.storm': 'TEMPÊTE',
+
   'boss.warn': '⚠  {name}  ⚠',
   'boss.fury': '⚠ FUREUR',
   'boss.defeated': 'BOSS VAINCU !  +{n} pièces',

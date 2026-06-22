@@ -139,6 +139,11 @@ const en: Record<string, string> = {
   'route.rest.label': 'Quiet Stretch',
   'route.rest.desc': 'Few enemies, few hazards — a breather. But little money.',
 
+  // ── In-run events (Track B2) ──
+  'event.night': 'NIGHT HORDE',
+  'event.roadblock': 'ROADBLOCK',
+  'event.storm': 'STORM',
+
   'boss.warn': '⚠  {name}  ⚠',
   'boss.fury': '⚠ FURY',
   'boss.defeated': 'BOSS DEFEATED!  +{n} coins',

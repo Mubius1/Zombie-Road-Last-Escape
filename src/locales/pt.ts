@@ -139,6 +139,11 @@ const pt: Record<string, string> = {
   'route.rest.label': 'Trecho Calmo',
   'route.rest.desc': 'Poucos inimigos, poucos perigos — um respiro. Mas pouco dinheiro.',
 
+  // ── Eventos na missão (Track B2) ──
+  'event.night': 'HORDA NOTURNA',
+  'event.roadblock': 'BLOQUEIO',
+  'event.storm': 'TEMPESTADE',
+
   'boss.warn': '⚠  {name}  ⚠',
   'boss.fury': '⚠ FÚRIA',
   'boss.defeated': 'CHEFE DERROTADO!  +{n} moedas',
