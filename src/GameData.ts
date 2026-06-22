@@ -30,15 +30,19 @@ export interface SurvivorData {
   /** Numeri iniettati nei segnaposto dell'abilità (singola fonte di verità, niente drift). */
   abilityParams?: Record<string, number>;
   color: string;
-  /** Nome proprio del personaggio (fisso, non tradotto — i nomi non si traducono). Texture: `survivor_<key>`. */
+  /** Nome proprio (fisso, non tradotto — i nomi non si traducono). Texture: `survivor_<key>`. */
   properName: string;
+  /** Cognome (fisso). */
+  surname: string;
+  /** Chiave i18n della storia del personaggio, prima dell'epidemia. */
+  bio: string;
 }
 
 export const SURVIVORS: SurvivorData[] = [
-  { key: 'mechanic', properName: 'Bruno',  name: 'survivor.mechanic.name', ability: 'survivor.mechanic.ability', abilityParams: { hp: 8, s: 5 },       color: '#44aaff' },
-  { key: 'medic',    properName: 'Sara',   name: 'survivor.medic.name',    ability: 'survivor.medic.ability',    abilityParams: { hp: 0.3 },          color: '#ff6666' },
-  { key: 'soldier',  properName: 'Marcus', name: 'survivor.soldier.name',  ability: 'survivor.soldier.ability',  abilityParams: { s: 1.6 },           color: '#ffcc44' },
-  { key: 'explorer', properName: 'Nadia',  name: 'survivor.explorer.name', ability: 'survivor.explorer.ability', abilityParams: { s: 5, base: 7.5 },  color: '#44ff88' },
+  { key: 'mechanic', properName: 'Bruno',  surname: 'Salerno', bio: 'survivor.mechanic.bio', name: 'survivor.mechanic.name', ability: 'survivor.mechanic.ability', abilityParams: { hp: 8, s: 5 },       color: '#44aaff' },
+  { key: 'medic',    properName: 'Sara',   surname: 'Conti',   bio: 'survivor.medic.bio',    name: 'survivor.medic.name',    ability: 'survivor.medic.ability',    abilityParams: { hp: 0.3 },          color: '#ff6666' },
+  { key: 'soldier',  properName: 'Marcus', surname: 'Hale',    bio: 'survivor.soldier.bio',  name: 'survivor.soldier.name',  ability: 'survivor.soldier.ability',  abilityParams: { s: 1.6 },           color: '#ffcc44' },
+  { key: 'explorer', properName: 'Nadia',  surname: 'Volkova', bio: 'survivor.explorer.bio', name: 'survivor.explorer.name', ability: 'survivor.explorer.ability', abilityParams: { s: 5, base: 7.5 },  color: '#44ff88' },
 ];
 
 export interface Upgrades {

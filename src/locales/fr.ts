@@ -189,6 +189,10 @@ const fr: Record<string, string> = {
   'survivor.soldier.ability': 'Tourelle auto toutes les {s} secondes',
   'survivor.explorer.name': 'Explorateur',
   'survivor.explorer.ability': 'Bidons toutes les {s}s (au lieu de {base}s)',
+  'survivor.mechanic.bio': 'Tenait un garage de quartier : aucun moteur ne lui a résisté.',
+  'survivor.medic.bio': "Infirmière aux urgences ; aux premières morsures, elle n'a pas fui.",
+  'survivor.soldier.bio': "Caporal des unités d'assaut, réformé un mois avant l'effondrement.",
+  'survivor.explorer.bio': 'Guide de montagne, elle connaît des sentiers que les cartes ont oubliés.',
 
   'debug.title': 'MODE DEBUG — Galerie de Modèles & Tests',
   'debug.subtitle': 'Clique sur un véhicule ou une arme pour le tester · boutons en bas pour les tests',

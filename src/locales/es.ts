@@ -189,6 +189,10 @@ const es: Record<string, string> = {
   'survivor.soldier.ability': 'Torreta automática cada {s} segundos',
   'survivor.explorer.name': 'Explorador',
   'survivor.explorer.ability': 'Bidones aparecen cada {s}s (vs {base}s)',
+  'survivor.mechanic.bio': 'Llevaba un taller de barrio: ningún motor le dijo jamás que no.',
+  'survivor.medic.bio': 'Enfermera de urgencias; a las primeras mordidas, no huyó.',
+  'survivor.soldier.bio': 'Cabo de las unidades de asalto, licenciado un mes antes del colapso.',
+  'survivor.explorer.bio': 'Guía de montaña que conoce sendas y atajos que los mapas olvidaron.',
 
   'debug.title': 'MODO DEBUG — Galería de Modelos y Pruebas',
   'debug.subtitle': 'Haz clic en un vehículo o arma para probarlo · botones abajo para las pruebas',

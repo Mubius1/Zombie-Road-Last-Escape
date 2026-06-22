@@ -189,6 +189,10 @@ const de: Record<string, string> = {
   'survivor.soldier.ability': 'Auto-Turm alle {s} Sekunden',
   'survivor.explorer.name': 'Kundschafter',
   'survivor.explorer.ability': 'Kanister alle {s}s (statt {base}s)',
+  'survivor.mechanic.bio': 'Führte eine Hinterhof-Werkstatt — kein Motor sagte je nein zu ihm.',
+  'survivor.medic.bio': 'Notaufnahme-Schwester; als die ersten Bisse kamen, floh sie nicht.',
+  'survivor.soldier.bio': 'Korporal einer Sturmeinheit, einen Monat vor dem Kollaps entlassen.',
+  'survivor.explorer.bio': 'Bergführerin, die Pfade kennt, die keine Karte zeigt.',
 
   'debug.title': 'DEBUG-MODUS — Modellgalerie & Tests',
   'debug.subtitle': 'Klicke ein Fahrzeug oder eine Waffe zum Testen · Schaltflächen unten für Tests',

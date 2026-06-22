@@ -189,6 +189,10 @@ const en: Record<string, string> = {
   'survivor.soldier.ability': 'Auto turret every {s} seconds',
   'survivor.explorer.name': 'Explorer',
   'survivor.explorer.ability': 'Fuel cans appear every {s}s (vs {base}s)',
+  'survivor.mechanic.bio': 'Ran a backstreet garage — no engine ever told him no.',
+  'survivor.medic.bio': "An ER nurse; when the first bites came in, she didn't run.",
+  'survivor.soldier.bio': 'An assault-unit corporal, discharged a month before the collapse.',
+  'survivor.explorer.bio': 'A mountain guide who knows trails and shortcuts the maps forgot.',
 
   'debug.title': 'DEBUG MODE — Model Gallery & Tests',
   'debug.subtitle': 'Click a vehicle or weapon to try it · buttons below for tests',

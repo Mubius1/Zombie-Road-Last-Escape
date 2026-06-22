@@ -236,7 +236,7 @@ export default class ShopScene extends Phaser.Scene {
       Ui.text(this, px, py + 22, t('shop.inVehicle'), { fontSize: '11px', color: '#777755' });
       this.survivors.forEach((key, i) => {
         const s = SURVIVORS.find(sv => sv.key === key);
-        if (s) Ui.text(this, px + 6, py + 36 + i * 16, t('shop.survivorName', { name: `${s.properName} · ${t(s.name)}` }), { fontSize: '12px', color: s.color });
+        if (s) Ui.text(this, px + 6, py + 36 + i * 16, t('shop.survivorName', { name: `${s.properName} ${s.surname}` }), { fontSize: '12px', color: s.color });
       });
     }
 
@@ -246,9 +246,9 @@ export default class ShopScene extends Phaser.Scene {
       { fontSize: '11px', color: '#777755' });
 
     this.offeredSurvivors.forEach((s, i) => {
-      const iy = rY + 18 + i * 74;
+      const iy = rY + 18 + i * 88;
       const alreadyIn = this.survivors.includes(s.key);
-      const bg = Ui.box(this, px + 145, iy + 30, 290, 66, { fill: UI.panelWarm, radius: 7, stroke: UI.stroke, strokeAlpha: 0.5 });
+      const bg = Ui.box(this, px + 145, iy + 38, 290, 80, { fill: UI.panelWarm, radius: 7, stroke: UI.stroke, strokeAlpha: 0.5 });
 
       if (!alreadyIn) {
         bg.setInteractive(true);
@@ -257,11 +257,12 @@ export default class ShopScene extends Phaser.Scene {
         bg.on('pointerdown', () => this.recruitSurvivor(s.key));
       }
 
-      // Ritratto procedurale del sopravvissuto (sbiadito se già a bordo).
-      this.add.image(px + 262, iy + 30, `survivor_${s.key}`).setScale(1 / OVERSAMPLE).setAlpha(alreadyIn ? 0.45 : 1);
-      Ui.text(this, px + 6, iy + 8,  `${s.properName} · ${t(s.name)}`, { fontSize: '14px', color: s.color, fontStyle: 'bold' });
-      Ui.text(this, px + 6, iy + 28, t(s.ability, s.abilityParams), { fontSize: '10px', color: '#666655', wordWrap: { width: 215 } });
-      Ui.text(this, px + 6, iy + 46, alreadyIn ? t('shop.recruited') : t('shop.free'),
+      // Ritratto procedurale (sbiadito se già a bordo).
+      this.add.image(px + 262, iy + 38, `survivor_${s.key}`).setScale(1 / OVERSAMPLE).setAlpha(alreadyIn ? 0.45 : 1);
+      Ui.text(this, px + 6, iy + 6,  `${s.properName} ${s.surname} · ${t(s.name)}`, { fontSize: '13px', color: s.color, fontStyle: 'bold' });
+      Ui.text(this, px + 6, iy + 23, t(s.bio), { fontSize: '9px', color: '#8a8478', fontStyle: 'italic', wordWrap: { width: 218 } });
+      Ui.text(this, px + 6, iy + 53, t(s.ability, s.abilityParams), { fontSize: '10px', color: '#666655', wordWrap: { width: 218 } });
+      Ui.text(this, px + 6, iy + 67, alreadyIn ? t('shop.recruited') : t('shop.free'),
         { fontSize: '11px', color: alreadyIn ? UI.greenDim : UI.greenOk });
     });
   }
