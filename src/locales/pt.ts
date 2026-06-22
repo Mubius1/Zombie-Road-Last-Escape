@@ -93,7 +93,7 @@ const pt: Record<string, string> = {
   'hud.combo': 'COMBO {n}',
   'hud.comboMult': 'COMBO {n}  ×{m}',
   'hud.attached': '[{n} agarrados]',
-  'hud.godMode': '◆ GOD MODE  (G off · B chefe · N fim · H reparar)',
+  'hud.godMode': '◆ GOD MODE  (G off · B chefe · N fim · H reparar · E evento)',
   'hud.controls': '↑↓/WS Mover · RATO mira · CLIQUE atira · 1-5/Q Arma · SHIFT Arranque · F Sobrecarga',
   'hud.debugHint': '0=Debug',
 

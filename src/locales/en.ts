@@ -93,7 +93,7 @@ const en: Record<string, string> = {
   'hud.combo': 'COMBO {n}',
   'hud.comboMult': 'COMBO {n}  ×{m}',
   'hud.attached': '[{n} clinging]',
-  'hud.godMode': '◆ GOD MODE  (G off · B boss · N end · H repair)',
+  'hud.godMode': '◆ GOD MODE  (G off · B boss · N end · H repair · E event)',
   'hud.controls': '↑↓/WS Move · MOUSE aim · CLICK fire · 1-5/Q Weapon · SHIFT Dash · F Overdrive',
   'hud.debugHint': '0=Debug',
 

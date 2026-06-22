@@ -207,6 +207,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private missionNumber = 1; // numero di missione corrente (per scaling NG+ e vittoria di ciclo)
   private deathToll = 0;     // monete perse al pedaggio dell'ultima morte (per l'overlay)
   private debugRun = false;  // run di Debug (prova veicolo/arma): NON persiste il checkpoint reale
+  private debugEventIdx = 0; // debug: ciclo deterministico degli eventi B2 (tasto E)
   private routeSpawnMult = 1; // Track B1: modificatore densità nemici dal nodo di percorso
   private routeMoneyMult = 1; // Track B1: modificatore monete fine missione dal nodo di percorso
 
@@ -635,6 +636,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     kb.on('keydown-N', () => { if (this.alive && !this.missionDone) this.triggerMissionComplete(); });
     kb.on('keydown-H', () => { this.health = this.maxHealth; this.fuel = this.maxFuel;
       (Object.keys(this.components) as ComponentKey[]).forEach(k => this.components[k].health = 100); });
+    kb.on('keydown-E', () => this.debugCycleEvent()); // debug: cicla gli eventi B2 (notte/blocco/tempesta/convoglio)
   }
 
   /** Pausa la partita e apre le Impostazioni in overlay (ESC le richiude e riprende). */
@@ -1303,6 +1305,17 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     else this.eventConvoy();
   }
 
+  /** Debug (tasto E): cicla deterministicamente i 4 eventi B2 → utile per testarli (anche il convoglio). */
+  private debugCycleEvent() {
+    if (!this.alive || this.boss.active || this.missionDone) return;
+    const evs = ['night', 'roadblock', 'storm', 'convoy'] as const;
+    const e = evs[this.debugEventIdx++ % evs.length];
+    if (e === 'night') this.eventNightHorde();
+    else if (e === 'roadblock') this.eventRoadblock();
+    else if (e === 'storm') this.eventStorm();
+    else this.eventConvoy();
+  }
+
   /** ORDA NOTTURNA: le luci calano e arriva una raffica di nemici. */
   private eventNightHorde() {
     this.announceEvent('event.night', '#88aaff');
@@ -1362,6 +1375,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private eventConvoy() {
     this.announceEvent('event.convoy', '#66ff99');
     this.sfx?.playBossWarn();
+    // GameScene genera solo la texture del veicolo del giocatore → assicura quella del van alleato.
+    if (!this.textures.exists('vehicle_armored_van')) buildVehicleTexture(this, 'armored_van');
     const vx = this.designW * 0.6, vy = ROAD_CENTER;
     const van = this.add.sprite(this.designW + 90, vy, 'vehicle_armored_van')
       .setScale(1 / OVERSAMPLE).setDepth(10).setTint(0x88ffaa);
