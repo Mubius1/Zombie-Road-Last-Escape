@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import Juice from '../Juice';
 import Ui, { UI } from '../Ui';
-import { buildVehicleTexture } from '../VehicleTextures';
+import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { resetRunState, getRun, restoreRun } from '../RunState';
 import SaveData from '../SaveData';
@@ -102,14 +102,18 @@ export default class MenuScene extends Phaser.Scene {
 
     // Veicolo che attraversa la strada accennata, fari accesi (silhouette del gioco)
     if (!this.textures.exists('vehicle_armored_truck')) buildVehicleTexture(this, 'armored_truck');
+    if (!this.textures.exists('aim_turret_mg')) buildTurretTextures(this); // torretta = overlay (combat reboot)
     const car = this.add.image(-150, 470, 'vehicle_armored_truck').setScale(1 / OVERSAMPLE).setDepth(2);
+    // Torretta sul mozzo, in avanti (= direzione di marcia): segue auto e dosso con le stesse tween.
+    const turret = this.add.image(car.x + (TURRET_DX['armored_truck'] ?? 0), car.y, 'aim_turret_mg')
+      .setOrigin(0.11, 0.5).setScale(1 / OVERSAMPLE).setDepth(3);
     const beam = this.add.image(car.x + 70, 468, 'fx_light')
       .setTint(0xfff4bc).setBlendMode(Phaser.BlendModes.ADD).setScale(3, 1.2).setAlpha(0.35).setDepth(2);
     this.tweens.add({
-      targets: [car, beam], x: `+=${this.designW + 320}`,
+      targets: [car, turret, beam], x: `+=${this.designW + 320}`,
       duration: 7200, repeat: -1, repeatDelay: 1200, ease: 'Linear',
     });
-    this.tweens.add({ targets: car, y: '+=3', duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: [car, turret], y: '+=3', duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   }
 
   // ─── Titolo ───────────────────────────────────────────────────────────────────
