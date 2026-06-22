@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { BOSS_CONFIG, BOSS_ORDER } from '../World';
-import { buildEntityTextures } from '../EntityTextures';
+import { buildEntityTextures, buildSurvivorTextures } from '../EntityTextures';
 import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import { VEHICLES, VEHICLE_KEYS, WEAPONS, WEAPON_KEYS, WeaponType, SURVIVORS } from '../GameData';
 import Juice from '../Juice';
@@ -45,6 +45,7 @@ export default class DebugScene extends Phaser.Scene {
 
     // Genera TUTTE le texture (tutti i veicoli + entità)
     buildEntityTextures(this);
+    buildSurvivorTextures(this); // ritratti sopravvissuti
     VEHICLE_KEYS.forEach(k => buildVehicleTexture(this, k));
     buildTurretTextures(this); // torretta statica per la galleria
 
@@ -56,12 +57,13 @@ export default class DebugScene extends Phaser.Scene {
       fontSize: '10px', color: UI.faint,
     }).setOrigin(0.5, 0);
 
-    this.drawVehicles(46);
-    this.drawZombies(148);
-    this.drawBosses(244);
-    this.drawObjects(338);
-    this.drawWeapons(404);
-    this.drawButtons(470);
+    this.drawVehicles(42);
+    this.drawZombies(126);
+    this.drawSurvivors(210);
+    this.drawBosses(298);
+    this.drawObjects(386);
+    this.drawWeapons(450);
+    this.drawButtons(502);
     Juice.fadeIn(this, 250);
   }
 
@@ -107,6 +109,17 @@ export default class DebugScene extends Phaser.Scene {
       const type = z.key.replace('zombie_', '');
       this.add.sprite(cx, top + 30, z.key).setOrigin(0.5).setScale(1 / OVERSAMPLE).play(`walk_${type}`);
       Ui.text(this, cx, top + 56, t(z.label), { fontSize: '10px', color: '#aaddaa' }).setOrigin(0.5, 0);
+    });
+  }
+
+  private drawSurvivors(y: number) {
+    this.sectionTitle(12, y, t('debug.survivors'), UI.goldDim);
+    const top = y + 18;
+    SURVIVORS.forEach((s, i) => {
+      const cx = 84 + i * 150;
+      this.cell(cx, top + 30, 124, 60);
+      this.add.image(cx, top + 28, `survivor_${s.key}`).setOrigin(0.5).setScale(1 / OVERSAMPLE);
+      Ui.text(this, cx, top + 62, `${s.properName} · ${t(s.name)}`, { fontSize: '9px', color: s.color }).setOrigin(0.5, 0);
     });
   }
 
