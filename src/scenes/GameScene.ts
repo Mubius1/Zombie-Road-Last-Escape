@@ -65,6 +65,13 @@ const NIGHT_DIM = 0.4;               // alpha del velo notturno
 const STORM_DURATION = 7000;         // ms della tempesta
 const STORM_DIM = 0.28;              // alpha del velo tempesta
 const STORM_HANDLING_MULT = 0.55;    // sterzo molle durante la tempesta
+// ── Sopravvissuti con effetto attivo: Cecchino (anti-tank) · Artificiere (granata) · Saccheggiatore. ──
+const SNIPER_CD = 2200;         // ms tra i colpi del Cecchino
+const SNIPER_DMG = 5;           // danno alto del Cecchino (vs 1 mg / 2 fucile)
+const GRENADE_CD = 5500;        // ms di ricarica della granata (Artificiere, tasto C)
+const GRENADE_AOE = 110;        // raggio dell'esplosione granata
+const GRENADE_DMG = 8;          // danno della granata nell'area
+const LOOTER_MONEY_MULT = 1.12; // +12% monete a fine missione (Saccheggiatore)
 const CONVOY_DURATION = 11000;       // ms da scortare il van
 const CONVOY_HP = 100;               // salute del van alleato
 const CONVOY_ZOMBIE_DMG = 9;         // danno al van per ogni zombi che lo raggiunge
@@ -201,6 +208,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private mechanicTimer = 0;
   private soldierTimer = 0;
+  private sniperTimer = 0;       // Cecchino: timer del colpo anti-tank
+  private grenadeReadyAt = 0;    // Artificiere: prossimo istante in cui la granata è pronta
   private lowFuelWarned = false; // evita di ripetere l'allarme carburante ogni frame (AU5)
   private giantTimer = 0;
   private envIndex = 0;
@@ -303,6 +312,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.attachedZombies = [];
     this.mechanicTimer = 0;
     this.soldierTimer = 0;
+    this.sniperTimer = 0; this.grenadeReadyAt = 0;
     this.giantTimer = GIANT_SPAWN_INTERVAL;
     this.lowFuelWarned = false;
     this.envIndex = (missionNum - 1) % ENVIRONMENTS.length;
@@ -624,6 +634,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // ESC: metti in pausa e apri il menu di pausa (Impostazioni / Riprendi / Esci al menu)
     const kb = this.input.keyboard!;
     kb.on('keydown-ESC', () => this.openPauseMenu());
+    kb.on('keydown-C', () => this.throwGrenade()); // Artificiere: granata AoE (gated nel metodo)
 
     // Tasti debug
     kb.on('keydown-ZERO', () => this.scene.start('DebugScene'));
@@ -1004,6 +1015,14 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         this.soldierTimer = 0;
         const targetY = this.getNearestZombieY();
         this.fireAutoShot(targetY);
+      }
+    }
+    if (this.activeSurvivors.includes('sniper')) {
+      this.sniperTimer += delta;
+      if (this.sniperTimer >= SNIPER_CD) {
+        this.sniperTimer = 0;
+        const target = this.getToughestZombie();
+        if (target) this.fireSniperShot(target);
       }
     }
   }
@@ -1596,6 +1615,67 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     return nearest;
   }
 
+  /** Cecchino: lo zombi DAVANTI al veicolo con più HP attuali (anti-tank: corazzato/caricatore/gigante). */
+  private getToughestZombie(): Phaser.Physics.Arcade.Sprite | null {
+    let best: Phaser.Physics.Arcade.Sprite | null = null, bestHp = -1;
+    for (const z of this.zombies.getChildren() as Phaser.Physics.Arcade.Sprite[]) {
+      if (!z.active || z.x < this.vehicle.x) continue;
+      const hp = (z.getData('hp') as number) ?? 0;
+      if (hp > bestHp) { bestHp = hp; best = z; }
+    }
+    return best;
+  }
+
+  private fireSniperShot(z: Phaser.Physics.Arcade.Sprite) {
+    const sx = this.vehicle.x + this.turretDx, sy = this.vehicle.y;
+    const ang = Math.atan2(z.y - sy, z.x - sx);
+    this.spawnBullet(sx, sy, ang, SNIPER_DMG, BULLET_SPEED * 1.4, 0xff5588, 9999); // colpo forte, scia rosa
+    this.sfx?.playShot('rifle'); // timbro fucile (cadenza lenta)
+  }
+
+  /** Artificiere (tasto C): lancia una granata verso il mirino; esplode all'arrivo (AoE). A ricarica. */
+  private throwGrenade() {
+    if (!this.alive || this.missionDone || !this.activeSurvivors.includes('demolitionist')) return;
+    if (this.time.now < this.grenadeReadyAt) return;
+    this.grenadeReadyAt = this.time.now + GRENADE_CD;
+    const sx = this.vehicle.x + this.turretDx, sy = this.vehicle.y;
+    const tx = Phaser.Math.Clamp(this.aimX, sx + 40, this.designW - 12);
+    const ty = Phaser.Math.Clamp(this.aimY, ROAD_TOP, ROAD_BOTTOM);
+    const g = this.add.image(sx, sy, 'particle').setTint(0x4a6a2a).setScale(1.7).setDepth(12);
+    this.tweens.add({ targets: g, x: tx, y: ty, angle: 360, duration: 480, ease: 'Quad.out',
+      onComplete: () => { if (this.alive && !this.missionDone) this.grenadeExplode(g.x, g.y); g.destroy(); } });
+    this.sfx?.playShot('mg'); // "tonf" del lancio
+  }
+
+  /** Esplosione della granata: danno nell'area a zombi + aggrappati + VFX (come il razzo). */
+  private grenadeExplode(x: number, y: number) {
+    for (const z of this.zombies.getChildren() as Phaser.Physics.Arcade.Sprite[]) {
+      if (!z.active || Phaser.Math.Distance.Between(x, y, z.x, z.y) > GRENADE_AOE) continue;
+      const hp = (z.getData('hp') as number) - GRENADE_DMG;
+      if (hp <= 0) {
+        const zt = z.getData('type') as ZombieType;
+        this.addKillScore(ZOMBIE_STATS[zt].score);
+        this.killBurst(zt, z.x, z.y);
+        if (zt === 'toxic') this.spawnToxicCloud(z.x, z.y);
+        z.destroy();
+      } else {
+        z.setData('hp', hp); z.setTint(0xffffff);
+        this.time.delayedCall(80, () => { if (z?.active) z.clearTint(); });
+      }
+    }
+    for (let i = this.attachedZombies.length - 1; i >= 0; i--) {
+      const az = this.attachedZombies[i];
+      if (Phaser.Math.Distance.Between(x, y, az.sprite.x, az.sprite.y) <= GRENADE_AOE) {
+        az.hp -= GRENADE_DMG;
+        if (az.hp <= 0) { this.addKillScore(5); this.spawnHitParticles(az.sprite.x, az.sprite.y); az.sprite.destroy(); this.attachedZombies.splice(i, 1); }
+      }
+    }
+    Juice.lightFlash(this, x, y, 0xff8a33, 5);
+    this.cameras.main.shake(180, 0.01);
+    this.environment?.addDecal('scorch', x, y);
+    this.sfx?.playExplosion();
+  }
+
   // ─── Collision handlers ──────────────────────────────────────────────────────
 
   /** Suono di colpo con throttle: evita cacofonia a fuoco rapido / più colpi nello stesso frame. */
@@ -1931,7 +2011,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (this.missionDone) return;
     this.missionDone = true;
 
-    const earned = Math.floor(this.score / 8 * this.routeMoneyMult); // Track B1: monete × nodo di percorso
+    const lootMult = this.activeSurvivors.includes('looter') ? LOOTER_MONEY_MULT : 1; // Saccheggiatore: +12%
+    const earned = Math.floor(this.score / 8 * this.routeMoneyMult * lootMult); // Track B1 (nodo) × Saccheggiatore
     setRun(this.registry, 'money',         (getRun(this.registry, 'money') ?? 0) + earned);
     setRun(this.registry, 'missionNumber', (getRun(this.registry, 'missionNumber') ?? 1) + 1);
     setRun(this.registry, 'lastScore',     this.score);

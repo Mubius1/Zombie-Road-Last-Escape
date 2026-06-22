@@ -96,6 +96,38 @@ export function buildSurvivorTextures(scene: Phaser.Scene) {
     g.fillStyle(0x9ff0ff); g.fillCircle(15.4, 7, 0.8); g.fillCircle(27.4, 7, 0.8); // riflesso lenti
     g.generateTexture('survivor_explorer', W, H); g.destroy();
   }
+  { // Vince (Saccheggiatore) — cappuccio + bandana sul volto.
+    const g = OS_G(); shoulders(g, 0xb8901e);
+    g.fillStyle(0x35322c); g.fillRoundedRect(6, 3, 32, 26, 11);          // cappuccio (dietro)
+    face(g, 0xb8895a, 0xd0a878, 0x86603a, 0x2a1d12);
+    g.fillStyle(0x2c2924); g.fillRoundedRect(6, 3, 32, 11, 7);           // bordo cappuccio sulla fronte
+    g.fillStyle(0x6a5a3a); g.fillRoundedRect(11, 23, 20, 9, 4);          // bandana su naso/bocca
+    g.fillStyle(0x4a3e28); g.fillRect(11, 27, 20, 2);                    // piega bandana
+    g.generateTexture('survivor_looter', W, H); g.destroy();
+  }
+  { // Eva (Cecchino) — berretto + mirino su un occhio.
+    const g = OS_G(); shoulders(g, 0x5a78a0);
+    face(g, 0xd8b48a, 0xeccaa0, 0xa88454, 0x3a2a16);
+    g.fillStyle(0x2e3640); g.fillRoundedRect(8, 4, 26, 11, 6);           // berretto
+    g.fillStyle(0x88bbff); g.fillRect(10, 12, 22, 1.6);                  // riga blu
+    g.fillStyle(0x16161b); g.fillCircle(28, 19.5, 3.6);                  // anello mirino (occhio dx)
+    g.fillStyle(0x6fd0ff); g.fillCircle(28, 19.5, 2.1);                  // lente
+    g.fillStyle(0x9ff0ff); g.fillCircle(27.3, 18.8, 0.7);               // riflesso
+    g.fillStyle(0x16161b); g.fillRect(31, 19, 6, 1.4);                  // stanghetta
+    g.generateTexture('survivor_sniper', W, H); g.destroy();
+  }
+  { // Karim (Artificiere) — elmetto da cantiere + goggles + respiratore.
+    const g = OS_G(); shoulders(g, 0xc86a1e);
+    face(g, 0xa06a40, 0xc08a58, 0x6e4626, 0x241608);
+    g.fillStyle(0xd07a1e); g.fillRoundedRect(7, 3, 30, 10, 7);           // cupola casco
+    g.fillStyle(0xa85e16); g.fillRect(7, 12, 30, 3);                     // tesa casco
+    g.fillStyle(0xffaa44); g.fillRect(20, 4, 4, 8);                      // cresta centrale
+    g.fillStyle(0x2a2a30); g.fillRoundedRect(10, 13, 24, 3, 1);          // cinghia goggles
+    g.fillStyle(0xffcc66); g.fillCircle(16, 14.5, 2.1); g.fillCircle(28, 14.5, 2.1); // lenti ambra
+    g.fillStyle(0x3a3a40); g.fillRoundedRect(15, 25, 14, 8, 4);          // respiratore su bocca
+    g.fillStyle(0x55555c); g.fillCircle(22, 30, 2.4);                   // filtro
+    g.generateTexture('survivor_demolitionist', W, H); g.destroy();
+  }
 }
 
 export function buildEntityTextures(scene: Phaser.Scene) {

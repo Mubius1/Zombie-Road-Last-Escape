@@ -114,7 +114,7 @@ const it: Record<string, string> = {
   'hud.comboMult': 'COMBO {n}  ×{m}',
   'hud.attached': '[{n} aggrappati]',
   'hud.godMode': '◆ GOD MODE  (G off · B boss · N fine · H ripara · E evento)',
-  'hud.controls': '↑↓/WS Muovi · MOUSE mira · CLIC spara · 1-5/Q Arma · SHIFT Scatto · F Sovracc.',
+  'hud.controls': '↑↓/WS Muovi · MOUSE mira · CLIC spara · 1-5/Q Arma · SHIFT Scatto · F Sovracc. · C Granata',
   'hud.debugHint': '0=Debug',
 
   // ── Componenti del veicolo (HUD) ─────────────────────────────────────────────────
@@ -223,6 +223,15 @@ const it: Record<string, string> = {
   'survivor.medic.bio': 'Infermiera al pronto soccorso; ai primi morsi, non è scappata.',
   'survivor.soldier.bio': "Caporale dei reparti d'assalto, congedato un mese prima del crollo.",
   'survivor.explorer.bio': 'Guida di montagna: conosce sentieri e scorciatoie che le mappe hanno scordato.',
+  'survivor.looter.name': 'Saccheggiatore',
+  'survivor.looter.ability': '+{p}% monete a fine missione',
+  'survivor.looter.bio': 'Sciacallo anche prima del crollo: trovava sempre qualcosa da rivendere.',
+  'survivor.sniper.name': 'Cecchino',
+  'survivor.sniper.ability': 'Auto: colpo forte allo zombi più resistente ogni {s}s',
+  'survivor.sniper.bio': 'Campionessa di tiro a segno: un colpo, un bersaglio.',
+  'survivor.demolitionist.name': 'Artificiere',
+  'survivor.demolitionist.ability': 'Tasto C: granata ad area (ricarica {s}s)',
+  'survivor.demolitionist.bio': 'Genio militare: con due fili e poco altro fa saltare qualsiasi cosa.',
 
   // ── Modalità debug ───────────────────────────────────────────────────────────────
   'debug.title': 'MODALITÀ DEBUG — Galleria Modelli & Test',

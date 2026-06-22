@@ -49,6 +49,9 @@ export const SURVIVORS: SurvivorData[] = [
   { key: 'medic',    properName: 'Sara',   surname: 'Conti',   bio: 'survivor.medic.bio',    name: 'survivor.medic.name',    ability: 'survivor.medic.ability',    abilityParams: { hp: 0.3 },          color: '#ff6666' },
   { key: 'soldier',  properName: 'Marcus', surname: 'Hale',    bio: 'survivor.soldier.bio',  name: 'survivor.soldier.name',  ability: 'survivor.soldier.ability',  abilityParams: { s: 1.6 },           color: '#ffcc44' },
   { key: 'explorer', properName: 'Nadia',  surname: 'Volkova', bio: 'survivor.explorer.bio', name: 'survivor.explorer.name', ability: 'survivor.explorer.ability', abilityParams: { s: 5, base: 7.5 },  color: '#44ff88' },
+  { key: 'looter',        properName: 'Vince',  surname: 'Pagano',    bio: 'survivor.looter.bio',        name: 'survivor.looter.name',        ability: 'survivor.looter.ability',        abilityParams: { p: 12 },  color: '#d4af37' },
+  { key: 'sniper',        properName: 'Eva',    surname: 'Lindqvist', bio: 'survivor.sniper.bio',        name: 'survivor.sniper.name',        ability: 'survivor.sniper.ability',        abilityParams: { s: 2.2 }, color: '#88bbff' },
+  { key: 'demolitionist', properName: 'Karim',  surname: 'Haddad',    bio: 'survivor.demolitionist.bio', name: 'survivor.demolitionist.name', ability: 'survivor.demolitionist.ability', abilityParams: { s: 5.5 }, color: '#ff7733' },
 ];
 
 export interface Upgrades {
