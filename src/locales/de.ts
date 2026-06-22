@@ -25,6 +25,8 @@ const de: Record<string, string> = {
   'settings.fsOff': 'AUS',
   'settings.colorblind': 'FARBENBLIND',
   'settings.colorblindDesc': 'Statusleisten blau/gelb (kein Rot↔Grün)',
+  'settings.brightness': 'HELLIGKEIT',
+  'settings.brightnessDesc': 'Verdunkelt oder erhellt den ganzen Bildschirm',
   'settings.cbOn': 'AN',
   'settings.cbOff': 'AUS',
   'settings.language': 'SPRACHE',

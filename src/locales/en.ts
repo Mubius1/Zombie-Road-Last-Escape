@@ -25,6 +25,8 @@ const en: Record<string, string> = {
   'settings.fsOff': 'OFF',
   'settings.colorblind': 'COLORBLIND',
   'settings.colorblindDesc': 'Blue/yellow status bars (no red↔green)',
+  'settings.brightness': 'BRIGHTNESS',
+  'settings.brightnessDesc': 'Darkens or brightens the whole screen',
   'settings.cbOn': 'ON',
   'settings.cbOff': 'OFF',
   'settings.language': 'LANGUAGE',

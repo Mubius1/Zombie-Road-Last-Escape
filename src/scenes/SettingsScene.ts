@@ -4,11 +4,12 @@ import Settings from '../Settings';
 import { enterScreen } from '../PostFx';
 import SoundManager from '../SoundManager';
 import Ui, { UI, MENU_VIGNETTE } from '../Ui';
-import { setupCamera, DESIGN_W, RESOLUTIONS, currentResolution } from '../Config';
+import { setupCamera, applyBrightness, DESIGN_W, RESOLUTIONS, currentResolution } from '../Config';
 import { t, LANGS } from '../i18n';
 
 const H = 600;
 const VOL_STEPS = 10;
+const BRIGHT_STEPS = 9, BRIGHT_MIN = 0.6, BRIGHT_STEP = 0.1; // luminosità 60%..140% (1.0 = nativo)
 
 /**
  * Schermata Impostazioni. Due modi d'uso:
@@ -30,6 +31,8 @@ export default class SettingsScene extends Phaser.Scene {
   private volCells: Phaser.GameObjects.Rectangle[] = [];
   private volLabel!: Phaser.GameObjects.Text;
   private muteBtn!: Phaser.GameObjects.Text;
+  private brightCells: Phaser.GameObjects.Rectangle[] = [];
+  private brightLabel!: Phaser.GameObjects.Text;
   private preview?: SoundManager;
   /** Larghezza di design (800 in 4:3, maggiore in 16:9). */
   private designW = DESIGN_W;
@@ -45,6 +48,7 @@ export default class SettingsScene extends Phaser.Scene {
   create() {
     this.designW = setupCamera(this).designW;
     this.volCells = [];
+    this.brightCells = [];
     const inGame = this.fromKey === 'GameScene';
 
     // In pausa: fondo semi-trasparente così si intravede la partita congelata.
@@ -130,6 +134,40 @@ export default class SettingsScene extends Phaser.Scene {
     if (!this.preview) this.preview = new SoundManager(webAudio.context);
     this.preview.setVolume(Settings.volume);
     this.preview.playZombieKill();
+  }
+
+  // ─── Luminosità ──────────────────────────────────────────────────────────────
+
+  private buildBrightness(y: number) {
+    const cx = this.designW / 2;
+    Ui.text(this, cx - 230, y - 28, t('settings.brightness'), { fontSize: '15px', fontStyle: 'bold', color: UI.goldDim });
+    this.brightLabel = Ui.text(this, cx + 230, y - 28, '', { fontSize: '15px', color: UI.text }).setOrigin(1, 0);
+
+    const cellW = 38, gap = 6, total = BRIGHT_STEPS * cellW + (BRIGHT_STEPS - 1) * gap;
+    const startX = cx - total / 2;
+    for (let i = 0; i < BRIGHT_STEPS; i++) {
+      const x = startX + i * (cellW + gap) + cellW / 2;
+      const cell = this.add.rectangle(x, y + 6, cellW, 30, 0x1a1a24)
+        .setStrokeStyle(1, UI.strokeSoft)
+        .setInteractive({ useHandCursor: true });
+      cell.on('pointerdown', () => this.setBrightness(BRIGHT_MIN + i * BRIGHT_STEP));
+      this.brightCells.push(cell);
+    }
+    Ui.text(this, cx - 230, y + 30, t('settings.brightnessDesc'), { fontSize: '11px', color: UI.faint });
+    this.refreshBrightness();
+  }
+
+  private setBrightness(v: number) {
+    Settings.brightness = v;
+    this.refreshBrightness();
+    applyBrightness(this); // anteprima live sull'intero schermo
+  }
+
+  private refreshBrightness() {
+    const v = Settings.brightness;
+    const idx = Math.round((v - BRIGHT_MIN) / BRIGHT_STEP);
+    this.brightCells.forEach((cell, i) => cell.setFillStyle(i <= idx ? 0xc8a84a : 0x1a1a24));
+    this.brightLabel.setText(`${Math.round(v * 100)}%`);
   }
 
   // ─── Effetti schermo ─────────────────────────────────────────────────────────
@@ -362,8 +400,9 @@ export default class SettingsScene extends Phaser.Scene {
   /** Pagina GENERALE: lingua + accessibilità (daltonismo). */
   private buildGeneralPage() {
     this.pageHeader(t('settings.catGeneral'));
-    this.buildLanguage(H / 2 - 60);
-    this.buildColorblind(H / 2 + 20);
+    this.buildLanguage(H / 2 - 120);
+    this.buildBrightness(H / 2 + 10);
+    this.buildColorblind(H / 2 + 130);
     this.pageFooter();
   }
 

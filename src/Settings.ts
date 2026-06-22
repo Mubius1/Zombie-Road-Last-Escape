@@ -42,14 +42,17 @@ export interface SettingsData {
   fullscreen: boolean;
   /** Modalità daltonico-safe: ricolora le barre di stato (HP/componenti) con palette blu/giallo/arancio. */
   colorblind: boolean;
+  /** Luminosità globale 0.6..1.4 (1 = nativo): velo scuro (<1) o additivo (>1) top-most in ogni scena. */
+  brightness: number;
   /** Lingua dei testi dell'interfaccia (vedi i18n.ts). */
   language: Lang;
 }
 
 const STORAGE_KEY = 'zombieRoad.settings.v1';
-const DEFAULTS: SettingsData = { volume: 1, screenFx: true, bloom: true, shadows: true, asphaltDetail: true, resolution: 0, fullscreen: false, colorblind: false, language: 'it' };
+const DEFAULTS: SettingsData = { volume: 1, screenFx: true, bloom: true, shadows: true, asphaltDetail: true, resolution: 0, fullscreen: false, colorblind: false, language: 'it', brightness: 1 };
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+const clampBright = (v: number) => (v < 0.6 ? 0.6 : v > 1.4 ? 1.4 : v);
 
 function loadSettings(): SettingsData {
   try {
@@ -66,6 +69,7 @@ function loadSettings(): SettingsData {
       resolution: typeof p.resolution === 'number' ? Math.max(0, p.resolution | 0) : DEFAULTS.resolution,
       fullscreen: typeof p.fullscreen === 'boolean' ? p.fullscreen             : DEFAULTS.fullscreen,
       colorblind: typeof p.colorblind === 'boolean' ? p.colorblind             : DEFAULTS.colorblind,
+      brightness: typeof p.brightness === 'number'  ? clampBright(p.brightness) : DEFAULTS.brightness,
       language:   isLang(p.language)                ? p.language                : detectLang(),
     };
   } catch {
@@ -99,6 +103,9 @@ export default class Settings {
 
   static get colorblind(): boolean { return this.data.colorblind; }
   static set colorblind(v: boolean) { this.data.colorblind = v; this.save(); }
+
+  static get brightness(): number { return this.data.brightness; }
+  static set brightness(v: number) { this.data.brightness = clampBright(v); this.save(); }
 
   static get language(): Lang { return this.data.language; }
   static set language(v: Lang) { if (isLang(v)) { this.data.language = v; this.save(); } }

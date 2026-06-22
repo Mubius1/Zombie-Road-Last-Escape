@@ -74,5 +74,22 @@ export function setupCamera(scene: Phaser.Scene): { designW: number; designH: nu
   const cam = scene.cameras.main;
   cam.setZoom(S);
   cam.centerOn(designW / 2, DESIGN_H / 2);
+  applyBrightness(scene);
   return { designW, designH: DESIGN_H, S };
+}
+
+/**
+ * Overlay di LUMINOSITÀ globale (top-most): scurisce (velo nero) o schiarisce (velo bianco additivo)
+ * l'intero schermo secondo `Settings.brightness` (1 = nativo → nessun overlay). Chiamato da setupCamera
+ * in OGNI scena → effetto globale; SettingsScene lo ri-applica live mentre si regola. Idempotente
+ * (rimuove l'overlay precedente). A scrollFactor 0 e pixel nativi → non subisce lo zoom della camera.
+ */
+export function applyBrightness(scene: Phaser.Scene): void {
+  scene.children.getByName('brightnessOverlay')?.destroy();
+  const b = Settings.brightness;
+  if (Math.abs(b - 1) < 0.001) return;
+  const w = scene.scale.width, h = scene.scale.height, darken = b < 1;
+  const ov = scene.add.rectangle(w / 2, h / 2, w, h, darken ? 0x000000 : 0xffffff, darken ? 1 - b : b - 1);
+  ov.setName('brightnessOverlay').setScrollFactor(0).setDepth(10000);
+  if (!darken) ov.setBlendMode(Phaser.BlendModes.ADD);
 }

@@ -25,6 +25,8 @@ const fr: Record<string, string> = {
   'settings.fsOff': 'ACTIVER',
   'settings.colorblind': 'DALTONISME',
   'settings.colorblindDesc': "Barres d'état bleu/jaune (sans rouge↔vert)",
+  'settings.brightness': 'LUMINOSITÉ',
+  'settings.brightnessDesc': "Assombrit ou éclaircit tout l'écran",
   'settings.cbOn': 'ACTIVÉ',
   'settings.cbOff': 'DÉSACTIVÉ',
   'settings.language': 'LANGUE',

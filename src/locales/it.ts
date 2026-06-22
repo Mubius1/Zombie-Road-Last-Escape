@@ -35,6 +35,8 @@ const it: Record<string, string> = {
   'settings.fsOff': 'ATTIVA',
   'settings.colorblind': 'DALTONISMO',
   'settings.colorblindDesc': 'Barre di stato blu/giallo (no rosso↔verde)',
+  'settings.brightness': 'LUMINOSITÀ',
+  'settings.brightnessDesc': 'Scurisce o schiarisce tutto lo schermo',
   'settings.cbOn': 'ATTIVO',
   'settings.cbOff': 'DISATTIVO',
   'settings.language': 'LINGUA',
