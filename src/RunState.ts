@@ -25,6 +25,8 @@ export interface RunData {
   components: Record<ComponentKey, number> | null;
   /** Punteggio dell'ultima partita conclusa (per overlay/record). */
   lastScore: number;
+  /** Track B1: chiave del nodo di percorso scelto per la prossima missione ('none' = nessuno). */
+  routeModifier: string;
 }
 
 /** Lettura tipizzata dal registry. Ritorna `undefined` se la chiave non è ancora impostata
@@ -53,6 +55,7 @@ export function resetRunState(registry: Phaser.Data.DataManager) {
   setRun(registry, 'ownedWeapons', ['mg']);
   setRun(registry, 'currentWeapon', 'mg');
   setRun(registry, 'components', null);
+  setRun(registry, 'routeModifier', 'none');
 }
 
 /**
@@ -72,6 +75,7 @@ export function snapshotRun(registry: Phaser.Data.DataManager): RunData {
     currentWeapon: getRun(registry, 'currentWeapon') ?? 'mg',
     components:    getRun(registry, 'components') ?? null,
     lastScore:     getRun(registry, 'lastScore') ?? 0,
+    routeModifier: getRun(registry, 'routeModifier') ?? 'none',
   };
 }
 
@@ -87,4 +91,5 @@ export function restoreRun(registry: Phaser.Data.DataManager, run: RunData): voi
   setRun(registry, 'currentWeapon', run.currentWeapon);
   setRun(registry, 'components',    run.components);
   setRun(registry, 'lastScore',     run.lastScore);
+  setRun(registry, 'routeModifier', run.routeModifier ?? 'none');
 }

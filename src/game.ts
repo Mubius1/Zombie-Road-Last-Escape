@@ -5,6 +5,7 @@ import ShopScene from './scenes/ShopScene';
 import DebugScene from './scenes/DebugScene';
 import SettingsScene from './scenes/SettingsScene';
 import PauseScene from './scenes/PauseScene';
+import RouteScene from './scenes/RouteScene';
 import { currentResolution } from './Config';
 import { PIPELINES } from './PostFx';
 
@@ -25,7 +26,7 @@ export default class Game {
         width: res.w,
         height: res.h,
       },
-      scene: [MenuScene, GameScene, ShopScene, DebugScene, SettingsScene, PauseScene],
+      scene: [MenuScene, GameScene, ShopScene, RouteScene, DebugScene, SettingsScene, PauseScene],
       // Post-processing GLSL (WebGL): Phaser instrada le sottoclassi PostFXPipeline
       // al registro post-pipeline al boot. Su Canvas (fallback AUTO) viene ignorato.
       // `as any`: PipelineConfig vuole `typeof WebGLPipeline`, qui passiamo le classi PostFX.

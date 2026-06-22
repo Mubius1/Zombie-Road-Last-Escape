@@ -408,6 +408,6 @@ export default class ShopScene extends Phaser.Scene {
   }
 
   private continueGame() {
-    Juice.go(this, 'GameScene');
+    Juice.go(this, 'RouteScene'); // Track B1: prima la scelta di percorso, poi la missione
   }
 }

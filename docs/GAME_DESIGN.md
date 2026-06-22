@@ -224,7 +224,7 @@ Tra le missioni, nel **GARAGE** (`ShopScene`):
 
 ## §11 · Stato persistente (registry)
 
-Lo stato della corsa vive nel `registry` di Phaser durante il gioco: `missionNumber`, `money`, `vehicle`, `ownedVehicles`, `survivors`, `upgrades`, `components`, `currentWeapon`, `ownedWeapons`, `lastScore`.
+Lo stato della corsa vive nel `registry` di Phaser durante il gioco: `missionNumber`, `money`, `vehicle`, `ownedVehicles`, `survivors`, `upgrades`, `components`, `currentWeapon`, `ownedWeapons`, `lastScore`, `routeModifier` (Track B1: nodo di percorso scelto per la prossima missione).
 
 A ogni missione (e dopo ogni ricompensa/acquisto) quello stato viene **salvato su disco** come **checkpoint** (`SaveData.run` → localStorage): è ciò che **"CONTINUA"** ripristina, anche **tra sessioni** del browser. Il game over non lo cancella — lo ripristina col pedaggio (§10); solo **Nuova Partita** lo azzera. Sopravvivono inoltre i **record** (`bestMission`/`bestScore`, mostrati nel menu). (Le preferenze — volume, effetti, risoluzione, daltonismo — vivono separate in `Settings`.)
 

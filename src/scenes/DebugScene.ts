@@ -195,6 +195,7 @@ export default class DebugScene extends Phaser.Scene {
     if (!owned.includes(key)) owned.push(key);
     setRun(this.registry, 'ownedVehicles', owned);
     setRun(this.registry, 'vehicle', key);
+    setRun(this.registry, 'routeModifier', 'none'); // Track B1: test pulito, nessun modificatore di percorso
     this.registry.set('debugRun', true); // run di test: non persistere sul salvataggio reale
     Juice.go(this, 'GameScene');
   }
@@ -204,6 +205,7 @@ export default class DebugScene extends Phaser.Scene {
     if (!owned.includes(key)) owned.push(key);
     setRun(this.registry, 'ownedWeapons', owned);
     setRun(this.registry, 'currentWeapon', key);
+    setRun(this.registry, 'routeModifier', 'none'); // Track B1: test pulito, nessun modificatore di percorso
     this.registry.set('debugRun', true); // run di test: non persistere sul salvataggio reale
     Juice.go(this, 'GameScene');
   }

@@ -128,6 +128,17 @@ const en: Record<string, string> = {
   'game.deathToll': 'Recovery cost: −{n}★',
   'game.restart': '[ SPACE ] retry mission',
 
+  // ── Route (Track B: node choice between missions) ──
+  'route.title': 'CHOOSE YOUR ROUTE',
+  'route.subtitle': 'Next mission: {n} · pick a node',
+  'route.money': '★ {p} coins',
+  'route.horde.label': 'Dense Horde',
+  'route.horde.desc': 'Thick swarms and constant surges. High risk, rich payout.',
+  'route.minefield.label': 'Mined Road',
+  'route.minefield.desc': 'Wrecks, oil and mines everywhere. Clean driving = extra loot.',
+  'route.rest.label': 'Quiet Stretch',
+  'route.rest.desc': 'Few enemies, few hazards — a breather. But little money.',
+
   'boss.warn': '⚠  {name}  ⚠',
   'boss.fury': '⚠ FURY',
   'boss.defeated': 'BOSS DEFEATED!  +{n} coins',

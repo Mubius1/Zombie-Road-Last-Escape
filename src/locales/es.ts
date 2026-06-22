@@ -128,6 +128,17 @@ const es: Record<string, string> = {
   'game.deathToll': 'Coste de recuperación: −{n}★',
   'game.restart': '[ ESPACIO ] reintentar misión',
 
+  // ── Ruta (Track B) ──
+  'route.title': 'ELIGE LA RUTA',
+  'route.subtitle': 'Próxima misión: {n} · elige un nodo',
+  'route.money': '★ {p} monedas',
+  'route.horde.label': 'Horda Densa',
+  'route.horde.desc': 'Enjambres densos y oleadas continuas. Alto riesgo, buena paga.',
+  'route.minefield.label': 'Carretera Minada',
+  'route.minefield.desc': 'Restos, aceite y minas por doquier. Conducir limpio = más botín.',
+  'route.rest.label': 'Tramo Tranquilo',
+  'route.rest.desc': 'Pocos enemigos, pocos peligros — un respiro. Pero poco dinero.',
+
   'boss.warn': '⚠  {name}  ⚠',
   'boss.fury': '⚠ FURIA',
   'boss.defeated': '¡JEFE DERROTADO!  +{n} monedas',

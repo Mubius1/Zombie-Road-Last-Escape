@@ -128,6 +128,17 @@ const fr: Record<string, string> = {
   'game.deathToll': 'Coût de récupération : −{n}★',
   'game.restart': '[ ESPACE ] réessayer la mission',
 
+  // ── Itinéraire (Track B) ──
+  'route.title': 'CHOISIS TON ITINÉRAIRE',
+  'route.subtitle': 'Prochaine mission : {n} · choisis un nœud',
+  'route.money': '★ {p} pièces',
+  'route.horde.label': 'Horde Dense',
+  'route.horde.desc': 'Nuées denses et vagues continues. Gros risque, grosse paie.',
+  'route.minefield.label': 'Route Minée',
+  'route.minefield.desc': 'Épaves, huile et mines partout. Conduite propre = butin en plus.',
+  'route.rest.label': 'Tronçon Calme',
+  'route.rest.desc': "Peu d'ennemis, peu d'obstacles — une pause. Mais peu d'argent.",
+
   'boss.warn': '⚠  {name}  ⚠',
   'boss.fury': '⚠ FUREUR',
   'boss.defeated': 'BOSS VAINCU !  +{n} pièces',

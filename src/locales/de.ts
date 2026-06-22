@@ -128,6 +128,17 @@ const de: Record<string, string> = {
   'game.deathToll': 'Bergungskosten: −{n}★',
   'game.restart': '[ LEER ] Mission wiederholen',
 
+  // ── Route (Track B) ──
+  'route.title': 'WÄHLE DEINE ROUTE',
+  'route.subtitle': 'Nächste Mission: {n} · wähle einen Knoten',
+  'route.money': '★ {p} Münzen',
+  'route.horde.label': 'Dichte Horde',
+  'route.horde.desc': 'Dichte Schwärme und ständige Wellen. Hohes Risiko, fette Beute.',
+  'route.minefield.label': 'Verminte Straße',
+  'route.minefield.desc': 'Wracks, Öl und Minen überall. Sauberes Fahren = mehr Beute.',
+  'route.rest.label': 'Ruhige Etappe',
+  'route.rest.desc': 'Wenige Gegner, wenige Hindernisse — zum Durchatmen. Aber wenig Geld.',
+
   'boss.warn': '⚠  {name}  ⚠',
   'boss.fury': '⚠ FURIE',
   'boss.defeated': 'BOSS BESIEGT!  +{n} Münzen',

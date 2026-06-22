@@ -10,6 +10,7 @@ import Ui, { UI } from '../Ui';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { resetRunState, getRun, setRun, snapshotRun, restoreRun } from '../RunState';
 import SaveData from '../SaveData';
+import { routeNode } from '../Routes';
 import { buildEntityTextures } from '../EntityTextures';
 import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import HudController from '../HudController';
@@ -182,6 +183,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private missionNumber = 1; // numero di missione corrente (per scaling NG+ e vittoria di ciclo)
   private deathToll = 0;     // monete perse al pedaggio dell'ultima morte (per l'overlay)
   private debugRun = false;  // run di Debug (prova veicolo/arma): NON persiste il checkpoint reale
+  private routeSpawnMult = 1; // Track B1: modificatore densità nemici dal nodo di percorso
+  private routeMoneyMult = 1; // Track B1: modificatore monete fine missione dal nodo di percorso
 
   private hud!: HudController;
 
@@ -264,7 +267,11 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.distance = 0;
     this.alive = true;
     this.missionDone = false;
-    this.spawnInterval = Math.max(330, 1350 - (missionNum - 1) * 80); // densità "orda": più stretto di prima
+    // Track B1: nodo di percorso scelto in RouteScene → modificatori della missione (densità/hazard/monete).
+    const route = routeNode(getRun(this.registry, 'routeModifier'));
+    this.routeSpawnMult = route.spawnMult;
+    this.routeMoneyMult = route.moneyMult;
+    this.spawnInterval = Math.round(Math.max(330, 1350 - (missionNum - 1) * 80) * route.spawnMult); // densità base × nodo
     this.spawnTimer = 0;
     this.surgeTimer = SURGE_INTERVAL;
     this.stripes = [];
@@ -313,7 +320,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
     const fuelDelay = this.activeSurvivors.includes('explorer') ? 5000 : 7500;
     this.time.addEvent({ delay: fuelDelay, callback: this.spawnFuelCan, callbackScope: this, loop: true });
-    this.time.addEvent({ delay: HAZARD_SPAWN_INTERVAL, callback: this.spawnHazard, callbackScope: this, loop: true });
+    this.time.addEvent({ delay: Math.round(HAZARD_SPAWN_INTERVAL / route.hazardMult), callback: this.spawnHazard, callbackScope: this, loop: true }); // Track B1: frequenza × nodo
 
     // Audio
     const webAudio = this.sound as Phaser.Sound.WebAudioSoundManager;
@@ -867,14 +874,14 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.spawnTimer -= delta;
     if (this.spawnTimer <= 0) {
       this.spawnZombie();
-      this.spawnInterval = Math.max(290, this.spawnInterval - 3);
+      this.spawnInterval = Math.max(Math.round(290 * this.routeSpawnMult), this.spawnInterval - 3); // Track B1: pavimento × nodo
       this.spawnTimer = this.spawnInterval;
     }
     // Sferzata: ogni SURGE_INTERVAL un'orda extra (ritmo a picchi, come l'arena).
     this.surgeTimer -= delta;
     if (this.surgeTimer <= 0) {
       this.surgeTimer = SURGE_INTERVAL;
-      const n = Math.min(7, SURGE_BASE + Math.floor((this.missionNumber - 1) / 2));
+      const n = Math.min(9, Math.round((SURGE_BASE + Math.floor((this.missionNumber - 1) / 2)) / this.routeSpawnMult)); // Track B1: sferzata × nodo
       for (let i = 0; i < n; i++) this.spawnZombie();
     }
   }
@@ -1706,7 +1713,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (this.missionDone) return;
     this.missionDone = true;
 
-    const earned = Math.floor(this.score / 8);
+    const earned = Math.floor(this.score / 8 * this.routeMoneyMult); // Track B1: monete × nodo di percorso
     setRun(this.registry, 'money',         (getRun(this.registry, 'money') ?? 0) + earned);
     setRun(this.registry, 'missionNumber', (getRun(this.registry, 'missionNumber') ?? 1) + 1);
     setRun(this.registry, 'lastScore',     this.score);
@@ -1717,6 +1724,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       turret: this.components.turret.health,
       armor:  this.components.armor.health,
     });
+    setRun(this.registry, 'routeModifier', 'none'); // Track B1: il modificatore vale una sola missione → consumato
     // CHECKPOINT: lo stato è avanzato (ricompense + missione successiva) → persisti subito, così
     // chiudere il browser sull'overlay di fine missione o nel negozio non perde la missione (fix review).
     if (!this.debugRun) SaveData.saveRun(snapshotRun(this.registry));

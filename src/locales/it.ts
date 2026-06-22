@@ -146,6 +146,17 @@ const it: Record<string, string> = {
   'game.restart': '[ SPAZIO ] riprova la missione',
 
   // ── Boss ─────────────────────────────────────────────────────────────────────────
+  // ── Percorso (Track B: scelta di nodo tra le missioni) ──────────────────────────
+  'route.title': 'SCEGLI IL PERCORSO',
+  'route.subtitle': 'Prossima missione: {n} · scegli un nodo',
+  'route.money': '★ {p} monete',
+  'route.horde.label': 'Orda Fitta',
+  'route.horde.desc': 'Sciami fittissimi e sferzate continue. Alto rischio, ricca paga.',
+  'route.minefield.label': 'Strada Minata',
+  'route.minefield.desc': 'Irta di relitti, olio e mine. Guida pulita = bottino in più.',
+  'route.rest.label': 'Tratta Tranquilla',
+  'route.rest.desc': 'Pochi nemici, pochi ostacoli — per rifiatare. Ma poche monete.',
+
   'boss.warn': '⚠  {name}  ⚠',
   'boss.fury': '⚠ FURIA',
   'boss.defeated': 'BOSS SCONFITTO!  +{n} monete',
