@@ -17,6 +17,8 @@ const pt: Record<string, string> = {
   'settings.vignette': 'Vinheta',
   'settings.grain': 'Grão',
   'settings.scanline': 'Scanlines CRT',
+  'settings.grading': 'Gradação',
+  'settings.aberration': 'Aberração',
   'settings.fxOn': 'ATIVADOS',
   'settings.fxOff': 'DESATIVADOS',
   'settings.resolution': 'RESOLUÇÃO',

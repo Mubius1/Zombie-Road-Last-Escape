@@ -173,12 +173,13 @@ export default class FilmPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFX
     this.set1f('uTime', this.elapsed);
     this.set1f('uIntensity', p.intensity);
     this.set1f('uVignette', Settings.vignetteFx ? this.vignette : 0); // toggle singolo (Impostazioni → Grafica)
-    this.set1f('uContrast', p.contrast);
-    this.set1f('uSaturation', p.saturation);
-    this.set1f('uWarmth', p.warmth);
-    this.set1f('uTone', p.tone);
-    this.set1f('uExposure', p.exposure);
-    this.set1f('uAberration', p.aberration + p.shock); // base + kick transitorio
+    const grade = Settings.gradingFx; // toggle grading (tone-map / contrasto / saturazione / temperatura)
+    this.set1f('uContrast', grade ? p.contrast : 1);
+    this.set1f('uSaturation', grade ? p.saturation : 1);
+    this.set1f('uWarmth', grade ? p.warmth : 0);
+    this.set1f('uTone', grade ? p.tone : 0);
+    this.set1f('uExposure', p.exposure); // ininfluente quando uTone=0
+    this.set1f('uAberration', Settings.aberrationFx ? p.aberration + p.shock : 0); // toggle aberrazione (+ kick)
     this.set1f('uGrain', Settings.grainFx ? p.grain : 0);          // toggle singolo
     this.set1f('uScanline', Settings.scanlineFx ? p.scanline : 0); // toggle singolo
     this.set1f('uSpeed', p.speed);

@@ -27,6 +27,8 @@ const it: Record<string, string> = {
   'settings.vignette': 'Vignetta',
   'settings.grain': 'Grana',
   'settings.scanline': 'Scanline CRT',
+  'settings.grading': 'Grading',
+  'settings.aberration': 'Aberrazione',
   'settings.fxOn': 'ATTIVI',
   'settings.fxOff': 'DISATTIVI',
   'settings.resolution': 'RISOLUZIONE',

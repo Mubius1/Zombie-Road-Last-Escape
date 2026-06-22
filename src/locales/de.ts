@@ -17,6 +17,8 @@ const de: Record<string, string> = {
   'settings.vignette': 'Vignette',
   'settings.grain': 'Korn',
   'settings.scanline': 'CRT-Scanlines',
+  'settings.grading': 'Grading',
+  'settings.aberration': 'Aberration',
   'settings.fxOn': 'AN',
   'settings.fxOff': 'AUS',
   'settings.resolution': 'AUFLÖSUNG',

@@ -172,30 +172,32 @@ export default class SettingsScene extends Phaser.Scene {
 
   // ─── Effetti schermo ─────────────────────────────────────────────────────────
 
-  /** Effetti schermo selezionabili singolarmente: tre chip (Vignetta · Grana · Scanline CRT). */
-  private buildScreenFxGroup(y: number) {
+  /** Effetti schermo (post-fx) selezionabili singolarmente: griglia 2×3 di chip. */
+  private buildScreenFxGrid(y: number) {
     const cx = this.designW / 2;
-    Ui.text(this, cx - 230, y - 18, t('settings.screenFx'), { fontSize: '15px', fontStyle: 'bold', color: UI.cyan });
+    Ui.text(this, cx - 230, y, t('settings.screenFx'), { fontSize: '15px', fontStyle: 'bold', color: UI.cyan });
 
     const chips: Array<[string, () => boolean, (v: boolean) => void]> = [
-      [t('settings.vignette'), () => Settings.vignetteFx, v => { Settings.vignetteFx = v; }],
-      [t('settings.grain'),    () => Settings.grainFx,    v => { Settings.grainFx = v; }],
-      [t('settings.scanline'), () => Settings.scanlineFx, v => { Settings.scanlineFx = v; }],
+      [t('settings.vignette'),   () => Settings.vignetteFx,   v => { Settings.vignetteFx = v; }],
+      [t('settings.grain'),      () => Settings.grainFx,      v => { Settings.grainFx = v; }],
+      [t('settings.scanline'),   () => Settings.scanlineFx,   v => { Settings.scanlineFx = v; }],
+      [t('settings.grading'),    () => Settings.gradingFx,    v => { Settings.gradingFx = v; }],
+      [t('settings.aberration'), () => Settings.aberrationFx, v => { Settings.aberrationFx = v; }],
+      [t('settings.bloom'),      () => Settings.bloom,        v => { Settings.bloom = v; }],
     ];
-    const cw = 140, gap = 8, total = chips.length * cw + (chips.length - 1) * gap;
-    const startX = cx - total / 2;
+    const cols = 3, cw = 146, ch = 32, gapX = 10, gapY = 8;
+    const startX = cx - (cols * cw + (cols - 1) * gapX) / 2;
     chips.forEach(([label, get, set], i) => {
-      const x = startX + i * (cw + gap) + cw / 2, on = get();
-      const chip = this.add.rectangle(x, y + 16, cw, 34, on ? 0x16301a : 0x26262e)
+      const x = startX + (i % cols) * (cw + gapX) + cw / 2;
+      const cy = y + 26 + Math.floor(i / cols) * (ch + gapY);
+      const on = get();
+      const chip = this.add.rectangle(x, cy, cw, ch, on ? 0x16301a : 0x26262e)
         .setStrokeStyle(2, on ? UI.hpHigh : UI.blueLine, 0.8)
         .setInteractive({ useHandCursor: true });
-      Ui.text(this, x, y + 16, label, { fontSize: '12px', fontStyle: 'bold', color: on ? UI.greenSoft : UI.faint }).setOrigin(0.5);
+      Ui.text(this, x, cy, label, { fontSize: '12px', fontStyle: 'bold', color: on ? UI.greenSoft : UI.faint }).setOrigin(0.5);
       chip.on('pointerover', () => chip.setFillStyle(on ? 0x1d3d22 : 0x32323c));
       chip.on('pointerout',  () => chip.setFillStyle(on ? 0x16301a : 0x26262e));
-      chip.on('pointerdown', () => {
-        set(!get());
-        this.scene.restart({ from: this.fromKey, page: this.page, nav: true }); // riapplica gli effetti all'istante
-      });
+      chip.on('pointerdown', () => { set(!get()); this.scene.restart({ from: this.fromKey, page: this.page, nav: true }); });
     });
   }
 
@@ -387,12 +389,11 @@ export default class SettingsScene extends Phaser.Scene {
   /** Pagina GRAFICA: risoluzione, schermo intero, effetti filmici, bloom, ombre, asfalto. */
   private buildGraphicsPage(inGame: boolean) {
     this.pageHeader(t('settings.catGraphics'));
-    this.buildResolution(H / 2 - 150, inGame);
-    this.buildFullscreen(H / 2 - 88);
-    this.buildScreenFxGroup(H / 2 - 26);
-    this.buildToggle(H / 2 + 36,  t('settings.bloom'),   t('settings.bloomDesc'),   () => Settings.bloom,         v => { Settings.bloom = v; });
-    this.buildToggle(H / 2 + 98,  t('settings.shadows'), t('settings.shadowsDesc'), () => Settings.shadows,       v => { Settings.shadows = v; });
-    this.buildToggle(H / 2 + 160, t('settings.asphalt'), t('settings.asphaltDesc'), () => Settings.asphaltDetail, v => { Settings.asphaltDetail = v; });
+    this.buildResolution(H / 2 - 170, inGame);
+    this.buildFullscreen(H / 2 - 116);
+    this.buildScreenFxGrid(H / 2 - 68); // Effetti schermo: griglia 2×3 di chip (post-fx)
+    this.buildToggle(H / 2 + 46,  t('settings.shadows'), t('settings.shadowsDesc'), () => Settings.shadows,       v => { Settings.shadows = v; });
+    this.buildToggle(H / 2 + 104, t('settings.asphalt'), t('settings.asphaltDesc'), () => Settings.asphaltDetail, v => { Settings.asphaltDetail = v; });
     this.pageFooter();
   }
 

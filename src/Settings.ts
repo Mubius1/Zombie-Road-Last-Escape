@@ -33,6 +33,8 @@ export interface SettingsData {
   vignetteFx: boolean;
   grainFx: boolean;
   scanlineFx: boolean;
+  gradingFx: boolean;     // grading filmico (tone-map / contrasto / saturazione / temperatura)
+  aberrationFx: boolean;  // aberrazione cromatica radiale (+ kick d'impatto)
   /** Bloom (bagliore additivo sugli elementi luminosi). WebGL. */
   bloom: boolean;
   /** Ombre di contatto a terra (radicamento 2.5D). WebGL. */
@@ -52,7 +54,7 @@ export interface SettingsData {
 }
 
 const STORAGE_KEY = 'zombieRoad.settings.v1';
-const DEFAULTS: SettingsData = { volume: 1, vignetteFx: true, grainFx: true, scanlineFx: true, bloom: true, shadows: true, asphaltDetail: true, resolution: 0, fullscreen: false, colorblind: false, language: 'it', brightness: 1 };
+const DEFAULTS: SettingsData = { volume: 1, vignetteFx: true, grainFx: true, scanlineFx: true, gradingFx: true, aberrationFx: true, bloom: true, shadows: true, asphaltDetail: true, resolution: 0, fullscreen: false, colorblind: false, language: 'it', brightness: 1 };
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const clampBright = (v: number) => (v < 0.6 ? 0.6 : v > 1.4 ? 1.4 : v);
@@ -69,6 +71,8 @@ function loadSettings(): SettingsData {
       vignetteFx: typeof p.vignetteFx === 'boolean' ? p.vignetteFx : legacyOn,
       grainFx:    typeof p.grainFx === 'boolean'    ? p.grainFx    : legacyOn,
       scanlineFx: typeof p.scanlineFx === 'boolean' ? p.scanlineFx : legacyOn,
+      gradingFx:    typeof p.gradingFx === 'boolean'    ? p.gradingFx    : legacyOn,
+      aberrationFx: typeof p.aberrationFx === 'boolean' ? p.aberrationFx : legacyOn,
       bloom:        typeof p.bloom === 'boolean'         ? p.bloom         : DEFAULTS.bloom,
       shadows:      typeof p.shadows === 'boolean'       ? p.shadows       : DEFAULTS.shadows,
       asphaltDetail: typeof p.asphaltDetail === 'boolean' ? p.asphaltDetail : DEFAULTS.asphaltDetail,
@@ -98,8 +102,18 @@ export default class Settings {
   static get scanlineFx(): boolean { return this.data.scanlineFx; }
   static set scanlineFx(v: boolean) { this.data.scanlineFx = v; this.save(); }
 
-  /** Master COMPUTATO: lo shader filmico si attacca se almeno un effetto schermo è attivo. */
-  static get screenFx(): boolean { return this.data.vignetteFx || this.data.grainFx || this.data.scanlineFx; }
+  static get gradingFx(): boolean { return this.data.gradingFx; }
+  static set gradingFx(v: boolean) { this.data.gradingFx = v; this.save(); }
+
+  static get aberrationFx(): boolean { return this.data.aberrationFx; }
+  static set aberrationFx(v: boolean) { this.data.aberrationFx = v; this.save(); }
+
+  /** Master COMPUTATO: la catena post-fx (Film + bloom) si attacca se almeno un effetto schermo è attivo
+   *  → bloom incluso, così resta indipendente dai singoli effetti del FilmPipeline. */
+  static get screenFx(): boolean {
+    const d = this.data;
+    return d.vignetteFx || d.grainFx || d.scanlineFx || d.gradingFx || d.aberrationFx || d.bloom;
+  }
 
   static get bloom(): boolean { return this.data.bloom; }
   static set bloom(v: boolean) { this.data.bloom = v; this.save(); }
