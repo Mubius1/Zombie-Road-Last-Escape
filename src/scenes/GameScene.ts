@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { VEHICLES, Upgrades, WeaponType, WEAPONS, WEAPON_KEYS, FOOD } from '../GameData';
+import { VEHICLES, Upgrades, WeaponType, WEAPONS, WEAPON_KEYS, FOOD, SURVIVORS } from '../GameData';
 import SoundManager from '../SoundManager';
 import Juice from '../Juice';
 import { enterScreen, pulse, rampSpeed, resetKinetics } from '../PostFx';
@@ -74,6 +74,11 @@ const GRENADE_AOE = 110;        // raggio dell'esplosione granata
 const GRENADE_DMG = 8;          // danno della granata nell'area
 const LOOTER_MONEY_MULT = 1.12; // +12% monete a fine missione (Saccheggiatore)
 // M2 cibo & mantenimento: costanti condivise in GameData.FOOD (vedi BALANCE.md §8).
+// M3 rischio & permanenza dei sopravvissuti.
+const INJURY_CHANCE = 0.25;         // prob. di ferire un sopravvissuto su colpo pesante / salute bassa
+const INJURY_HP_THRESHOLD = 0.35;   // sotto questa frazione di salute ogni colpo può ferire
+const INJURY_HEAVY_DMG = 8;         // danno (post-armatura) che conta come "colpo pesante"
+const STARVE_MISSIONS_TO_LEAVE = 2; // missioni consecutive da affamato prima di andarsene
 const CONVOY_DURATION = 11000;       // ms da scortare il van
 const CONVOY_HP = 100;               // salute del van alleato
 const CONVOY_ZOMBIE_DMG = 9;         // danno al van per ogni zombi che lo raggiunge
@@ -211,6 +216,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private overdriveMult = 1;             // ×1.3 durata con 'overcharge'
   private toxicResist = 1;               // ×0.5 danno tossico con 'filters'
   private hungry: string[] = [];         // M2: sopravvissuti affamati questa missione (abilità spenta)
+  private injured: string[] = [];        // M3: sopravvissuti feriti (abilità spenta finché non curati)
+  private lostSurvivor = '';             // M3: sopravvissuto perso all'ultima morte (per l'overlay)
+  private pendingSurvivorLeft = '';      // M3: nome di chi se n'è andato per fame (toast differito in create)
   private activeSurvivors: string[] = [];
 
   private mechanicTimer = 0;
@@ -297,12 +305,28 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
     // M2 cibo: i sopravvissuti a bordo "mangiano" a inizio missione. Consumo UNA volta per numero di
     // missione (foodMission) → il retry dopo la morte non ri-addebita. Chi resta senza → affamato.
+    this.injured = getRun(this.registry, 'injured') ?? []; // M3: feriti tramandati (abilità spenta)
     let food = getRun(this.registry, 'food') ?? FOOD.start;
     this.hungry = getRun(this.registry, 'hungry') ?? [];
     if (getRun(this.registry, 'foodMission') !== this.missionNumber) {
       const fed = Math.min(this.activeSurvivors.length, Math.floor(food / FOOD.perSurvivor));
       food = Math.max(0, food - fed * FOOD.perSurvivor);
       this.hungry = this.activeSurvivors.slice(fed); // i non sfamati (oltre la capienza di cibo)
+      // M3 fame prolungata: streak di missioni con affamati; a STARVE_MISSIONS_TO_LEAVE uno se ne va.
+      let streak = getRun(this.registry, 'starveStreak') ?? 0;
+      streak = this.hungry.length > 0 ? streak + 1 : 0;
+      if (streak >= STARVE_MISSIONS_TO_LEAVE && this.hungry.length > 0) {
+        const leaver = this.hungry[this.hungry.length - 1];
+        this.activeSurvivors = this.activeSurvivors.filter(k => k !== leaver);
+        this.hungry  = this.hungry.filter(k => k !== leaver);
+        this.injured = this.injured.filter(k => k !== leaver);
+        setRun(this.registry, 'survivors', this.activeSurvivors);
+        setRun(this.registry, 'injured', this.injured);
+        const s = SURVIVORS.find(sv => sv.key === leaver);
+        this.pendingSurvivorLeft = s ? `${s.properName} ${s.surname}` : leaver;
+        streak = 0;
+      }
+      setRun(this.registry, 'starveStreak', streak);
       setRun(this.registry, 'food', food);
       setRun(this.registry, 'hungry', this.hungry);
       setRun(this.registry, 'foodMission', this.missionNumber);
@@ -615,6 +639,11 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private buildHUD(missionNum: number) {
     this.hud = new HudController(this, this.designW);
     this.hud.build(this.hudOpts(missionNum));
+    // M3: se un sopravvissuto se n'è andato per fame a inizio missione, avvisa (toast differito).
+    if (this.pendingSurvivorLeft) {
+      const who = this.pendingSurvivorLeft; this.pendingSurvivorLeft = '';
+      this.time.delayedCall(700, () => this.flashSurvivorEvent(t('game.survivorLeft', { name: who }), UI.red));
+    }
   }
 
   /** Opzioni di costruzione dell'HUD dallo stato corrente (riusate da build e re-build lingua). */
@@ -1020,7 +1049,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   /** Sopravvissuto a bordo E non affamato (M2: la fame spegne l'abilità per la missione). */
   private hasActiveSurvivor(key: string): boolean {
-    return this.activeSurvivors.includes(key) && !this.hungry.includes(key);
+    return this.activeSurvivors.includes(key) && !this.hungry.includes(key) && !this.injured.includes(key);
   }
 
   private updateSurvivorEffects(delta: number, _time: number) {
@@ -2001,7 +2030,29 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.health = Math.max(0, this.health - dealt);
     this.hud.flashHealthBar();
     if (this.health <= 0) this.endGame(t('game.over.vehicle'));
-    else this.flashVehicleDamage(dealt); // se è game over, ci pensa endGame a tingere il veicolo
+    else { this.maybeInjure(dealt); this.flashVehicleDamage(dealt); } // M3: colpo pesante può ferire un sopravvissuto
+  }
+
+  /** M3: un colpo pesante (o salute bassa) può ferire un sopravvissuto → abilità spenta finché non lo
+   *  curi al negozio. Persiste solo se sopravvivi alla missione (entra nel checkpoint di fine missione). */
+  private maybeInjure(dealt: number) {
+    if (dealt < INJURY_HEAVY_DMG && this.health >= INJURY_HP_THRESHOLD * this.maxHealth) return;
+    const pool = this.activeSurvivors.filter(k => !this.injured.includes(k));
+    if (pool.length === 0 || Math.random() >= INJURY_CHANCE) return;
+    const victim = pool[Math.floor(Math.random() * pool.length)];
+    this.injured = [...this.injured, victim];
+    setRun(this.registry, 'injured', this.injured);
+    const s = SURVIVORS.find(sv => sv.key === victim);
+    this.flashSurvivorEvent(t('game.survivorInjured', { name: s ? `${s.properName} ${s.surname}` : victim }), UI.amberSoft);
+    this.sfx?.playImpact();
+  }
+
+  /** Toast breve a centro-alto schermo per gli eventi sopravvissuti (ferito / andato via). */
+  private flashSurvivorEvent(msg: string, color: string) {
+    const txt = Ui.text(this, this.scale.width / 2, 122, msg,
+      { fontSize: '15px', color, fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 })
+      .setOrigin(0.5).setScrollFactor(0).setDepth(50);
+    this.tweens.add({ targets: txt, y: 100, alpha: 0, duration: 1900, ease: 'Quad.in', onComplete: () => txt.destroy() });
   }
 
   /**
@@ -2126,6 +2177,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private endGame(reason: string) {
     if (!this.alive) return;
     this.alive = false;
+    this.lostSurvivor = '';
 
     SaveData.record(this.missionNumber, this.score); // aggiorna il record (G5)
 
@@ -2141,9 +2193,13 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       const cp = SaveData.loadRun();
       if (cp) {
         this.deathToll = Math.floor(cp.money * DEATH_MONEY_PENALTY);
-        const recovered = { ...cp, money: Math.max(0, cp.money - this.deathToll) };
+        // M3 permanenza: oltre al pedaggio monete, la morte porta via 1 sopravvissuto (se a bordo).
+        const survLeft = [...cp.survivors];
+        this.lostSurvivor = survLeft.length > 0 ? survLeft.splice(Math.floor(Math.random() * survLeft.length), 1)[0] : '';
+        const recovered = { ...cp, money: Math.max(0, cp.money - this.deathToll),
+          survivors: survLeft, injured: cp.injured.filter(k => k !== this.lostSurvivor) };
         restoreRun(this.registry, recovered);
-        SaveData.saveRun(recovered); // il checkpoint riflette il pedaggio (auto-limitante: monete ≥ 0)
+        SaveData.saveRun(recovered); // il checkpoint riflette pedaggio + perdita (auto-limitante: monete ≥ 0)
       } else {
         this.deathToll = 0;
         resetRunState(this.registry);
@@ -2167,7 +2223,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
     this.time.delayedCall(700, () => {
       const cx = this.designW/2, cy = H/2;
-      Ui.box(this, cx,cy,440,300,{ fill:UI.black, fillAlpha:0.88, radius:16, stroke:UI.redCrit, strokeAlpha:0.55 }).setDepth(30);
+      Ui.box(this, cx,cy,440,324,{ fill:UI.black, fillAlpha:0.88, radius:16, stroke:UI.redCrit, strokeAlpha:0.55 }).setDepth(30);
       Ui.text(this, cx,cy-92,t('game.gameOver'),{
         fontSize:'46px', color:'#ff3333', fontStyle:'bold',
         stroke:'#880000', strokeThickness:5,
@@ -2176,11 +2232,16 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       Ui.text(this, cx,cy-8,t('game.scoreLine', { n: this.score }),{fontSize:'22px',color:UI.white}).setOrigin(0.5).setDepth(31);
       Ui.text(this, cx,cy+24,t('game.distanceLine', { n: Math.floor(this.distance/100) }),{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
       // Campagna a checkpoint: da dove si riprende + il pedaggio di recupero pagato (modello B).
-      Ui.text(this, cx,cy+58,t('game.checkpointResume', { n: this.missionNumber }),{fontSize:'14px',color:UI.amberSoft}).setOrigin(0.5).setDepth(31);
+      Ui.text(this, cx,cy+54,t('game.checkpointResume', { n: this.missionNumber }),{fontSize:'14px',color:UI.amberSoft}).setOrigin(0.5).setDepth(31);
+      if (this.lostSurvivor) {
+        const ls = SURVIVORS.find(sv => sv.key === this.lostSurvivor);
+        Ui.text(this, cx,cy+78,t('game.survivorLost', { name: ls ? `${ls.properName} ${ls.surname}` : this.lostSurvivor }),
+          {fontSize:'13px',color:UI.red,fontStyle:'bold'}).setOrigin(0.5).setDepth(31);
+      }
       if (this.deathToll > 0)
-        Ui.text(this, cx,cy+82,t('game.deathToll', { n: this.deathToll }),{fontSize:'12px',color:UI.redSoft}).setOrigin(0.5).setDepth(31);
-      Ui.text(this, cx,cy+108,t('game.restart'),{fontSize:'14px',color:UI.faint}).setOrigin(0.5).setDepth(31);
-      this.addMenuReturn(cx, cy+136);
+        Ui.text(this, cx,cy+98,t('game.deathToll', { n: this.deathToll }),{fontSize:'12px',color:UI.redSoft}).setOrigin(0.5).setDepth(31);
+      Ui.text(this, cx,cy+122,t('game.restart'),{fontSize:'14px',color:UI.faint}).setOrigin(0.5).setDepth(31);
+      this.addMenuReturn(cx, cy+150);
       this.input.keyboard?.once('keydown-M', () => Juice.go(this, 'MenuScene'));
     });
   }

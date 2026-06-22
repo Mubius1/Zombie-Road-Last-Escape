@@ -72,6 +72,7 @@ const en: Record<string, string> = {
   'shop.recruitOnePerVisit': 'Only 1 per stop',
   'shop.food': '🍖 Food {n}/{max}',
   'shop.rations': '+{n} rations ★{c}',
+  'shop.heal': 'Heal ★{c}',
   'shop.recruited': 'ALREADY RECRUITED',
   'shop.free': 'FREE',
   'shop.vehicleFull': 'Vehicle full',
@@ -151,6 +152,9 @@ const en: Record<string, string> = {
   'game.gameOver': 'GAME OVER',
   'game.checkpointResume': 'Resume from Mission {n}',
   'game.deathToll': 'Recovery cost: −{n}★',
+  'game.survivorInjured': '{name} is injured!',
+  'game.survivorLeft': '{name} left — starvation',
+  'game.survivorLost': "{name} didn't make it",
   'game.restart': '[ SPACE ] retry mission',
 
   // ── Route (Track B: node choice between missions) ──

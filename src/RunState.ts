@@ -37,6 +37,10 @@ export interface RunData {
   hungry: string[];
   /** M2: numero di missione per cui il cibo è già stato consumato (evita doppio addebito al retry). */
   foodMission: number;
+  /** M3: sopravvissuti feriti (abilità spenta finché non curati al negozio). */
+  injured: string[];
+  /** M3: missioni consecutive con almeno un affamato (a STARVE_MISSIONS_TO_LEAVE uno se ne va). */
+  starveStreak: number;
 }
 
 /** Lettura tipizzata dal registry. Ritorna `undefined` se la chiave non è ancora impostata
@@ -70,6 +74,8 @@ export function resetRunState(registry: Phaser.Data.DataManager) {
   setRun(registry, 'food', 40); // = FOOD.start (RunState non importa da GameData per non creare cicli)
   setRun(registry, 'hungry', []);
   setRun(registry, 'foodMission', -1);
+  setRun(registry, 'injured', []);
+  setRun(registry, 'starveStreak', 0);
 }
 
 /**
@@ -94,6 +100,8 @@ export function snapshotRun(registry: Phaser.Data.DataManager): RunData {
     food:          getRun(registry, 'food') ?? 40,
     hungry:        getRun(registry, 'hungry') ?? [],
     foodMission:   getRun(registry, 'foodMission') ?? -1,
+    injured:       getRun(registry, 'injured') ?? [],
+    starveStreak:  getRun(registry, 'starveStreak') ?? 0,
   };
 }
 
@@ -114,4 +122,6 @@ export function restoreRun(registry: Phaser.Data.DataManager, run: RunData): voi
   setRun(registry, 'food',        run.food ?? 40);
   setRun(registry, 'hungry',      run.hungry ?? []);
   setRun(registry, 'foodMission', run.foodMission ?? -1);
+  setRun(registry, 'injured',      run.injured ?? []);
+  setRun(registry, 'starveStreak', run.starveStreak ?? 0);
 }

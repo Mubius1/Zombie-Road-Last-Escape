@@ -13,6 +13,7 @@ import SaveData from '../SaveData';
 import { t } from '../i18n';
 
 const H = 600;
+const HEAL_COST = 60; // M3: costo cura di un sopravvissuto ferito (dimezzato col Medico a bordo)
 
 // `label`/`desc` sono CHIAVI i18n (risolte con t() al render). `key`/`cost` restano dati.
 interface ShopItem {
@@ -45,6 +46,7 @@ export default class ShopScene extends Phaser.Scene {
   private ownedVehicles: string[] = ['civilian_car'];
   private survivors: string[] = [];
   private food = 0; // M2: scorta cibo di campagna (per il display + acquisto razioni nel negozio)
+  private injured: string[] = []; // M3: sopravvissuti feriti (marker 🩹 + cura nel negozio)
   private missionNum = 2;
   private offeredSurvivors: SurvivorData[] = [];
 
@@ -79,6 +81,7 @@ export default class ShopScene extends Phaser.Scene {
     this.ownedVehicles  = getRun(this.registry, 'ownedVehicles')  ?? ['civilian_car'];
     this.survivors      = getRun(this.registry, 'survivors')      ?? [];
     this.food           = getRun(this.registry, 'food')           ?? FOOD.start;
+    this.injured        = getRun(this.registry, 'injured')        ?? [];
     this.missionNum     = getRun(this.registry, 'missionNumber')  ?? 2;
     this.currentWeapon  = getRun(this.registry, 'currentWeapon')  ?? 'mg';
     this.ownedWeapons   = getRun(this.registry, 'ownedWeapons')   ?? ['mg'];
@@ -278,8 +281,22 @@ export default class ShopScene extends Phaser.Scene {
         if (!s) return;
         const ly = py + 54 + i * 18;
         const starving = i >= fedNext; // proiezione fame alla prossima missione col cibo attuale
-        Ui.text(this, px + 6, ly, t('shop.survivorName', { name: `${s.properName} ${s.surname}` }) + (starving ? '  🍖✗' : ''),
-          { fontSize: '12px', color: starving ? UI.amberSoft : s.color });
+        const hurt = this.injured.includes(key);
+        const mark = (hurt ? ' 🩹' : '') + (starving ? ' 🍖✗' : '');
+        Ui.text(this, px + 6, ly, t('shop.survivorName', { name: `${s.properName} ${s.surname}` }) + mark,
+          { fontSize: '12px', color: hurt ? UI.red : starving ? UI.amberSoft : s.color });
+        // M3: cura del ferito (★, dimezzata col Medico a bordo).
+        if (hurt) {
+          const cost = this.healCost(), canHeal = this.money >= cost;
+          const heal = Ui.text(this, px + 250, ly, t('shop.heal', { c: cost }),
+            { fontSize: '10px', color: canHeal ? UI.greenOk : '#554444', fontStyle: 'bold' }).setOrigin(1, 0);
+          if (canHeal) {
+            heal.setInteractive({ useHandCursor: true });
+            heal.on('pointerover', () => heal.setColor(UI.white));
+            heal.on('pointerout',  () => heal.setColor(UI.greenOk));
+            heal.on('pointerdown', () => this.healSurvivor(key));
+          }
+        }
         // ✕ = fai scendere dal veicolo (libera un posto).
         const off = Ui.text(this, px + 286, ly, '✕', { fontSize: '14px', color: UI.amberSoft, fontStyle: 'bold' })
           .setOrigin(1, 0).setInteractive({ useHandCursor: true });
@@ -431,6 +448,22 @@ export default class ShopScene extends Phaser.Scene {
     this.persist();
     ShopScene.sfx?.playFuelPickup();
     this.time.delayedCall(150, () => this.refresh());
+  }
+
+  /** M3: cura un sopravvissuto ferito pagando healCost() monete. */
+  private healSurvivor(key: string) {
+    const cost = this.healCost();
+    if (!this.injured.includes(key) || this.money < cost) return;
+    this.money -= cost;
+    this.injured = this.injured.filter(k => k !== key);
+    setRun(this.registry, 'money', this.money);
+    setRun(this.registry, 'injured', this.injured);
+    this.afterPurchase();
+  }
+
+  /** Costo cura: dimezzato se il Medico è a bordo (sinergia M3). */
+  private healCost(): number {
+    return this.survivors.includes('medic') ? Math.floor(HEAL_COST / 2) : HEAL_COST;
   }
 
   /** M2: compra una razione (food += rationFood, cap FOOD.max) per FOOD.rationCost monete. */

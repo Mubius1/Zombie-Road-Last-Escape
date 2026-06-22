@@ -84,6 +84,7 @@ const it: Record<string, string> = {
   'shop.recruitOnePerVisit': 'Solo 1 a sosta',
   'shop.food': '🍖 Cibo {n}/{max}',
   'shop.rations': '+{n} razioni ★{c}',
+  'shop.heal': 'Cura ★{c}',
   'shop.recruited': 'GIÀ RECLUTATO',
   'shop.free': 'GRATIS',
   'shop.vehicleFull': 'Veicolo pieno',
@@ -168,6 +169,9 @@ const it: Record<string, string> = {
   'game.gameOver': 'GAME OVER',
   'game.checkpointResume': 'Riprendi dalla Missione {n}',
   'game.deathToll': 'Costo di recupero: −{n}★',
+  'game.survivorInjured': '{name} è ferito!',
+  'game.survivorLeft': "{name} se n'è andato — fame",
+  'game.survivorLost': "{name} non ce l'ha fatta",
   'game.restart': '[ SPAZIO ] riprova la missione',
 
   // ── Boss ─────────────────────────────────────────────────────────────────────────

@@ -72,6 +72,7 @@ const fr: Record<string, string> = {
   'shop.recruitOnePerVisit': '1 seul par arrêt',
   'shop.food': '🍖 Nourriture {n}/{max}',
   'shop.rations': '+{n} rations ★{c}',
+  'shop.heal': 'Soigner ★{c}',
   'shop.recruited': 'DÉJÀ RECRUTÉ',
   'shop.free': 'GRATUIT',
   'shop.vehicleFull': 'Véhicule plein',
@@ -151,6 +152,9 @@ const fr: Record<string, string> = {
   'game.gameOver': 'GAME OVER',
   'game.checkpointResume': 'Reprends à la Mission {n}',
   'game.deathToll': 'Coût de récupération : −{n}★',
+  'game.survivorInjured': '{name} est blessé !',
+  'game.survivorLeft': '{name} est parti — faim',
+  'game.survivorLost': "{name} n'a pas survécu",
   'game.restart': '[ ESPACE ] réessayer la mission',
 
   // ── Itinéraire (Track B) ──
