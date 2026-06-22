@@ -58,12 +58,12 @@ export default class DebugScene extends Phaser.Scene {
     }).setOrigin(0.5, 0);
 
     this.drawVehicles(42);
-    this.drawZombies(126);
-    this.drawSurvivors(210);
-    this.drawBosses(298);
-    this.drawObjects(386);
-    this.drawWeapons(450);
-    this.drawButtons(502);
+    this.drawZombies(122);
+    this.drawSurvivors(212);
+    this.drawBosses(302);
+    this.drawObjects(400);
+    this.drawWeapons(468);
+    this.drawButtons(522);
     Juice.fadeIn(this, 250);
   }
 
@@ -117,9 +117,9 @@ export default class DebugScene extends Phaser.Scene {
     const top = y + 18;
     SURVIVORS.forEach((s, i) => {
       const cx = 84 + i * 150;
-      this.cell(cx, top + 30, 124, 60);
-      this.add.image(cx, top + 28, `survivor_${s.key}`).setOrigin(0.5).setScale(1 / OVERSAMPLE);
-      Ui.text(this, cx, top + 62, `${s.properName} · ${t(s.name)}`, { fontSize: '9px', color: s.color }).setOrigin(0.5, 0);
+      this.cell(cx, top + 26, 124, 56);
+      this.add.image(cx, top + 24, `survivor_${s.key}`).setOrigin(0.5).setScale(1 / OVERSAMPLE);
+      Ui.text(this, cx, top + 56, `${s.properName} · ${t(s.name)}`, { fontSize: '9px', color: s.color }).setOrigin(0.5, 0);
     });
   }
 
@@ -129,15 +129,16 @@ export default class DebugScene extends Phaser.Scene {
     BOSS_ORDER.forEach((bt, i) => {
       const cfg = BOSS_CONFIG[bt];
       const cx = 100 + i * 160;
-      this.cell(cx, top + 30, 150, 64);
-      // Scala ridotta per stare nella cella, ma mantiene proporzioni reali
-      const shrink = 0.6;
+      this.cell(cx, top + 26, 150, 52);
       const texKey = `boss_${bt}`;
-      this.add.sprite(cx, top + 30, texKey)
-        .setOrigin(0.5).setScale(cfg.scaleX * shrink / OVERSAMPLE, cfg.scaleY * shrink / OVERSAMPLE)
+      const spr = this.add.sprite(cx, top + 26, texKey)
+        .setOrigin(0.5).setScale(cfg.scaleX * 0.6 / OVERSAMPLE, cfg.scaleY * 0.6 / OVERSAMPLE)
         .play(`walk_${texKey}`);
-      Ui.text(this, cx, top + 50, t(cfg.name), { fontSize: '9px', color: UI.redSoft, fontStyle: 'bold' }).setOrigin(0.5, 0);
-      Ui.text(this, cx, top + 62, t('debug.bossStats', { hp: cfg.hp, reward: cfg.reward }), { fontSize: '8px', color: '#886666' }).setOrigin(0.5, 0);
+      // CAP dell'altezza: i modelli boss sono grandi → ridotti per stare nella cella e NON
+      // coprire le scritte sotto (proporzioni reali mantenute).
+      if (spr.displayHeight > 46) { const f = 46 / spr.displayHeight; spr.setScale(spr.scaleX * f, spr.scaleY * f); }
+      Ui.text(this, cx, top + 56, t(cfg.name), { fontSize: '9px', color: UI.redSoft, fontStyle: 'bold' }).setOrigin(0.5, 0);
+      Ui.text(this, cx, top + 68, t('debug.bossStats', { hp: cfg.hp, reward: cfg.reward }), { fontSize: '8px', color: '#886666' }).setOrigin(0.5, 0);
     });
   }
 
