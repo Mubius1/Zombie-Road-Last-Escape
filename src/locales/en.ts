@@ -143,6 +143,9 @@ const en: Record<string, string> = {
   'event.night': 'NIGHT HORDE',
   'event.roadblock': 'ROADBLOCK',
   'event.storm': 'STORM',
+  'event.convoy': 'CONVOY — protect it!',
+  'event.convoyOk': 'CONVOY SAVED!  +{m}★',
+  'event.convoyLost': 'CONVOY LOST',
 
   'boss.warn': '⚠  {name}  ⚠',
   'boss.fury': '⚠ FURY',

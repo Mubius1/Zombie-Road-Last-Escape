@@ -65,6 +65,11 @@ const NIGHT_DIM = 0.4;               // alpha del velo notturno
 const STORM_DURATION = 7000;         // ms della tempesta
 const STORM_DIM = 0.28;              // alpha del velo tempesta
 const STORM_HANDLING_MULT = 0.55;    // sterzo molle durante la tempesta
+const CONVOY_DURATION = 11000;       // ms da scortare il van
+const CONVOY_HP = 100;               // salute del van alleato
+const CONVOY_ZOMBIE_DMG = 9;         // danno al van per ogni zombi che lo raggiunge
+const CONVOY_REWARD_MONEY = 100;     // bonus monete se il van sopravvive
+const CONVOY_REWARD_FUEL = 25;       // carburante condiviso dal convoglio salvato
 // ── Mira col mouse (combat reboot): la torretta punta il puntatore; i colpi danno knockback. ──
 const MAX_AIM = Phaser.Math.DegToRad(82); // arco frontale di mira (±82° da destra)
 const KNOCK = 220;        // impulso di rinculo dei colpi (px/s, decade) — solo game-feel
@@ -167,6 +172,11 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private eventEndsAt = 0;                                // fine dell'evento a durata in corso (velo)
   private eventOverlay: Phaser.GameObjects.Rectangle | null = null; // velo a schermo (notte/tempesta)
   private lastEvent = '';                                 // ultimo evento (per non ripeterlo di fila)
+  private convoyVan: Phaser.GameObjects.Sprite | null = null;       // van alleato da scortare (B2)
+  private convoyHp = 0;                                   // salute del van
+  private convoyHpBar: Phaser.GameObjects.Rectangle | null = null;  // riempimento barra HP del van
+  private convoyHpBarBg: Phaser.GameObjects.Rectangle | null = null; // sfondo barra HP del van
+  private convoyUntil = 0;                                // fine della scorta (successo se il van è ancora vivo)
   private lastHazardY = ROAD_CENTER;                      // corsia dell'ultimo hazard (bias taniche)
 
   private attachedZombies: AttachedZombie[] = [];
@@ -311,6 +321,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.stormUntil = 0; this.nextEventIdx = 0; this.lastEvent = '';
     this.eventOverlay?.destroy(); this.eventOverlay = null;
     this.eventThresholds = EVENT_FRACTIONS.map(f => f * MISSION_DIST); // Track B2: soglie eventi della missione
+    this.convoyVan?.destroy(); this.convoyVan = null;
+    this.convoyHpBar?.destroy(); this.convoyHpBar = null; this.convoyHpBarBg?.destroy(); this.convoyHpBarBg = null;
+    this.convoyHp = 0; this.convoyUntil = 0;
     this.aimAngle = 0; this.aimX = this.designW; this.aimY = ROAD_CENTER; this.recoil = 0;
     this.turretDx = TURRET_DX[this.vehicleKey] ?? 8;
     this.boss = new BossController(this); // stato boss fresco + gruppi fisici (usati da buildColliders)
@@ -1277,15 +1290,17 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       if (Math.random() < EVENT_CHANCE) this.triggerRandomEvent();
     }
     if (this.eventOverlay && this.time.now >= this.eventEndsAt) this.endTimedEvent();
+    this.updateConvoy();
   }
 
   private triggerRandomEvent() {
-    const pool = ['night', 'roadblock', 'storm'].filter(e => e !== this.lastEvent);
+    const pool = ['night', 'roadblock', 'storm', 'convoy'].filter(e => e !== this.lastEvent);
     const ev = pool[Math.floor(Math.random() * pool.length)];
     this.lastEvent = ev;
     if (ev === 'night') this.eventNightHorde();
     else if (ev === 'roadblock') this.eventRoadblock();
-    else this.eventStorm();
+    else if (ev === 'storm') this.eventStorm();
+    else this.eventConvoy();
   }
 
   /** ORDA NOTTURNA: le luci calano e arriva una raffica di nemici. */
@@ -1323,9 +1338,84 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.showEventOverlay(0x223344, STORM_DIM, STORM_DURATION);
   }
 
+  /** Aggiorna il convoglio attivo: i nemici vicini al van lo danneggiano; muove la barra HP; allo
+   *  scadere del tempo (van ancora vivo) → successo. Chiamato ogni frame da updateEvents. */
+  private updateConvoy() {
+    const v = this.convoyVan;
+    if (!v?.active) return;
+    // Copia (slice): onZombieHitConvoy fa z.destroy() → non mutare l'array del gruppo mentre lo si itera.
+    (this.zombies.getChildren() as Phaser.Physics.Arcade.Sprite[]).slice().forEach(z => {
+      if (z.active && Phaser.Math.Distance.Between(z.x, z.y, v.x, v.y) < 34) this.onZombieHitConvoy(z);
+    });
+    // Se un colpo ha fatto fallire il convoglio nel forEach (van distrutto), esci: niente logica di
+    // successo nello stesso frame (endConvoy ha azzerato convoyUntil → la guardia sotto scatterebbe).
+    if (!this.convoyVan?.active) return;
+    if (this.convoyHpBarBg) { this.convoyHpBarBg.x = v.x; this.convoyHpBarBg.y = v.y - 30; }
+    if (this.convoyHpBar) {
+      this.convoyHpBar.x = v.x - 23; this.convoyHpBar.y = v.y - 30;
+      this.convoyHpBar.scaleX = Math.max(0, this.convoyHp) / CONVOY_HP;
+    }
+    if (this.time.now >= this.convoyUntil) this.convoySucceeded();
+  }
+
+  /** CONVOGLIO: un van alleato arriva; difendilo dai nemici per la durata → bonus monete + carburante. */
+  private eventConvoy() {
+    this.announceEvent('event.convoy', '#66ff99');
+    this.sfx?.playBossWarn();
+    const vx = this.designW * 0.6, vy = ROAD_CENTER;
+    const van = this.add.sprite(this.designW + 90, vy, 'vehicle_armored_van')
+      .setScale(1 / OVERSAMPLE).setDepth(10).setTint(0x88ffaa);
+    this.tweens.add({ targets: van, x: vx, duration: 800, ease: 'Sine.out' });
+    this.convoyVan = van;
+    this.convoyHp = CONVOY_HP;
+    this.convoyUntil = this.time.now + CONVOY_DURATION;
+    this.convoyHpBarBg = this.add.rectangle(vx, vy - 30, 46, 6, 0x331818).setDepth(24);
+    this.convoyHpBar = this.add.rectangle(vx - 23, vy - 30, 46, 6, 0x44ff88).setOrigin(0, 0.5).setDepth(25);
+  }
+
+  private onZombieHitConvoy(z: Phaser.Physics.Arcade.Sprite) {
+    if (!z.active || !this.convoyVan?.active) return;
+    this.convoyHp -= CONVOY_ZOMBIE_DMG;
+    this.spawnHitParticles(z.x, z.y);
+    z.destroy();
+    this.convoyVan.setTint(0xffffff);
+    this.time.delayedCall(60, () => { if (this.convoyVan?.active) this.convoyVan.setTint(0x88ffaa); });
+    if (this.convoyHp <= 0) this.convoyFailed();
+  }
+
+  private convoySucceeded() {
+    const v = this.convoyVan;
+    this.endConvoy();
+    setRun(this.registry, 'money', (getRun(this.registry, 'money') ?? 0) + CONVOY_REWARD_MONEY);
+    this.fuel = Math.min(this.maxFuel, this.fuel + CONVOY_REWARD_FUEL);
+    this.announceEvent('event.convoyOk', '#66ff99', { m: CONVOY_REWARD_MONEY });
+    this.sfx?.playMissionComplete();
+    if (v?.active) this.tweens.add({ targets: v, x: -140, duration: 1100, ease: 'Sine.in', onComplete: () => v.destroy() });
+  }
+
+  private convoyFailed() {
+    const v = this.convoyVan;
+    this.endConvoy();
+    this.announceEvent('event.convoyLost', '#ff5544');
+    if (v?.active) {
+      Juice.lightFlash(this, v.x, v.y, 0xff6622, 6);
+      this.cameras.main.shake(220, 0.012);
+      this.sfx?.playExplosion();
+      v.destroy();
+    }
+  }
+
+  /** Smonta barra e riferimenti del convoglio; lo sprite del van lo gestiscono success/fail (esce/esplode). */
+  private endConvoy() {
+    this.convoyHpBar?.destroy(); this.convoyHpBar = null;
+    this.convoyHpBarBg?.destroy(); this.convoyHpBarBg = null;
+    this.convoyVan = null;
+    this.convoyUntil = 0;
+  }
+
   /** Banner d'annuncio centrato (modello dello stinger del Gigante). Spazio design (camera statica). */
-  private announceEvent(key: string, color: string) {
-    const b = Ui.text(this, this.designW / 2, 150, t(key), {
+  private announceEvent(key: string, color: string, params?: Record<string, string | number>) {
+    const b = Ui.text(this, this.designW / 2, 150, t(key, params), {
       fontSize: '28px', color, fontStyle: 'bold', stroke: '#000000', strokeThickness: 5,
     }).setOrigin(0.5).setDepth(26).setScale(0.6).setAlpha(0);
     this.tweens.add({ targets: b, alpha: 1, scale: 1, duration: 260, ease: 'Back.out' });
@@ -1354,6 +1444,10 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.eventOverlay?.destroy();
     this.eventOverlay = null;
     this.stormUntil = 0;
+    this.convoyHpBar?.destroy(); this.convoyHpBar = null;
+    this.convoyHpBarBg?.destroy(); this.convoyHpBarBg = null;
+    this.convoyVan?.destroy(); this.convoyVan = null;
+    this.convoyUntil = 0;
   }
 
   private spawnFuelCan() {

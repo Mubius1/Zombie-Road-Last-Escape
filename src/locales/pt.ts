@@ -143,6 +143,9 @@ const pt: Record<string, string> = {
   'event.night': 'HORDA NOTURNA',
   'event.roadblock': 'BLOQUEIO',
   'event.storm': 'TEMPESTADE',
+  'event.convoy': 'COMBOIO — protege-o!',
+  'event.convoyOk': 'COMBOIO SALVO!  +{m}★',
+  'event.convoyLost': 'COMBOIO PERDIDO',
 
   'boss.warn': '⚠  {name}  ⚠',
   'boss.fury': '⚠ FÚRIA',
