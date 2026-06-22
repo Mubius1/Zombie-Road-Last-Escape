@@ -383,7 +383,7 @@ Cupola metallica (`#33333a` / `#55555c` / `#70707a`) con spuntoni `#3a3a42` e **
 3. **5 armi** con `bullet` tinteggiato a runtime + **razzo** dedicato; muzzle-flash, esplosione (bloom/luce), decal `scorch`.
 4. **Pickup tanica** con etichetta di pericolo + spawn temporizzato (gated dall'Esploratore).
 5. **Oggetti-effetto** `particle` (scintilla calda) e `toxic_cloud` (minaccia verde) coerenti coi 3 colori firma.
-6. **Sopravvissuti** con **ritratto procedurale** (busto testa+spalle 40×46, `buildSurvivorTextures`) e **nome proprio**: *Bruno* (Meccanico — berretto + fascia blu), *Sara* (Medico — fascia bianca + croce rossa), *Marcus* (Soldato — elmetto + accento giallo), *Nadia* (Esploratore — cappello a tesa + banda verde). Distinti per **copricapo** (gancio di silhouette) + colletto col **colore-firma** del ruolo; mostrati nel negozio. Effetti di gameplay invariati (riparazioni, torretta auto ciano, taniche extra).
+6. **Sopravvissuti** con **ritratto procedurale** (busto testa+spalle 44×52, volto a 3 toni + occhi infossati, `buildSurvivorTextures`) e **nome proprio**: *Bruno* (Meccanico — berretto + fascia blu), *Sara* (Medico — fascia bianca + croce rossa), *Marcus* (Soldato — elmetto + accento giallo), *Nadia* (Esploratore — cappello a tesa + banda verde). Distinti per **copricapo** (gancio di silhouette) + colletto col **colore-firma** del ruolo; mostrati nel negozio. Effetti di gameplay invariati (riparazioni, torretta auto ciano, taniche extra).
 
 **Aperto (rifinitura futura):**
 - **Usura/danno visibile sul veicolo** al calare dei componenti (oggi il danno è solo nell'HUD): chiazze, fumo dal motore, ruota sgonfia.

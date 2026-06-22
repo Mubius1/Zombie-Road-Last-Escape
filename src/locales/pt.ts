@@ -194,6 +194,7 @@ const pt: Record<string, string> = {
   'debug.subtitle': 'Clique num veículo ou arma para testar · botões abaixo para os testes',
   'debug.vehicles': 'VEÍCULOS  (clique = testar)',
   'debug.zombies': 'ZUMBIS',
+  'debug.survivors': 'SOBREVIVENTES',
   'debug.bosses': 'CHEFES  (modelos dedicados)',
   'debug.bossStats': 'HP {hp} · ★{reward}',
   'debug.objects': 'PROJÉTEIS E OBJETOS',

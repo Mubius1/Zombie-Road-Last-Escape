@@ -8,7 +8,7 @@ import { OVERSAMPLE } from './Config';
  * validate da `npm run validate:art` contro le art bible.
  */
 /**
- * Ritratti procedurali dei SOPRAVVISSUTI (busto testa+spalle, 40×46, sovracampionati). Distinti per
+ * Ritratti procedurali dei SOPRAVVISSUTI (busto testa+spalle, 44×52, sovracampionati). Distinti per
  * RUOLO dal copricapo (berretto / fascia-croce / elmetto / cappello a tesa) + colletto col colore-firma.
  * Token del negozio/galleria debug. Funzione a sé (guardia `textures.exists`). Vedi art bible OGGETTI.
  */
@@ -21,47 +21,80 @@ export function buildSurvivorTextures(scene: Phaser.Scene) {
     (g as any).generateTexture = (k: string, w: number, h: number) => orig(k, w * OVERSAMPLE, h * OVERSAMPLE);
     return g;
   };
-  const cloth = 0x33333d, clothSh = 0x222229, dark = 0x14141a;
-  // Busto comune (luce alto-sinistra): spalle, colletto-accento a V, collo, testa, ombra lato dx, occhi.
-  const bust = (g: Phaser.GameObjects.Graphics, skin: number, skinSh: number, accent: number) => {
-    g.fillStyle(0x000000, 0.22); g.fillEllipse(20, 44, 30, 6);
-    g.fillStyle(clothSh); g.fillRoundedRect(3, 33, 34, 13, 7);
-    g.fillStyle(cloth);   g.fillRoundedRect(5, 32, 30, 11, 6);
-    g.fillStyle(accent);  g.fillTriangle(15, 32, 25, 32, 20, 41);
-    g.fillStyle(skinSh);  g.fillRect(16, 25, 8, 9);
-    g.fillStyle(skin);    g.fillRoundedRect(11, 11, 18, 19, 8);
-    g.fillStyle(0x000000, 0.13); g.fillRoundedRect(21, 12, 8, 17, 7);
-    g.fillStyle(dark);    g.fillRect(15, 20, 3, 3); g.fillRect(22, 20, 3, 3);
+  const W = 44, H = 52;
+  const cloth = 0x33333d, clothSh = 0x23232c, clothHi = 0x42424e;
+
+  // Spalle + colletto a V col colore-firma del ruolo (luce alto-sinistra).
+  const shoulders = (g: Phaser.GameObjects.Graphics, accent: number) => {
+    g.fillStyle(0x000000, 0.20); g.fillEllipse(22, 50, 34, 6);            // ombra a terra
+    g.fillStyle(clothSh); g.fillRoundedRect(3, 37, 38, 15, 9);            // spalle (ombra)
+    g.fillStyle(cloth);   g.fillRoundedRect(5, 36, 34, 13, 8);            // spalle (luce)
+    g.fillStyle(clothHi); g.fillRoundedRect(7, 36, 12, 4, 3);             // highlight spalla sx
+    g.fillStyle(accent);  g.fillTriangle(14, 36, 30, 36, 22, 46);         // colletto a V (firma)
+    g.fillStyle(0x000000, 0.28); g.fillTriangle(19, 37, 25, 37, 22, 44);  // interno colletto (ombra)
   };
 
-  { // Meccanico (Bruno): berretto + fascia blu + barba corta.
-    const g = OS_G(); bust(g, 0xc28a5a, 0x8f6038, 0x3a86c8);
-    g.fillStyle(0x2a2a30); g.fillRoundedRect(9, 8, 22, 9, 4);
-    g.fillStyle(0x44aaff); g.fillRect(9, 15, 22, 2);
-    g.fillStyle(0x000000, 0.20); g.fillRect(13, 26, 14, 3);
-    g.generateTexture('survivor_mechanic', 40, 46); g.destroy();
+  // Volto: collo, testa a 3 toni, orecchie, occhi INFOSSATI (look survival), sopracciglia, naso, bocca.
+  const face = (g: Phaser.GameObjects.Graphics, sk: number, skHi: number, skSh: number, brow: number, mouth = 0x7a3a32) => {
+    g.fillStyle(skSh); g.fillRoundedRect(17, 27, 10, 11, 3);              // collo (ombra)
+    g.fillStyle(sk);   g.fillRoundedRect(18, 27, 6, 9, 2);               // collo (luce)
+    g.fillStyle(skSh); g.fillEllipse(22, 18, 23, 25);                    // testa (ombra)
+    g.fillStyle(sk);   g.fillEllipse(21, 17, 21, 23);                    // testa (luce, alto-sx)
+    g.fillStyle(skHi); g.fillEllipse(16, 13, 8, 9);                      // highlight fronte/guancia
+    g.fillStyle(skSh); g.fillEllipse(28, 23, 8, 11);                     // ombra guancia/mascella dx
+    g.fillStyle(skSh); g.fillCircle(10, 18, 2.8); g.fillCircle(32, 18, 2.8); // orecchie
+    g.fillStyle(sk);   g.fillCircle(10.4, 18, 1.3); g.fillCircle(31.6, 18, 1.3);
+    g.fillStyle(skSh); g.fillEllipse(16, 19.5, 7, 5); g.fillEllipse(28, 19.5, 7, 5); // occhiaie
+    g.fillStyle(brow); g.fillRoundedRect(12, 15, 8, 2.4, 1); g.fillRoundedRect(24, 15, 8, 2.4, 1); // sopracciglia
+    g.fillStyle(0x18140f); g.fillCircle(16.5, 19.5, 2); g.fillCircle(28.5, 19.5, 2); // occhi
+    g.fillStyle(0x8d8478); g.fillCircle(16, 18.8, 0.8); g.fillCircle(28, 18.8, 0.8); // glint
+    g.fillStyle(skSh); g.fillTriangle(20, 20, 23, 26, 19, 26);           // naso (ombra)
+    g.fillStyle(mouth); g.fillRoundedRect(17, 28, 10, 2.2, 1);           // bocca
+  };
+
+  { // Bruno (Meccanico) — berretto + stoppia + fascia blu + macchia di grasso.
+    const g = OS_G(); shoulders(g, 0x3a86c8);
+    face(g, 0xc08a58, 0xd6a878, 0x8c5e36, 0x2a1e12);
+    g.fillStyle(0x000000, 0.20); g.fillRoundedRect(12, 24, 20, 7, 4);    // stoppia su mascella
+    g.fillStyle(0x2b2b33); g.fillRoundedRect(9, 3, 26, 12, 7);           // berretto (cupola)
+    g.fillStyle(0x1e1e25); g.fillRoundedRect(9, 11, 26, 4, 2);           // risvolto
+    g.fillStyle(0x44aaff); g.fillRect(11, 11, 22, 2);                    // fascia blu
+    g.fillStyle(0x000000, 0.22); g.fillRect(27, 22, 5, 2);              // grasso su guancia
+    g.generateTexture('survivor_mechanic', W, H); g.destroy();
   }
-  { // Medico (Sara): capelli + fascia bianca con croce rossa.
-    const g = OS_G(); bust(g, 0xd6a878, 0xa6764a, 0xc84444);
-    g.fillStyle(0x3a2a1a); g.fillRoundedRect(9, 9, 22, 8, 4);
-    g.fillStyle(0xe8e8e8); g.fillRect(10, 13, 20, 4);
-    g.fillStyle(0xff4444); g.fillRect(19, 11.5, 2.4, 7); g.fillRect(16.5, 14, 7.4, 2.4);
-    g.generateTexture('survivor_medic', 40, 46); g.destroy();
+  { // Sara (Medico) — capelli + fascia bianca con croce rossa + spilla.
+    const g = OS_G(); shoulders(g, 0xc84444);
+    g.fillStyle(0x4a3422); g.fillRoundedRect(8, 7, 28, 22, 10);          // capelli (dietro)
+    face(g, 0xd6a87a, 0xe8c098, 0xa6764a, 0x33240f);
+    g.fillStyle(0x4a3422); g.fillRoundedRect(7, 13, 6, 15, 3); g.fillRoundedRect(31, 13, 6, 15, 3); // ciocche laterali
+    g.fillStyle(0xeae8e0); g.fillRoundedRect(9, 9, 26, 5, 2);            // fascia bianca
+    g.fillStyle(0xd83a3a); g.fillRect(20, 8.4, 2.6, 6.6); g.fillRect(18, 10.5, 6.6, 2.6); // croce rossa
+    g.fillStyle(0xc84444); g.fillCircle(14, 40, 1.8);                    // spilla rossa colletto
+    g.generateTexture('survivor_medic', W, H); g.destroy();
   }
-  { // Soldato (Marcus): elmetto militare + accento giallo + sottogola.
-    const g = OS_G(); bust(g, 0x7e5436, 0x573820, 0xc8a030);
-    g.fillStyle(0x4a5038); g.fillRoundedRect(8, 7, 24, 11, 7);
-    g.fillStyle(0x3a4028); g.fillRect(8, 16, 24, 3);
-    g.fillStyle(0xffcc44); g.fillRect(10, 9, 5, 2);
-    g.fillStyle(0x2a2e1e); g.fillRect(13, 29, 2, 4); g.fillRect(25, 29, 2, 4);
-    g.generateTexture('survivor_soldier', 40, 46); g.destroy();
+  { // Marcus (Soldato) — elmetto + sottogola + gallone giallo + cicatrice.
+    const g = OS_G(); shoulders(g, 0xb89030);
+    face(g, 0x8a5a38, 0xa67248, 0x5e3a20, 0x241608);
+    g.fillStyle(0x000000, 0.20); g.fillRoundedRect(14, 25, 16, 5, 3);    // ombra mento
+    g.fillStyle(0x454b34); g.fillRoundedRect(7, 2, 30, 14, 9);           // cupola elmetto
+    g.fillStyle(0x363c28); g.fillRoundedRect(7, 13, 30, 4, 2);           // bordo elmetto
+    g.fillStyle(0x565c40); g.fillRoundedRect(10, 4, 12, 4, 3);           // riflesso elmetto
+    g.fillStyle(0xffcc44); g.fillRect(9, 5, 5, 2.2);                     // gallone giallo
+    g.fillStyle(0x363c28); g.fillRect(13, 15, 2.4, 13); g.fillRect(29, 15, 2.4, 13); // sottogola
+    g.fillStyle(0xb88a6a); g.fillRect(30, 18, 1.6, 6);                   // cicatrice
+    g.generateTexture('survivor_soldier', W, H); g.destroy();
   }
-  { // Esploratore (Nadia): cappello a tesa larga + banda verde.
-    const g = OS_G(); bust(g, 0xc99a6a, 0x986a40, 0x35c870);
-    g.fillStyle(0x5a4a2a); g.fillEllipse(20, 13, 30, 6);
-    g.fillStyle(0x6a5a32); g.fillRoundedRect(12, 6, 16, 9, 5);
-    g.fillStyle(0x44ff88); g.fillRect(12, 11, 16, 2);
-    g.generateTexture('survivor_explorer', 40, 46); g.destroy();
+  { // Nadia (Esploratrice) — cappello a tesa + goggles + banda verde.
+    const g = OS_G(); shoulders(g, 0x35c870);
+    face(g, 0xc99a6a, 0xe0b486, 0x986a40, 0x2a1d10);
+    g.fillStyle(0x5a4a2a); g.fillEllipse(22, 11, 36, 7);                 // tesa larga
+    g.fillStyle(0x4a3c20); g.fillEllipse(22, 12, 36, 4);                 // sotto-tesa (ombra)
+    g.fillStyle(0x6e5e34); g.fillRoundedRect(12, 2, 20, 11, 6);          // cupola
+    g.fillStyle(0x44ff88); g.fillRect(12, 9, 20, 2);                     // banda verde
+    g.fillStyle(0x2a2a30); g.fillRoundedRect(13, 6, 18, 3, 1);           // cinghia goggles
+    g.fillStyle(0x6fd6e6); g.fillCircle(16, 7.5, 2.2); g.fillCircle(28, 7.5, 2.2); // lenti goggles
+    g.fillStyle(0x9ff0ff); g.fillCircle(15.4, 7, 0.8); g.fillCircle(27.4, 7, 0.8); // riflesso lenti
+    g.generateTexture('survivor_explorer', W, H); g.destroy();
   }
 }
 
