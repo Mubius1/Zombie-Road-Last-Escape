@@ -29,6 +29,10 @@ export const VEHICLES: Record<string, VehicleData> = {
 
 export const VEHICLE_KEYS = Object.keys(VEHICLES);
 
+/** M2 cibo & mantenimento sopravvissuti (numeri in BALANCE.md §8). Condiviso GameScene↔ShopScene
+ *  per evitare drift tra consumo (gioco) e proiezione "affamato" (negozio). */
+export const FOOD = { max: 120, perSurvivor: 10, start: 40, rationFood: 40, rationCost: 100 } as const;
+
 export interface SurvivorData {
   /** Chiave stabile (logica/persistenza). */
   key: string;

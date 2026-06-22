@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { VEHICLES, VEHICLE_KEYS, SURVIVORS, SurvivorData, Upgrades, WEAPONS, WEAPON_KEYS, WeaponType } from '../GameData';
+import { VEHICLES, VEHICLE_KEYS, SURVIVORS, SurvivorData, Upgrades, WEAPONS, WEAPON_KEYS, WeaponType, FOOD } from '../GameData';
 import { buildEntityTextures, buildSurvivorTextures } from '../EntityTextures';
 import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import Juice from '../Juice';
@@ -44,6 +44,7 @@ export default class ShopScene extends Phaser.Scene {
   private currentVehicle = 'civilian_car';
   private ownedVehicles: string[] = ['civilian_car'];
   private survivors: string[] = [];
+  private food = 0; // M2: scorta cibo di campagna (per il display + acquisto razioni nel negozio)
   private missionNum = 2;
   private offeredSurvivors: SurvivorData[] = [];
 
@@ -77,6 +78,7 @@ export default class ShopScene extends Phaser.Scene {
     this.upgrades       = { ...(this.allUpgrades[this.currentVehicle] ?? {}) }; // potenziamenti del mezzo corrente
     this.ownedVehicles  = getRun(this.registry, 'ownedVehicles')  ?? ['civilian_car'];
     this.survivors      = getRun(this.registry, 'survivors')      ?? [];
+    this.food           = getRun(this.registry, 'food')           ?? FOOD.start;
     this.missionNum     = getRun(this.registry, 'missionNumber')  ?? 2;
     this.currentWeapon  = getRun(this.registry, 'currentWeapon')  ?? 'mg';
     this.ownedWeapons   = getRun(this.registry, 'ownedWeapons')   ?? ['mg'];
@@ -253,14 +255,31 @@ export default class ShopScene extends Phaser.Scene {
       fontSize: '13px', color: this.survivors.length >= cap ? UI.amberSoft : UI.goldDim, fontStyle: 'bold',
     });
 
-    // Recruited list
+    // M2 cibo: scorta di campagna + acquisto razioni. La proiezione "affamato" si aggiorna dal vivo
+    // comprando razioni (più cibo → più sopravvissuti sfamati alla prossima missione).
+    const fedNext = Math.floor(this.food / FOOD.perSurvivor);
+    Ui.text(this, px, py + 18, t('shop.food', { n: this.food, max: FOOD.max }),
+      { fontSize: '11px', color: this.food < this.survivors.length * FOOD.perSurvivor ? UI.amberSoft : UI.goldDim });
+    const canRation = this.food < FOOD.max && this.money >= FOOD.rationCost;
+    const rat = Ui.text(this, px + 286, py + 18, t('shop.rations', { n: FOOD.rationFood, c: FOOD.rationCost }),
+      { fontSize: '11px', color: canRation ? UI.greenOk : '#554444', fontStyle: 'bold' }).setOrigin(1, 0);
+    if (canRation) {
+      rat.setInteractive({ useHandCursor: true });
+      rat.on('pointerover', () => rat.setColor(UI.white));
+      rat.on('pointerout',  () => rat.setColor(UI.greenOk));
+      rat.on('pointerdown', () => this.buyRations());
+    }
+
+    // Recruited list (sotto la riga del cibo). Chi è oltre la capienza di cibo → segnato "affamato".
     if (this.survivors.length > 0) {
-      Ui.text(this, px, py + 22, t('shop.inVehicle'), { fontSize: '11px', color: '#777755' });
+      Ui.text(this, px, py + 40, t('shop.inVehicle'), { fontSize: '11px', color: '#777755' });
       this.survivors.forEach((key, i) => {
         const s = SURVIVORS.find(sv => sv.key === key);
         if (!s) return;
-        const ly = py + 36 + i * 18;
-        Ui.text(this, px + 6, ly, t('shop.survivorName', { name: `${s.properName} ${s.surname}` }), { fontSize: '12px', color: s.color });
+        const ly = py + 54 + i * 18;
+        const starving = i >= fedNext; // proiezione fame alla prossima missione col cibo attuale
+        Ui.text(this, px + 6, ly, t('shop.survivorName', { name: `${s.properName} ${s.surname}` }) + (starving ? '  🍖✗' : ''),
+          { fontSize: '12px', color: starving ? UI.amberSoft : s.color });
         // ✕ = fai scendere dal veicolo (libera un posto).
         const off = Ui.text(this, px + 286, ly, '✕', { fontSize: '14px', color: UI.amberSoft, fontStyle: 'bold' })
           .setOrigin(1, 0).setInteractive({ useHandCursor: true });
@@ -272,7 +291,7 @@ export default class ShopScene extends Phaser.Scene {
 
     // Offered survivors. M1: dopo aver reclutato in questa sosta, gli altri offerti si bloccano.
     const recruitSpent = getRun(this.registry, 'recruitLockMission') === this.missionNum;
-    const rY = py + 24 + Math.max(this.survivors.length, 0) * 18 + 24;
+    const rY = py + 42 + Math.max(this.survivors.length, 0) * 18 + 24;
     Ui.text(this, px, rY, recruitSpent ? t('shop.recruitSpent')
         : (this.offeredSurvivors.length > 0 ? t('shop.recruit') : t('shop.noneAvailable')),
       { fontSize: '11px', color: recruitSpent ? UI.amberSoft : '#777755' });
@@ -412,6 +431,16 @@ export default class ShopScene extends Phaser.Scene {
     this.persist();
     ShopScene.sfx?.playFuelPickup();
     this.time.delayedCall(150, () => this.refresh());
+  }
+
+  /** M2: compra una razione (food += rationFood, cap FOOD.max) per FOOD.rationCost monete. */
+  private buyRations() {
+    if (this.food >= FOOD.max || this.money < FOOD.rationCost) return;
+    this.money -= FOOD.rationCost;
+    this.food = Math.min(FOOD.max, this.food + FOOD.rationFood);
+    setRun(this.registry, 'money', this.money);
+    setRun(this.registry, 'food', this.food);
+    this.afterPurchase();
   }
 
   /** Fa scendere un sopravvissuto dal veicolo (libera un posto; il re-render aggiorna capienza e offerti). */

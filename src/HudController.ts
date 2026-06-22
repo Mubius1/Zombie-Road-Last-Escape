@@ -24,6 +24,8 @@ export interface HudBuildOpts {
   missionDist: number;
   components: Record<ComponentKey, ComponentData>;
   activeSurvivors: string[];
+  /** M2: sopravvissuti affamati (segnalati con "!" e tinta ambra nell'HUD). */
+  hungry: string[];
   ownedWeapons: WeaponType[];
   currentWeapon: WeaponType;
   debugGod: boolean;
@@ -153,9 +155,10 @@ export default class HudController {
 
     // Survivors icons
     if (o.activeSurvivors.length > 0) {
-      const names: Record<string,string> = { mechanic:'[M]', medic:'[+]', soldier:'[S]', explorer:'[E]' };
-      const txt = o.activeSurvivors.map(s2 => names[s2]??s2).join(' ');
-      this.own(Ui.text(s, dW-10,8,txt,{fontSize:'11px',color:'#cccc44'}).setOrigin(1,0).setDepth(D+1));
+      const names: Record<string,string> = { mechanic:'[M]', medic:'[+]', soldier:'[S]', explorer:'[E]', looter:'[$]', sniper:'[X]', demolitionist:'[B]' };
+      // M2: l'affamato (abilità spenta) ha un suffisso "!"; tutta la riga vira ambra se almeno uno lo è.
+      const txt = o.activeSurvivors.map(s2 => (names[s2]??s2) + (o.hungry.includes(s2) ? '!' : '')).join(' ');
+      this.own(Ui.text(s, dW-10,8,txt,{fontSize:'11px',color: o.hungry.length > 0 ? UI.amberSoft : '#cccc44'}).setOrigin(1,0).setDepth(D+1));
     }
 
     const compKeys: ComponentKey[] = ['engine','wheels','tank','turret','armor'];

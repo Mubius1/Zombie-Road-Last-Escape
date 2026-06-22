@@ -70,6 +70,8 @@ const fr: Record<string, string> = {
   'shop.noneAvailable': 'Aucun disponible',
   'shop.recruitSpent': 'Recrutement utilisé — reviens après la mission',
   'shop.recruitOnePerVisit': '1 seul par arrêt',
+  'shop.food': '🍖 Nourriture {n}/{max}',
+  'shop.rations': '+{n} rations ★{c}',
   'shop.recruited': 'DÉJÀ RECRUTÉ',
   'shop.free': 'GRATUIT',
   'shop.vehicleFull': 'Véhicule plein',

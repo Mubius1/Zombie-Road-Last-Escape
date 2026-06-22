@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { VEHICLES, Upgrades, WeaponType, WEAPONS, WEAPON_KEYS } from '../GameData';
+import { VEHICLES, Upgrades, WeaponType, WEAPONS, WEAPON_KEYS, FOOD } from '../GameData';
 import SoundManager from '../SoundManager';
 import Juice from '../Juice';
 import { enterScreen, pulse, rampSpeed, resetKinetics } from '../PostFx';
@@ -73,6 +73,7 @@ const GRENADE_CD = 5500;        // ms di ricarica della granata (Artificiere, ta
 const GRENADE_AOE = 110;        // raggio dell'esplosione granata
 const GRENADE_DMG = 8;          // danno della granata nell'area
 const LOOTER_MONEY_MULT = 1.12; // +12% monete a fine missione (Saccheggiatore)
+// M2 cibo & mantenimento: costanti condivise in GameData.FOOD (vedi BALANCE.md §8).
 const CONVOY_DURATION = 11000;       // ms da scortare il van
 const CONVOY_HP = 100;               // salute del van alleato
 const CONVOY_ZOMBIE_DMG = 9;         // danno al van per ogni zombi che lo raggiunge
@@ -209,6 +210,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private dashCooldownMs = DASH_COOLDOWN; // ×0.7 con 'nitro'
   private overdriveMult = 1;             // ×1.3 durata con 'overcharge'
   private toxicResist = 1;               // ×0.5 danno tossico con 'filters'
+  private hungry: string[] = [];         // M2: sopravvissuti affamati questa missione (abilità spenta)
   private activeSurvivors: string[] = [];
 
   private mechanicTimer = 0;
@@ -293,6 +295,19 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.missionNumber = missionNum;
     const savedComp        = getRun(this.registry, 'components')    ?? null;
 
+    // M2 cibo: i sopravvissuti a bordo "mangiano" a inizio missione. Consumo UNA volta per numero di
+    // missione (foodMission) → il retry dopo la morte non ri-addebita. Chi resta senza → affamato.
+    let food = getRun(this.registry, 'food') ?? FOOD.start;
+    this.hungry = getRun(this.registry, 'hungry') ?? [];
+    if (getRun(this.registry, 'foodMission') !== this.missionNumber) {
+      const fed = Math.min(this.activeSurvivors.length, Math.floor(food / FOOD.perSurvivor));
+      food = Math.max(0, food - fed * FOOD.perSurvivor);
+      this.hungry = this.activeSurvivors.slice(fed); // i non sfamati (oltre la capienza di cibo)
+      setRun(this.registry, 'food', food);
+      setRun(this.registry, 'hungry', this.hungry);
+      setRun(this.registry, 'foodMission', this.missionNumber);
+    }
+
     const vData = VEHICLES[this.vehicleKey];
     this.maxHealth       = 100 + vData.healthBonus + (this.upgrades.plating ? 30 : 0);
     this.health          = this.maxHealth;
@@ -368,7 +383,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.buildHUD(missionNum);
     this.buildInput();
 
-    const fuelDelay = this.activeSurvivors.includes('explorer') ? 5000 : 7500;
+    const fuelDelay = this.hasActiveSurvivor('explorer') ? 5000 : 7500;
     this.time.addEvent({ delay: fuelDelay, callback: this.spawnFuelCan, callbackScope: this, loop: true });
     this.time.addEvent({ delay: Math.round(HAZARD_SPAWN_INTERVAL / route.hazardMult), callback: this.spawnHazard, callbackScope: this, loop: true }); // Track B1: frequenza × nodo
 
@@ -608,6 +623,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       missionNum, missionDist: MISSION_DIST,
       components: this.components,
       activeSurvivors: this.activeSurvivors,
+      hungry: this.hungry,
       ownedWeapons: this.ownedWeapons,
       currentWeapon: this.currentWeapon,
       debugGod: this.debugGod,
@@ -1002,11 +1018,16 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     }
   }
 
+  /** Sopravvissuto a bordo E non affamato (M2: la fame spegne l'abilità per la missione). */
+  private hasActiveSurvivor(key: string): boolean {
+    return this.activeSurvivors.includes(key) && !this.hungry.includes(key);
+  }
+
   private updateSurvivorEffects(delta: number, _time: number) {
-    if (this.activeSurvivors.includes('medic')) {
+    if (this.hasActiveSurvivor('medic')) {
       this.health = Math.min(this.maxHealth, this.health + 0.3 * delta / 1000);
     }
-    if (this.activeSurvivors.includes('mechanic')) {
+    if (this.hasActiveSurvivor('mechanic')) {
       this.mechanicTimer += delta;
       if (this.mechanicTimer >= 5000) {
         this.mechanicTimer = 0;
@@ -1018,7 +1039,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         }
       }
     }
-    if (this.activeSurvivors.includes('soldier')) {
+    if (this.hasActiveSurvivor('soldier')) {
       this.soldierTimer += delta;
       if (this.soldierTimer >= 1600) { // G9: cadenza quasi raddoppiata (era 3000) → contributo reale
         this.soldierTimer = 0;
@@ -1026,7 +1047,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         this.fireAutoShot(targetY);
       }
     }
-    if (this.activeSurvivors.includes('sniper')) {
+    if (this.hasActiveSurvivor('sniper')) {
       this.sniperTimer += delta;
       if (this.sniperTimer >= SNIPER_CD) {
         this.sniperTimer = 0;
@@ -1645,7 +1666,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   /** Artificiere (tasto C): lancia una granata verso il mirino; esplode all'arrivo (AoE). A ricarica. */
   private throwGrenade() {
-    if (!this.alive || this.missionDone || !this.activeSurvivors.includes('demolitionist')) return;
+    if (!this.alive || this.missionDone || !this.hasActiveSurvivor('demolitionist')) return;
     if (this.time.now < this.grenadeReadyAt) return;
     this.grenadeReadyAt = this.time.now + GRENADE_CD;
     const sx = this.vehicle.x + this.turretDx, sy = this.vehicle.y;
@@ -2033,7 +2054,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (this.missionDone) return;
     this.missionDone = true;
 
-    const lootMult = this.activeSurvivors.includes('looter') ? LOOTER_MONEY_MULT : 1; // Saccheggiatore: +12%
+    const lootMult = this.hasActiveSurvivor('looter') ? LOOTER_MONEY_MULT : 1; // Saccheggiatore: +12% (spento se affamato)
     const earned = Math.floor(this.score / 8 * this.routeMoneyMult * lootMult); // Track B1 (nodo) × Saccheggiatore
     setRun(this.registry, 'money',         (getRun(this.registry, 'money') ?? 0) + earned);
     setRun(this.registry, 'missionNumber', (getRun(this.registry, 'missionNumber') ?? 1) + 1);

@@ -31,6 +31,12 @@ export interface RunData {
   routeModifier: string;
   /** Sopravvissuti M1: numero di missione in cui si è GIÀ reclutato (1 a sosta). -1 = nessuno. */
   recruitLockMission: number;
+  /** M2 cibo: scorta di campagna (0..FOOD.max), drenata a inizio missione dai sopravvissuti a bordo. */
+  food: number;
+  /** M2: sopravvissuti affamati nella missione corrente (abilità spenta). */
+  hungry: string[];
+  /** M2: numero di missione per cui il cibo è già stato consumato (evita doppio addebito al retry). */
+  foodMission: number;
 }
 
 /** Lettura tipizzata dal registry. Ritorna `undefined` se la chiave non è ancora impostata
@@ -61,6 +67,9 @@ export function resetRunState(registry: Phaser.Data.DataManager) {
   setRun(registry, 'components', null);
   setRun(registry, 'routeModifier', 'none');
   setRun(registry, 'recruitLockMission', -1);
+  setRun(registry, 'food', 40); // = FOOD.start (RunState non importa da GameData per non creare cicli)
+  setRun(registry, 'hungry', []);
+  setRun(registry, 'foodMission', -1);
 }
 
 /**
@@ -82,6 +91,9 @@ export function snapshotRun(registry: Phaser.Data.DataManager): RunData {
     lastScore:     getRun(registry, 'lastScore') ?? 0,
     routeModifier: getRun(registry, 'routeModifier') ?? 'none',
     recruitLockMission: getRun(registry, 'recruitLockMission') ?? -1,
+    food:          getRun(registry, 'food') ?? 40,
+    hungry:        getRun(registry, 'hungry') ?? [],
+    foodMission:   getRun(registry, 'foodMission') ?? -1,
   };
 }
 
@@ -99,4 +111,7 @@ export function restoreRun(registry: Phaser.Data.DataManager, run: RunData): voi
   setRun(registry, 'lastScore',     run.lastScore);
   setRun(registry, 'routeModifier', run.routeModifier ?? 'none');
   setRun(registry, 'recruitLockMission', run.recruitLockMission ?? -1);
+  setRun(registry, 'food',        run.food ?? 40);
+  setRun(registry, 'hungry',      run.hungry ?? []);
+  setRun(registry, 'foodMission', run.foodMission ?? -1);
 }
