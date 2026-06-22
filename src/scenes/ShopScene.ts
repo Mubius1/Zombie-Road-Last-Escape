@@ -241,12 +241,20 @@ export default class ShopScene extends Phaser.Scene {
       Ui.text(this, px, py + 22, t('shop.inVehicle'), { fontSize: '11px', color: '#777755' });
       this.survivors.forEach((key, i) => {
         const s = SURVIVORS.find(sv => sv.key === key);
-        if (s) Ui.text(this, px + 6, py + 36 + i * 16, t('shop.survivorName', { name: `${s.properName} ${s.surname}` }), { fontSize: '12px', color: s.color });
+        if (!s) return;
+        const ly = py + 36 + i * 18;
+        Ui.text(this, px + 6, ly, t('shop.survivorName', { name: `${s.properName} ${s.surname}` }), { fontSize: '12px', color: s.color });
+        // ✕ = fai scendere dal veicolo (libera un posto).
+        const off = Ui.text(this, px + 286, ly, '✕', { fontSize: '14px', color: UI.amberSoft, fontStyle: 'bold' })
+          .setOrigin(1, 0).setInteractive({ useHandCursor: true });
+        off.on('pointerover', () => off.setColor(UI.red));
+        off.on('pointerout',  () => off.setColor(UI.amberSoft));
+        off.on('pointerdown', () => this.dismissSurvivor(key));
       });
     }
 
     // Offered survivors
-    const rY = py + 24 + Math.max(this.survivors.length, 0) * 16 + 24;
+    const rY = py + 24 + Math.max(this.survivors.length, 0) * 18 + 24;
     Ui.text(this, px, rY, this.offeredSurvivors.length > 0 ? t('shop.recruit') : t('shop.noneAvailable'),
       { fontSize: '11px', color: '#777755' });
 
@@ -378,6 +386,16 @@ export default class ShopScene extends Phaser.Scene {
     this.persist();
     ShopScene.sfx?.playFuelPickup();
     this.time.delayedCall(150, () => this.refresh());
+  }
+
+  /** Fa scendere un sopravvissuto dal veicolo (libera un posto; il re-render aggiorna capienza e offerti). */
+  private dismissSurvivor(key: string) {
+    if (!this.survivors.includes(key)) return;
+    this.survivors = this.survivors.filter(k => k !== key);
+    setRun(this.registry, 'survivors', this.survivors);
+    this.persist();
+    ShopScene.sfx?.playImpact();
+    this.time.delayedCall(120, () => this.refresh());
   }
 
   /** Riduce i sopravvissuti alla capienza del veicolo scelto (gli eccedenti restano indietro). */
