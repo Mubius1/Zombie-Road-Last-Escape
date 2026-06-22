@@ -68,6 +68,8 @@ const es: Record<string, string> = {
   'shop.survivorName': '• {name}',
   'shop.recruit': 'Recluta (elige 1):',
   'shop.noneAvailable': 'Ninguno disponible',
+  'shop.recruitSpent': 'Reclutamiento usado — vuelve tras la misión',
+  'shop.recruitOnePerVisit': 'Solo 1 por parada',
   'shop.recruited': 'YA RECLUTADO',
   'shop.free': 'GRATIS',
   'shop.vehicleFull': 'Vehículo lleno',

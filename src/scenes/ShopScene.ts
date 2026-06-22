@@ -270,31 +270,35 @@ export default class ShopScene extends Phaser.Scene {
       });
     }
 
-    // Offered survivors
+    // Offered survivors. M1: dopo aver reclutato in questa sosta, gli altri offerti si bloccano.
+    const recruitSpent = getRun(this.registry, 'recruitLockMission') === this.missionNum;
     const rY = py + 24 + Math.max(this.survivors.length, 0) * 18 + 24;
-    Ui.text(this, px, rY, this.offeredSurvivors.length > 0 ? t('shop.recruit') : t('shop.noneAvailable'),
-      { fontSize: '11px', color: '#777755' });
+    Ui.text(this, px, rY, recruitSpent ? t('shop.recruitSpent')
+        : (this.offeredSurvivors.length > 0 ? t('shop.recruit') : t('shop.noneAvailable')),
+      { fontSize: '11px', color: recruitSpent ? UI.amberSoft : '#777755' });
 
     this.offeredSurvivors.forEach((s, i) => {
       const iy = rY + 18 + i * 88;
       const alreadyIn = this.survivors.includes(s.key);
       const full = !alreadyIn && this.survivors.length >= cap;
+      const locked = alreadyIn || full || recruitSpent;
       const bg = Ui.box(this, px + 145, iy + 38, 290, 80, { fill: UI.panelWarm, radius: 7, stroke: UI.stroke, strokeAlpha: 0.5 });
 
-      if (!alreadyIn && !full) {
+      if (!locked) {
         bg.setInteractive(true);
         bg.on('pointerover', () => bg.setFillStyle(0x1e1e14));
         bg.on('pointerout',  () => bg.setFillStyle(UI.panelWarm));
         bg.on('pointerdown', () => this.recruitSurvivor(s.key));
       }
 
-      // Ritratto procedurale (sbiadito se già a bordo o se il veicolo è pieno).
-      this.add.image(px + 262, iy + 38, `survivor_${s.key}`).setScale(1 / OVERSAMPLE).setAlpha(alreadyIn || full ? 0.45 : 1);
+      // Ritratto procedurale (sbiadito se non reclutabile: a bordo, veicolo pieno o reclutamento speso).
+      this.add.image(px + 262, iy + 38, `survivor_${s.key}`).setScale(1 / OVERSAMPLE).setAlpha(locked ? 0.45 : 1);
       Ui.text(this, px + 6, iy + 6,  `${s.properName} ${s.surname} · ${t(s.name)}`, { fontSize: '13px', color: s.color, fontStyle: 'bold' });
       Ui.text(this, px + 6, iy + 23, t(s.bio), { fontSize: '9px', color: '#8a8478', fontStyle: 'italic', wordWrap: { width: 218 } });
       Ui.text(this, px + 6, iy + 53, t(s.ability, s.abilityParams), { fontSize: '10px', color: '#666655', wordWrap: { width: 218 } });
-      Ui.text(this, px + 6, iy + 67, alreadyIn ? t('shop.recruited') : full ? t('shop.vehicleFull') : t('shop.free'),
-        { fontSize: '11px', color: alreadyIn ? UI.greenDim : full ? UI.amberSoft : UI.greenOk });
+      Ui.text(this, px + 6, iy + 67,
+        alreadyIn ? t('shop.recruited') : full ? t('shop.vehicleFull') : recruitSpent ? t('shop.recruitOnePerVisit') : t('shop.free'),
+        { fontSize: '11px', color: alreadyIn ? UI.greenDim : full ? UI.amberSoft : recruitSpent ? UI.amberSoft : UI.greenOk });
     });
   }
 
@@ -399,9 +403,12 @@ export default class ShopScene extends Phaser.Scene {
 
   private recruitSurvivor(key: string) {
     if (this.survivors.includes(key)) return;
+    // M1: 1 reclutamento a sosta. Il lock è per numero di missione → sopravvive al refresh del negozio.
+    if (getRun(this.registry, 'recruitLockMission') === this.missionNum) { ShopScene.sfx?.playImpact(); return; }
     const cap = VEHICLES[this.currentVehicle]?.survivorSlots ?? 4;
     if (this.survivors.length >= cap) { ShopScene.sfx?.playImpact(); return; } // veicolo pieno
     setRun(this.registry, 'survivors', [...this.survivors, key]);
+    setRun(this.registry, 'recruitLockMission', this.missionNum);
     this.persist();
     ShopScene.sfx?.playFuelPickup();
     this.time.delayedCall(150, () => this.refresh());
