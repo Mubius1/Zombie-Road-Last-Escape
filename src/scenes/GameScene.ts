@@ -32,6 +32,7 @@ const BULLET_SPEED = 680;
 const STRIPE_W = 48, STRIPE_GAP = 82;
 const ATTACH_DAMAGE_INTERVAL = 1600;
 const ATTACH_DAMAGE_AMOUNT = 14;
+const RAM_DMG = 6; // potenziamento 'ariete': danno da speronamento a chi tenta l'aggancio (per-veicolo)
 const MISSION_DIST = 18000;
 const GIANT_SPAWN_INTERVAL = 22000;
 const BOSS_TRIGGER = 0.82; // % missione a cui appare il boss
@@ -203,7 +204,11 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private vehicleFireMult = 1.0;
   private vehicleSpeedMult = 1.0;
   private vehicleArmorBonus = 0;
-  private upgrades: Upgrades = {};
+  private upgrades: Upgrades = {};       // set del VEICOLO CORRENTE (RunData.upgrades è per-veicolo)
+  private vehicleDamageBonus = 0;        // +1 con 'ammo'
+  private dashCooldownMs = DASH_COOLDOWN; // ×0.7 con 'nitro'
+  private overdriveMult = 1;             // ×1.3 durata con 'overcharge'
+  private toxicResist = 1;               // ×0.5 danno tossico con 'filters'
   private activeSurvivors: string[] = [];
 
   private mechanicTimer = 0;
@@ -283,19 +288,23 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.designW = setupCamera(this).designW;
     this.vehicleKey        = getRun(this.registry, 'vehicle')       ?? 'civilian_car';
     this.activeSurvivors   = getRun(this.registry, 'survivors')     ?? [];
-    this.upgrades          = getRun(this.registry, 'upgrades')      ?? {};
+    this.upgrades          = (getRun(this.registry, 'upgrades') ?? {})[this.vehicleKey] ?? {}; // set per-veicolo
     const missionNum: number = getRun(this.registry, 'missionNumber') ?? 1;
     this.missionNumber = missionNum;
     const savedComp        = getRun(this.registry, 'components')    ?? null;
 
     const vData = VEHICLES[this.vehicleKey];
-    this.maxHealth       = 100 + vData.healthBonus;
+    this.maxHealth       = 100 + vData.healthBonus + (this.upgrades.plating ? 30 : 0);
     this.health          = this.maxHealth;
     this.vehicleFireMult = vData.fireMult * (this.upgrades.turret ? 1.25 : 1.0);
     this.vehicleSpeedMult= vData.speedMult * (this.upgrades.engine ? 1.15 : 1.0);
     this.vehicleArmorBonus = vData.armorBonus + (this.upgrades.armor ? 20 : 0);
     this.maxFuel         = MAX_FUEL + (this.upgrades.fuelTank ? 30 : 0);
     this.fuel            = this.maxFuel;
+    this.vehicleDamageBonus = this.upgrades.ammo ? 1 : 0;
+    this.dashCooldownMs  = DASH_COOLDOWN * (this.upgrades.nitro ? 0.7 : 1);
+    this.overdriveMult   = this.upgrades.overcharge ? 1.3 : 1;
+    this.toxicResist     = this.upgrades.filters ? 0.5 : 1;
 
     this.score = 0;
     this.distance = 0;
@@ -745,7 +754,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   }
 
   private performDash(time: number) {
-    this.dashReadyAt    = time + DASH_COOLDOWN;
+    this.dashReadyAt    = time + this.dashCooldownMs; // 'nitro': ricarica scatto ridotta
     this.dashGraceUntil = time + DASH_GRACE;
     pulse(0.016); // kick cinetico allo scatto
 
@@ -791,7 +800,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   }
 
   private activateOverdrive(time: number) {
-    this.overdriveActiveUntil = time + OVERDRIVE_DURATION;
+    this.overdriveActiveUntil = time + OVERDRIVE_DURATION * this.overdriveMult; // 'overcharge': +30% durata
     pulse(0.022); // kick cinetico all'attivazione del Sovraccarico
 
     // Onda d'urto: sbalza via gli aggrappati (come lo scatto) e danneggia i nemici davanti al veicolo.
@@ -1540,6 +1549,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private fireWeapon() {
     const w = WEAPONS[this.currentWeapon];
+    const dmg = w.damage + this.vehicleDamageBonus;            // potenziamento 'ammo': +1 danno proiettile
     const a = this.aimAngle;                                   // verso il mirino (combat reboot)
     const len = 30, ox = this.vehicle.x + this.turretDx, oy = this.vehicle.y;
     const mx = ox + Math.cos(a) * len, my = oy + Math.sin(a) * len; // bocca della canna
@@ -1547,18 +1557,18 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     switch (this.currentWeapon) {
       case 'mg':
       case 'rifle':
-        this.spawnBullet(mx, my, a, w.damage, w.speed, w.color, FAR);
+        this.spawnBullet(mx, my, a, dmg, w.speed, w.color, FAR);
         break;
       case 'double_mg': {
         // Due linee parallele, offset PERPENDICOLARE alla mira (±14) — vedi BALANCE §7.
         const px = -Math.sin(a) * 14, py = Math.cos(a) * 14;
-        this.spawnBullet(mx + px, my + py, a, w.damage, w.speed, w.color, FAR);
-        this.spawnBullet(mx - px, my - py, a, w.damage, w.speed, w.color, FAR);
+        this.spawnBullet(mx + px, my + py, a, dmg, w.speed, w.color, FAR);
+        this.spawnBullet(mx - px, my - py, a, dmg, w.speed, w.color, FAR);
         break;
       }
       case 'flamethrower':
         // Sventaglio breve attorno alla mira; gittata = range dell'arma (BALANCE §7).
-        this.spawnBullet(mx, my, a + Phaser.Math.FloatBetween(-0.12, 0.12), w.damage, w.speed, w.color, w.range);
+        this.spawnBullet(mx, my, a + Phaser.Math.FloatBetween(-0.12, 0.12), dmg, w.speed, w.color, w.range);
         break;
       case 'rockets':
         this.spawnRocket(mx, my, a);
@@ -1892,8 +1902,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     const lastDmg = (cloud.getData('lastDmg') as number) ?? 0;
     if (this.time.now - lastDmg > 500) {
       cloud.setData('lastDmg', this.time.now);
-      this.dealDamage(3);
-      this.damageComponent('tank', 3);
+      this.dealDamage(3 * this.toxicResist);             // 'filters': danno tossico dimezzato
+      this.damageComponent('tank', 3 * this.toxicResist);
       this.sfx?.playToxicSizzle();
       this.vehicle.setTint(0x44ff44);
       this.time.delayedCall(150, () => { if (this.vehicle?.active) this.vehicle.clearTint(); });
@@ -1905,6 +1915,18 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private attachZombie(zombie: Phaser.Physics.Arcade.Sprite, prefTurret: boolean) {
     // Subito dopo lo scatto il veicolo "respinge": nessun nuovo aggancio per un istante.
     if (this.time.now < this.dashGraceUntil) { this.spawnHitParticles(zombie.x, zombie.y); zombie.destroy(); return; }
+    // Ariete frontale ('ram'): chi tenta l'aggancio subisce danno; i deboli vengono sfondati e muoiono.
+    if (this.upgrades.ram) {
+      const rhp = (zombie.getData('hp') as number) - RAM_DMG;
+      if (rhp <= 0) {
+        const zt = zombie.getData('type') as ZombieType;
+        this.addKillScore(ZOMBIE_STATS[zt].score);
+        this.killBurst(zt, zombie.x, zombie.y);
+        zombie.destroy();
+        return;
+      }
+      zombie.setData('hp', rhp);
+    }
     const usedSlots = this.attachedZombies.map(az => az.slotIndex);
     let slotIndex: number;
     if (prefTurret) {

@@ -268,6 +268,26 @@ Fonte: `SHOP_ITEMS` (`ShopScene.ts`).
 | `engine` | Motore potenziato | 120 | una tantum | velocità verticale ×1.15 |
 | `turret` | Torretta migliorata | 100 | una tantum | cadenza ×1.25 |
 | `fuelTank` | Serbatoio extra | 80 | una tantum | carburante massimo +30 |
+| `plating` | Blindatura pesante | 180 | una tantum | salute massima +30 |
+| `ram` | Ariete frontale | 130 | una tantum | speronare infligge 6 danni a chi tenta l'aggancio |
+| `nitro` | Nitro | 110 | una tantum | ricarica scatto ×0.7 (−30%) |
+| `ammo` | Munizioni pesanti | 160 | una tantum | +1 danno proiettile |
+| `filters` | Filtri NBC | 90 | una tantum | danno nube tossica ×0.5 (−50%) |
+| `overcharge` | Sovraccarico esteso | 140 | una tantum | durata overdrive ×1.3 (+30%) |
+
+> **Potenziamenti per-veicolo:** ogni potenziamento si applica al SOLO veicolo su cui è comprato
+> (`RunData.upgrades` = `Record<vehicleKey, Upgrades>`). Il negozio mostra solo il catalogo del mezzo
+> selezionato (`VEHICLES[key].upgrades` in `GameData.ts`); `repair` è universale per tutti i veicoli.
+>
+> | Veicolo | Catalogo |
+> |---|---|
+> | Auto civile | armor · engine · fuelTank · nitro |
+> | Pickup | engine · fuelTank · ram · nitro |
+> | Furgone blindato | armor · plating · turret · fuelTank · filters |
+> | SUV militare | engine · turret · nitro · ammo |
+> | Camion blindato | armor · plating · ram · fuelTank · turret |
+> | Mezzo militare pesante | armor · plating · turret · ammo · filters |
+> | Sperimentale | turret · ammo · nitro · overcharge |
 
 ### Sopravvissuti (gratis — 3 offerti, 1 scelto a visita)
 | Sopravvissuto | Effetto | Cadenza |
@@ -276,6 +296,9 @@ Fonte: `SHOP_ITEMS` (`ShopScene.ts`).
 | Medico | +0.3 salute | al secondo (continuo) |
 | Soldato | colpo auto verso lo zombi più vicino | ogni 1.6 s (G9: era 3 s, contributo troppo marginale) |
 | Esploratore | taniche più frequenti (5 s vs 7,5 s) | passivo |
+| Saccheggiatore | +12% monete a fine missione (compone col nodo di percorso) | a fine missione |
+| Cecchino | colpo forte (danno 5) allo zombi più resistente davanti | ogni 2,2 s |
+| Artificiere | tasto C: granata ad area (raggio 110, danno 8) | ricarica 5,5 s |
 
 ### Letture economiche di riferimento
 - **"Ripara tutto" (80)** è il pozzo ricorrente: a corazza/serbatoio rovinati è quasi sempre il miglior acquisto (rompe la spirale di §4).

@@ -19,17 +19,26 @@ interface ShopItem {
   key: string; label: string; cost: number; desc: string; oneTime: boolean;
 }
 
+// Catalogo COMPLETO dei potenziamenti. 'repair' è universale; quali degli altri compaiano nel negozio
+// dipende dal veicolo corrente (VEHICLES[key].upgrades). Acquisti = per-veicolo (RunData.upgrades).
 const SHOP_ITEMS: ShopItem[] = [
-  { key: 'repair',   label: 'item.repair.label',   cost:  80, desc: 'item.repair.desc',   oneTime: false },
-  { key: 'armor',    label: 'item.armor.label',    cost: 150, desc: 'item.armor.desc',    oneTime: true  },
-  { key: 'engine',   label: 'item.engine.label',   cost: 120, desc: 'item.engine.desc',   oneTime: true  },
-  { key: 'turret',   label: 'item.turret.label',   cost: 100, desc: 'item.turret.desc',   oneTime: true  },
-  { key: 'fuelTank', label: 'item.fuelTank.label', cost:  80, desc: 'item.fuelTank.desc', oneTime: true  },
+  { key: 'repair',     label: 'item.repair.label',     cost:  80, desc: 'item.repair.desc',     oneTime: false },
+  { key: 'armor',      label: 'item.armor.label',      cost: 150, desc: 'item.armor.desc',      oneTime: true  },
+  { key: 'engine',     label: 'item.engine.label',     cost: 120, desc: 'item.engine.desc',     oneTime: true  },
+  { key: 'turret',     label: 'item.turret.label',     cost: 100, desc: 'item.turret.desc',     oneTime: true  },
+  { key: 'fuelTank',   label: 'item.fuelTank.label',   cost:  80, desc: 'item.fuelTank.desc',   oneTime: true  },
+  { key: 'plating',    label: 'item.plating.label',    cost: 180, desc: 'item.plating.desc',    oneTime: true  },
+  { key: 'ram',        label: 'item.ram.label',        cost: 130, desc: 'item.ram.desc',        oneTime: true  },
+  { key: 'nitro',      label: 'item.nitro.label',      cost: 110, desc: 'item.nitro.desc',      oneTime: true  },
+  { key: 'ammo',       label: 'item.ammo.label',       cost: 160, desc: 'item.ammo.desc',       oneTime: true  },
+  { key: 'filters',    label: 'item.filters.label',    cost:  90, desc: 'item.filters.desc',    oneTime: true  },
+  { key: 'overcharge', label: 'item.overcharge.label', cost: 140, desc: 'item.overcharge.desc', oneTime: true  },
 ];
 
 export default class ShopScene extends Phaser.Scene {
   private money = 0;
-  private upgrades: Upgrades = {};
+  private upgrades: Upgrades = {};                     // set del veicolo CORRENTE (vista del negozio)
+  private allUpgrades: Record<string, Upgrades> = {};  // tutti i set per-veicolo (RunData.upgrades)
   private currentWeapon: WeaponType = 'mg';
   private ownedWeapons: WeaponType[] = ['mg'];
   private currentVehicle = 'civilian_car';
@@ -63,8 +72,9 @@ export default class ShopScene extends Phaser.Scene {
     this.ox = (this.designW - DESIGN_W) / 2;
 
     this.money          = getRun(this.registry, 'money')         ?? 0;
-    this.upgrades       = { ...(getRun(this.registry, 'upgrades') ?? {}) };
     this.currentVehicle = getRun(this.registry, 'vehicle')       ?? 'civilian_car';
+    this.allUpgrades    = { ...(getRun(this.registry, 'upgrades') ?? {}) };
+    this.upgrades       = { ...(this.allUpgrades[this.currentVehicle] ?? {}) }; // potenziamenti del mezzo corrente
     this.ownedVehicles  = getRun(this.registry, 'ownedVehicles')  ?? ['civilian_car'];
     this.survivors      = getRun(this.registry, 'survivors')      ?? [];
     this.missionNum     = getRun(this.registry, 'missionNumber')  ?? 2;
@@ -146,15 +156,24 @@ export default class ShopScene extends Phaser.Scene {
 
   private drawUpgradesPanel() {
     const px = 14 + this.ox, py = 76;
+    const vName = t(VEHICLES[this.currentVehicle]?.name ?? '');
     Ui.text(this, px, py, t('shop.upgrades'), { fontSize: '13px', color: UI.blueInfo, fontStyle: 'bold' });
+    // Sottotitolo: chiarisce che il catalogo è di QUESTO veicolo (potenziamenti per-veicolo).
+    Ui.text(this, px + 96, py + 1, t('shop.upgradesFor', { v: vName }), { fontSize: '10px', color: UI.faint });
 
-    SHOP_ITEMS.forEach((item, i) => {
-      const iy = py + 22 + i * 48;
+    // 'repair' è universale; gli altri dipendono dal catalogo del veicolo CORRENTE.
+    const catalog = (VEHICLES[this.currentVehicle]?.upgrades ?? []) as string[];
+    const items = SHOP_ITEMS.filter(it => it.key === 'repair' || catalog.includes(it.key));
+
+    const colW = 216, rowH = 50, boxW = 208;
+    items.forEach((item, i) => {
+      const col = i % 2, row = Math.floor(i / 2);
+      const ix = px + col * colW, iy = py + 22 + row * rowH;
       const bought    = item.oneTime && !!(this.upgrades as Record<string,boolean>)[item.key];
       const canAfford = !bought && this.money >= item.cost;
       const bgColor   = bought ? UI.panelBought : UI.panel;
 
-      const bg = Ui.box(this, px + 220, iy + 18, 440, 42, { fill: bgColor, radius: 6, stroke: UI.stroke, strokeAlpha: 0.5 });
+      const bg = Ui.box(this, ix + boxW / 2, iy + 18, boxW, 42, { fill: bgColor, radius: 6, stroke: UI.stroke, strokeAlpha: 0.5 });
       if (!bought) {
         // Interattiva anche se non acquistabile: serve il feedback "monete insufficienti" (U6).
         bg.setInteractive(true);
@@ -164,16 +183,14 @@ export default class ShopScene extends Phaser.Scene {
       }
 
       const lc = bought ? UI.greenDim : canAfford ? UI.text : '#554444';
-      Ui.text(this, px + 6, iy + 6,  t(item.label), { fontSize: '13px', color: lc, fontStyle: 'bold' });
-      Ui.text(this, px + 6, iy + 24, t(item.desc),  { fontSize: '10px', color: UI.faint });
+      Ui.text(this, ix + 6, iy + 5,  t(item.label), { fontSize: '12px', color: lc, fontStyle: 'bold' });
+      Ui.text(this, ix + 6, iy + 23, t(item.desc),  { fontSize: '9px',  color: UI.faint });
       if (bought) {
-        Ui.text(this, px + 432, iy + 15, '✓', { fontSize: '13px', color: UI.greenDim }).setOrigin(1, 0.5);
+        Ui.text(this, ix + boxW - 8, iy + 14, '✓', { fontSize: '13px', color: UI.greenDim }).setOrigin(1, 0.5);
       } else if (canAfford) {
-        Ui.text(this, px + 432, iy + 15, `★ ${item.cost}`, { fontSize: '13px', color: UI.gold }).setOrigin(1, 0.5);
+        Ui.text(this, ix + boxW - 8, iy + 14, `★${item.cost}`, { fontSize: '12px', color: UI.gold }).setOrigin(1, 0.5);
       } else {
-        // Marker esplicito di "non acquistabile" + quanto manca (U6).
-        Ui.text(this, px + 432, iy + 9,  `🔒 ★${item.cost}`,            { fontSize: '12px', color: '#aa5555' }).setOrigin(1, 0.5);
-        Ui.text(this, px + 432, iy + 26, t('shop.missing', { n: item.cost - this.money }), { fontSize: '10px', color: '#996644' }).setOrigin(1, 0.5);
+        Ui.text(this, ix + boxW - 8, iy + 14, `🔒${item.cost}`, { fontSize: '11px', color: '#aa5555' }).setOrigin(1, 0.5);
       }
     });
   }
@@ -372,8 +389,10 @@ export default class ShopScene extends Phaser.Scene {
     if (item.key === 'repair') {
       setRun(this.registry, 'components', { engine: 100, wheels: 100, tank: 100, turret: 100, armor: 100 });
     } else {
+      // Potenziamento applicato al SOLO veicolo corrente (catalogo per-veicolo).
       (this.upgrades as Record<string,boolean>)[item.key] = true;
-      setRun(this.registry, 'upgrades', { ...this.upgrades });
+      this.allUpgrades[this.currentVehicle] = { ...this.upgrades };
+      setRun(this.registry, 'upgrades', { ...this.allUpgrades });
     }
     this.afterPurchase();
   }

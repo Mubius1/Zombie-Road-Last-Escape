@@ -16,7 +16,9 @@ export interface RunData {
   missionNumber: number;
   money: number;
   survivors: string[];
-  upgrades: Upgrades;
+  /** Potenziamenti PER-VEICOLO: ogni veicolo tiene il suo set (key veicolo → Upgrades).
+   *  I salvataggi vecchi (Upgrades piatto) degradano a {} per il veicolo corrente (reset benigno). */
+  upgrades: Record<string, Upgrades>;
   vehicle: string;
   ownedVehicles: string[];
   ownedWeapons: WeaponType[];

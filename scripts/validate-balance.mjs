@@ -245,7 +245,8 @@ for (const key of WEAPON_KEYS) {
 // ════════════════════════════════════════════════════════════════════════════
 // §8 — NEGOZIO (costi)
 // ════════════════════════════════════════════════════════════════════════════
-const SHOP_KEYS = ['repair', 'armor', 'engine', 'turret', 'fuelTank'];
+const SHOP_KEYS = ['repair', 'armor', 'engine', 'turret', 'fuelTank',
+  'plating', 'ram', 'nitro', 'ammo', 'filters', 'overcharge'];
 // SHOP_ITEMS è un ARRAY ([...]) non un oggetto: prendo il contenuto fra '[' e '];'
 // (salto l'annotazione di tipo `ShopItem[]` cercando dopo '=').
 const shopArr = /const SHOP_ITEMS[^=]*=\s*\[([\s\S]*?)\]\s*;/.exec(shopSrc);
