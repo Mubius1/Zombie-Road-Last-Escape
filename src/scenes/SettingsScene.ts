@@ -172,24 +172,30 @@ export default class SettingsScene extends Phaser.Scene {
 
   // ─── Effetti schermo ─────────────────────────────────────────────────────────
 
-  private buildScreenFx(y: number) {
+  /** Effetti schermo selezionabili singolarmente: tre chip (Vignetta · Grana · Scanline CRT). */
+  private buildScreenFxGroup(y: number) {
     const cx = this.designW / 2;
-    Ui.text(this, cx - 230, y - 12, t('settings.screenFx'), { fontSize: '15px', fontStyle: 'bold', color: UI.cyan });
-    Ui.text(this, cx - 230, y + 8, t('settings.screenFxDesc'), { fontSize: '11px', color: UI.faint });
+    Ui.text(this, cx - 230, y - 18, t('settings.screenFx'), { fontSize: '15px', fontStyle: 'bold', color: UI.cyan });
 
-    const on = Settings.screenFx;
-    const btn = this.add.rectangle(cx + 190, y + 2, 130, 38, on ? 0x16301a : 0x301616)
-      .setStrokeStyle(2, on ? UI.hpHigh : 0x995544, 0.8)
-      .setInteractive({ useHandCursor: true });
-    Ui.text(this, cx + 190, y + 2, on ? t('settings.fxOn') : t('settings.fxOff'), {
-      fontSize: '16px', fontStyle: 'bold', color: on ? UI.greenSoft : UI.amberSoft,
-    }).setOrigin(0.5);
-
-    btn.on('pointerover', () => btn.setFillStyle(on ? 0x1d3d22 : 0x3d1d1d));
-    btn.on('pointerout',  () => btn.setFillStyle(on ? 0x16301a : 0x301616));
-    btn.on('pointerdown', () => {
-      Settings.screenFx = !Settings.screenFx;
-      this.scene.restart({ from: this.fromKey, page: this.page, nav: true }); // riapplica/rimuove l'overlay all'istante
+    const chips: Array<[string, () => boolean, (v: boolean) => void]> = [
+      [t('settings.vignette'), () => Settings.vignetteFx, v => { Settings.vignetteFx = v; }],
+      [t('settings.grain'),    () => Settings.grainFx,    v => { Settings.grainFx = v; }],
+      [t('settings.scanline'), () => Settings.scanlineFx, v => { Settings.scanlineFx = v; }],
+    ];
+    const cw = 140, gap = 8, total = chips.length * cw + (chips.length - 1) * gap;
+    const startX = cx - total / 2;
+    chips.forEach(([label, get, set], i) => {
+      const x = startX + i * (cw + gap) + cw / 2, on = get();
+      const chip = this.add.rectangle(x, y + 16, cw, 34, on ? 0x16301a : 0x26262e)
+        .setStrokeStyle(2, on ? UI.hpHigh : UI.blueLine, 0.8)
+        .setInteractive({ useHandCursor: true });
+      Ui.text(this, x, y + 16, label, { fontSize: '12px', fontStyle: 'bold', color: on ? UI.greenSoft : UI.faint }).setOrigin(0.5);
+      chip.on('pointerover', () => chip.setFillStyle(on ? 0x1d3d22 : 0x32323c));
+      chip.on('pointerout',  () => chip.setFillStyle(on ? 0x16301a : 0x26262e));
+      chip.on('pointerdown', () => {
+        set(!get());
+        this.scene.restart({ from: this.fromKey, page: this.page, nav: true }); // riapplica gli effetti all'istante
+      });
     });
   }
 
@@ -383,7 +389,7 @@ export default class SettingsScene extends Phaser.Scene {
     this.pageHeader(t('settings.catGraphics'));
     this.buildResolution(H / 2 - 150, inGame);
     this.buildFullscreen(H / 2 - 88);
-    this.buildScreenFx(H / 2 - 26);
+    this.buildScreenFxGroup(H / 2 - 26);
     this.buildToggle(H / 2 + 36,  t('settings.bloom'),   t('settings.bloomDesc'),   () => Settings.bloom,         v => { Settings.bloom = v; });
     this.buildToggle(H / 2 + 98,  t('settings.shadows'), t('settings.shadowsDesc'), () => Settings.shadows,       v => { Settings.shadows = v; });
     this.buildToggle(H / 2 + 160, t('settings.asphalt'), t('settings.asphaltDesc'), () => Settings.asphaltDetail, v => { Settings.asphaltDetail = v; });

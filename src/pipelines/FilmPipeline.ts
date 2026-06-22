@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import Settings from '../Settings';
 
 /**
  * FilmPipeline — post-processing filmico a livello di camera (GLSL inline, WebGL1).
@@ -171,15 +172,15 @@ export default class FilmPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFX
     p.shock *= 0.88; // lo shock di impatto decade da solo
     this.set1f('uTime', this.elapsed);
     this.set1f('uIntensity', p.intensity);
-    this.set1f('uVignette', this.vignette);
+    this.set1f('uVignette', Settings.vignetteFx ? this.vignette : 0); // toggle singolo (Impostazioni → Grafica)
     this.set1f('uContrast', p.contrast);
     this.set1f('uSaturation', p.saturation);
     this.set1f('uWarmth', p.warmth);
     this.set1f('uTone', p.tone);
     this.set1f('uExposure', p.exposure);
     this.set1f('uAberration', p.aberration + p.shock); // base + kick transitorio
-    this.set1f('uGrain', p.grain);
-    this.set1f('uScanline', p.scanline);
+    this.set1f('uGrain', Settings.grainFx ? p.grain : 0);          // toggle singolo
+    this.set1f('uScanline', Settings.scanlineFx ? p.scanline : 0); // toggle singolo
     this.set1f('uSpeed', p.speed);
   }
 }
