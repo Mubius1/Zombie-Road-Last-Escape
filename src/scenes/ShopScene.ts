@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { VEHICLES, VEHICLE_KEYS, SURVIVORS, SurvivorData, Upgrades, WEAPONS, WEAPON_KEYS, WeaponType } from '../GameData';
-import { buildEntityTextures } from '../EntityTextures';
+import { buildEntityTextures, buildSurvivorTextures } from '../EntityTextures';
 import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import Juice from '../Juice';
 import Settings from '../Settings';
@@ -100,6 +100,7 @@ export default class ShopScene extends Phaser.Scene {
 
   /** Genera (una volta) le texture procedurali per le anteprime di armi e veicoli. */
   private ensureTextures() {
+    buildSurvivorTextures(this); // ritratti sopravvissuti (guardia propria, sempre disponibili)
     if (this.textures.exists('vehicle_experimental')) return; // già generate da una partita
     buildEntityTextures(this);
     VEHICLE_KEYS.forEach(k => buildVehicleTexture(this, k));
@@ -235,7 +236,7 @@ export default class ShopScene extends Phaser.Scene {
       Ui.text(this, px, py + 22, t('shop.inVehicle'), { fontSize: '11px', color: '#777755' });
       this.survivors.forEach((key, i) => {
         const s = SURVIVORS.find(sv => sv.key === key);
-        if (s) Ui.text(this, px + 6, py + 36 + i * 16, t('shop.survivorName', { name: t(s.name) }), { fontSize: '12px', color: s.color });
+        if (s) Ui.text(this, px + 6, py + 36 + i * 16, t('shop.survivorName', { name: `${s.properName} · ${t(s.name)}` }), { fontSize: '12px', color: s.color });
       });
     }
 
@@ -256,8 +257,10 @@ export default class ShopScene extends Phaser.Scene {
         bg.on('pointerdown', () => this.recruitSurvivor(s.key));
       }
 
-      Ui.text(this, px + 6, iy + 8,  t(s.name),    { fontSize: '14px', color: s.color, fontStyle: 'bold' });
-      Ui.text(this, px + 6, iy + 28, t(s.ability, s.abilityParams), { fontSize: '10px', color: '#666655' });
+      // Ritratto procedurale del sopravvissuto (sbiadito se già a bordo).
+      this.add.image(px + 262, iy + 30, `survivor_${s.key}`).setScale(1 / OVERSAMPLE).setAlpha(alreadyIn ? 0.45 : 1);
+      Ui.text(this, px + 6, iy + 8,  `${s.properName} · ${t(s.name)}`, { fontSize: '14px', color: s.color, fontStyle: 'bold' });
+      Ui.text(this, px + 6, iy + 28, t(s.ability, s.abilityParams), { fontSize: '10px', color: '#666655', wordWrap: { width: 215 } });
       Ui.text(this, px + 6, iy + 46, alreadyIn ? t('shop.recruited') : t('shop.free'),
         { fontSize: '11px', color: alreadyIn ? UI.greenDim : UI.greenOk });
     });

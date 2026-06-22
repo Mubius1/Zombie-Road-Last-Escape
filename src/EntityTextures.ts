@@ -7,6 +7,64 @@ import { OVERSAMPLE } from './Config';
  * distruggono i Graphics dopo `generateTexture`. Le dimensioni-firma (AF/generateTexture) sono
  * validate da `npm run validate:art` contro le art bible.
  */
+/**
+ * Ritratti procedurali dei SOPRAVVISSUTI (busto testa+spalle, 40×46, sovracampionati). Distinti per
+ * RUOLO dal copricapo (berretto / fascia-croce / elmetto / cappello a tesa) + colletto col colore-firma.
+ * Token del negozio/galleria debug. Funzione a sé (guardia `textures.exists`). Vedi art bible OGGETTI.
+ */
+export function buildSurvivorTextures(scene: Phaser.Scene) {
+  if (scene.textures.exists('survivor_mechanic')) return;
+  const OS_G = () => {
+    const g = scene.make.graphics({ add: false } as any) as Phaser.GameObjects.Graphics & { generateTexture(k: string, w: number, h: number): void };
+    g.setScale(OVERSAMPLE);
+    const orig = g.generateTexture.bind(g);
+    (g as any).generateTexture = (k: string, w: number, h: number) => orig(k, w * OVERSAMPLE, h * OVERSAMPLE);
+    return g;
+  };
+  const cloth = 0x33333d, clothSh = 0x222229, dark = 0x14141a;
+  // Busto comune (luce alto-sinistra): spalle, colletto-accento a V, collo, testa, ombra lato dx, occhi.
+  const bust = (g: Phaser.GameObjects.Graphics, skin: number, skinSh: number, accent: number) => {
+    g.fillStyle(0x000000, 0.22); g.fillEllipse(20, 44, 30, 6);
+    g.fillStyle(clothSh); g.fillRoundedRect(3, 33, 34, 13, 7);
+    g.fillStyle(cloth);   g.fillRoundedRect(5, 32, 30, 11, 6);
+    g.fillStyle(accent);  g.fillTriangle(15, 32, 25, 32, 20, 41);
+    g.fillStyle(skinSh);  g.fillRect(16, 25, 8, 9);
+    g.fillStyle(skin);    g.fillRoundedRect(11, 11, 18, 19, 8);
+    g.fillStyle(0x000000, 0.13); g.fillRoundedRect(21, 12, 8, 17, 7);
+    g.fillStyle(dark);    g.fillRect(15, 20, 3, 3); g.fillRect(22, 20, 3, 3);
+  };
+
+  { // Meccanico (Bruno): berretto + fascia blu + barba corta.
+    const g = OS_G(); bust(g, 0xc28a5a, 0x8f6038, 0x3a86c8);
+    g.fillStyle(0x2a2a30); g.fillRoundedRect(9, 8, 22, 9, 4);
+    g.fillStyle(0x44aaff); g.fillRect(9, 15, 22, 2);
+    g.fillStyle(0x000000, 0.20); g.fillRect(13, 26, 14, 3);
+    g.generateTexture('survivor_mechanic', 40, 46); g.destroy();
+  }
+  { // Medico (Sara): capelli + fascia bianca con croce rossa.
+    const g = OS_G(); bust(g, 0xd6a878, 0xa6764a, 0xc84444);
+    g.fillStyle(0x3a2a1a); g.fillRoundedRect(9, 9, 22, 8, 4);
+    g.fillStyle(0xe8e8e8); g.fillRect(10, 13, 20, 4);
+    g.fillStyle(0xff4444); g.fillRect(19, 11.5, 2.4, 7); g.fillRect(16.5, 14, 7.4, 2.4);
+    g.generateTexture('survivor_medic', 40, 46); g.destroy();
+  }
+  { // Soldato (Marcus): elmetto militare + accento giallo + sottogola.
+    const g = OS_G(); bust(g, 0x7e5436, 0x573820, 0xc8a030);
+    g.fillStyle(0x4a5038); g.fillRoundedRect(8, 7, 24, 11, 7);
+    g.fillStyle(0x3a4028); g.fillRect(8, 16, 24, 3);
+    g.fillStyle(0xffcc44); g.fillRect(10, 9, 5, 2);
+    g.fillStyle(0x2a2e1e); g.fillRect(13, 29, 2, 4); g.fillRect(25, 29, 2, 4);
+    g.generateTexture('survivor_soldier', 40, 46); g.destroy();
+  }
+  { // Esploratore (Nadia): cappello a tesa larga + banda verde.
+    const g = OS_G(); bust(g, 0xc99a6a, 0x986a40, 0x35c870);
+    g.fillStyle(0x5a4a2a); g.fillEllipse(20, 13, 30, 6);
+    g.fillStyle(0x6a5a32); g.fillRoundedRect(12, 6, 16, 9, 5);
+    g.fillStyle(0x44ff88); g.fillRect(12, 11, 16, 2);
+    g.generateTexture('survivor_explorer', 40, 46); g.destroy();
+  }
+}
+
 export function buildEntityTextures(scene: Phaser.Scene) {
   if (scene.textures.exists('zombie_common')) return;
   const G = (_w: number, _h: number) => scene.make.graphics({ add: false } as any) as Phaser.GameObjects.Graphics & { generateTexture(k:string,w:number,h:number):void };
