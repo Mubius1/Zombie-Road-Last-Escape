@@ -229,7 +229,10 @@ export default class ShopScene extends Phaser.Scene {
 
   private drawSurvivorsPanel() {
     const px = 490 + this.ox, py = 76;
-    Ui.text(this, px, py, t('shop.survivors'), { fontSize: '13px', color: UI.goldDim, fontStyle: 'bold' });
+    const cap = VEHICLES[this.currentVehicle]?.survivorSlots ?? 4;
+    Ui.text(this, px, py, `${t('shop.survivors')}  ${this.survivors.length}/${cap}`, {
+      fontSize: '13px', color: this.survivors.length >= cap ? UI.amberSoft : UI.goldDim, fontStyle: 'bold',
+    });
 
     // Recruited list
     if (this.survivors.length > 0) {
@@ -248,22 +251,23 @@ export default class ShopScene extends Phaser.Scene {
     this.offeredSurvivors.forEach((s, i) => {
       const iy = rY + 18 + i * 88;
       const alreadyIn = this.survivors.includes(s.key);
+      const full = !alreadyIn && this.survivors.length >= cap;
       const bg = Ui.box(this, px + 145, iy + 38, 290, 80, { fill: UI.panelWarm, radius: 7, stroke: UI.stroke, strokeAlpha: 0.5 });
 
-      if (!alreadyIn) {
+      if (!alreadyIn && !full) {
         bg.setInteractive(true);
         bg.on('pointerover', () => bg.setFillStyle(0x1e1e14));
         bg.on('pointerout',  () => bg.setFillStyle(UI.panelWarm));
         bg.on('pointerdown', () => this.recruitSurvivor(s.key));
       }
 
-      // Ritratto procedurale (sbiadito se già a bordo).
-      this.add.image(px + 262, iy + 38, `survivor_${s.key}`).setScale(1 / OVERSAMPLE).setAlpha(alreadyIn ? 0.45 : 1);
+      // Ritratto procedurale (sbiadito se già a bordo o se il veicolo è pieno).
+      this.add.image(px + 262, iy + 38, `survivor_${s.key}`).setScale(1 / OVERSAMPLE).setAlpha(alreadyIn || full ? 0.45 : 1);
       Ui.text(this, px + 6, iy + 6,  `${s.properName} ${s.surname} · ${t(s.name)}`, { fontSize: '13px', color: s.color, fontStyle: 'bold' });
       Ui.text(this, px + 6, iy + 23, t(s.bio), { fontSize: '9px', color: '#8a8478', fontStyle: 'italic', wordWrap: { width: 218 } });
       Ui.text(this, px + 6, iy + 53, t(s.ability, s.abilityParams), { fontSize: '10px', color: '#666655', wordWrap: { width: 218 } });
-      Ui.text(this, px + 6, iy + 67, alreadyIn ? t('shop.recruited') : t('shop.free'),
-        { fontSize: '11px', color: alreadyIn ? UI.greenDim : UI.greenOk });
+      Ui.text(this, px + 6, iy + 67, alreadyIn ? t('shop.recruited') : full ? t('shop.vehicleFull') : t('shop.free'),
+        { fontSize: '11px', color: alreadyIn ? UI.greenDim : full ? UI.amberSoft : UI.greenOk });
     });
   }
 
@@ -345,14 +349,27 @@ export default class ShopScene extends Phaser.Scene {
 
   private recruitSurvivor(key: string) {
     if (this.survivors.includes(key)) return;
+    const cap = VEHICLES[this.currentVehicle]?.survivorSlots ?? 4;
+    if (this.survivors.length >= cap) { ShopScene.sfx?.playImpact(); return; } // veicolo pieno
     setRun(this.registry, 'survivors', [...this.survivors, key]);
     this.persist();
     ShopScene.sfx?.playFuelPickup();
     this.time.delayedCall(150, () => this.refresh());
   }
 
+  /** Riduce i sopravvissuti alla capienza del veicolo scelto (gli eccedenti restano indietro). */
+  private trimSurvivors(vehicleKey: string) {
+    const cap = VEHICLES[vehicleKey]?.survivorSlots ?? 4;
+    if (this.survivors.length > cap) {
+      this.survivors = this.survivors.slice(0, cap);
+      setRun(this.registry, 'survivors', this.survivors);
+    }
+  }
+
   private selectVehicle(key: string) {
     setRun(this.registry, 'vehicle', key);
+    this.currentVehicle = key;
+    this.trimSurvivors(key);
     this.persist();
     this.refresh();
   }
@@ -365,6 +382,8 @@ export default class ShopScene extends Phaser.Scene {
     setRun(this.registry, 'money', this.money);
     setRun(this.registry, 'ownedVehicles', newOwned);
     setRun(this.registry, 'vehicle', key);
+    this.currentVehicle = key;
+    this.trimSurvivors(key);
     this.afterPurchase();
   }
 

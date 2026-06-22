@@ -69,6 +69,7 @@ const en: Record<string, string> = {
   'shop.noneAvailable': 'None available',
   'shop.recruited': 'ALREADY RECRUITED',
   'shop.free': 'FREE',
+  'shop.vehicleFull': 'Vehicle full',
   'shop.vehicles': 'VEHICLES',
   'shop.continue': 'CONTINUE  ▶',
 

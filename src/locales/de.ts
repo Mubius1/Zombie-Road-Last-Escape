@@ -69,6 +69,7 @@ const de: Record<string, string> = {
   'shop.noneAvailable': 'Keine verfügbar',
   'shop.recruited': 'BEREITS ANGEWORBEN',
   'shop.free': 'GRATIS',
+  'shop.vehicleFull': 'Fahrzeug voll',
   'shop.vehicles': 'FAHRZEUGE',
   'shop.continue': 'WEITER  ▶',
 

@@ -69,6 +69,7 @@ const pt: Record<string, string> = {
   'shop.noneAvailable': 'Nenhum disponível',
   'shop.recruited': 'JÁ RECRUTADO',
   'shop.free': 'GRÁTIS',
+  'shop.vehicleFull': 'Veículo cheio',
   'shop.vehicles': 'VEÍCULOS',
   'shop.continue': 'CONTINUAR  ▶',
 
