@@ -41,13 +41,14 @@ I tre pilastri del titolo (coesione · game feel · rifinitura) tradotti sugli o
 | Sparo / scelta proiettile per arma | `GameScene.fireWeapon()`, `spawnBullet()`, `spawnRocket()` |
 | Muzzle-flash + bloom + luce esplosione | `src/Juice.ts` → `muzzleFlash()`, `bloomBurst()`, `lightFlash()` |
 | Dati veicoli (prezzo, colore, bonus) | `src/GameData.ts` → `VEHICLES`, `VEHICLE_KEYS`, `VehicleData` |
-| Dati sopravvissuti (abilità, colore) | `src/GameData.ts` → `SURVIVORS`, `SurvivorData` |
+| Dati sopravvissuti (nome proprio, abilità, colore) | `src/GameData.ts` → `SURVIVORS`, `SurvivorData` (`properName`) |
+| Ritratti sopravvissuti (texture procedurali) | `src/EntityTextures.ts` → `buildSurvivorTextures()` |
 | Spawn tanica (intervallo, esploratore) | `GameScene.spawnFuelCan()` + timer in `create()` |
 | Effetti dei sopravvissuti (riparazioni, torretta auto) | `GameScene.updateSurvivorEffects()` |
 | Galleria di test (veicoli a scala reale) | `src/scenes/DebugScene.ts` → `drawVehicles()` |
 | Vetrina armi/veicoli nel negozio | `src/scenes/ShopScene.ts` |
 
-**Chiavi texture:** `vehicle_<chiave>` (es. `vehicle_civilian_car`), `bullet`, `rocket`, `fuel_can`, `particle`, `toxic_cloud`, `hazard_wreck`, `hazard_oil`, `hazard_mine`.
+**Chiavi texture:** `vehicle_<chiave>` (es. `vehicle_civilian_car`), `bullet`, `rocket`, `fuel_can`, `particle`, `toxic_cloud`, `hazard_wreck`, `hazard_oil`, `hazard_mine`, `survivor_<chiave>` (ritratti: `survivor_mechanic/medic/soldier/explorer`).
 **Chiavi VFX condivise** (in `Juice.ts`): `fx_light` (alone additivo per muzzle/bloom/luce).
 
 ---
@@ -382,13 +383,13 @@ Cupola metallica (`#33333a` / `#55555c` / `#70707a`) con spuntoni `#3a3a42` e **
 3. **5 armi** con `bullet` tinteggiato a runtime + **razzo** dedicato; muzzle-flash, esplosione (bloom/luce), decal `scorch`.
 4. **Pickup tanica** con etichetta di pericolo + spawn temporizzato (gated dall'Esploratore).
 5. **Oggetti-effetto** `particle` (scintilla calda) e `toxic_cloud` (minaccia verde) coerenti coi 3 colori firma.
-6. **Sopravvissuti** come token colorati + effetti (torretta auto ciano, taniche extra).
+6. **Sopravvissuti** con **ritratto procedurale** (busto testa+spalle 40×46, `buildSurvivorTextures`) e **nome proprio**: *Bruno* (Meccanico — berretto + fascia blu), *Sara* (Medico — fascia bianca + croce rossa), *Marcus* (Soldato — elmetto + accento giallo), *Nadia* (Esploratore — cappello a tesa + banda verde). Distinti per **copricapo** (gancio di silhouette) + colletto col **colore-firma** del ruolo; mostrati nel negozio. Effetti di gameplay invariati (riparazioni, torretta auto ciano, taniche extra).
 
 **Aperto (rifinitura futura):**
 - **Usura/danno visibile sul veicolo** al calare dei componenti (oggi il danno è solo nell'HUD): chiazze, fumo dal motore, ruota sgonfia.
 - **Animazione di ricarica/idle** della torretta del veicolo (oggi statica).
 - **Varietà di razzo/fiamma** per le armi future (oggi 1 razzo dedicato; il resto è `bullet` tinto).
-- **Rappresentazione a bordo dei sopravvissuti** (oggi solo token UI).
+- **Rappresentazione a bordo dei sopravvissuti** durante la guida (oggi il **ritratto** vive nel negozio; sul veicolo in corsa non sono ancora visibili).
 - **Profiling 60 fps** a densità massima di proiettili.
 
 ---
