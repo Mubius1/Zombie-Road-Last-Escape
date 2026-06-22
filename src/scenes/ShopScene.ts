@@ -49,6 +49,8 @@ export default class ShopScene extends Phaser.Scene {
   /** Larghezza di design e offset per centrare il blocco-contenuti (800px) in 16:9. */
   private designW = DESIGN_W;
   private ox = 0;
+  /** Oggetti del tooltip veicolo (scheda al passaggio del mouse), distrutti all'uscita. */
+  private vehicleTip: Array<{ destroy(): void }> = [];
 
   constructor() { super({ key: 'ShopScene' }); }
 
@@ -289,6 +291,8 @@ export default class ShopScene extends Phaser.Scene {
         fill: bgColor, radius: 8,
         stroke: selected ? UI.greenSig : UI.stroke, strokeAlpha: selected ? 0.9 : 0.5,
       }).setInteractive(true);
+      bg.on('pointerover', () => this.showVehicleTooltip(key)); // scheda completa (descrizione + specifiche)
+      bg.on('pointerout',  () => this.hideVehicleTooltip());
 
       // Anteprima reale: sprite veicolo (sbiadito se non posseduto) + torretta statica (canna mg, in avanti)
       this.add.image(vx + 50, py + 30, `vehicle_${key}`).setScale(0.7 / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
@@ -320,6 +324,25 @@ export default class ShopScene extends Phaser.Scene {
         }
       }
     });
+  }
+
+  /** Scheda veicolo (al passaggio del mouse): nome, descrizione e specifiche CV/peso/velocità + bonus. */
+  private showVehicleTooltip(key: string) {
+    this.hideVehicleTooltip();
+    const v = VEHICLES[key];
+    const cx = this.designW / 2, cy = 352;
+    const keep = <T extends { destroy(): void }>(o: T): T => { this.vehicleTip.push(o); return o; };
+    keep(Ui.box(this, cx, cy, 600, 116, { fill: 0x0a0a14, fillAlpha: 0.98, radius: 10, stroke: UI.blueLine, strokeAlpha: 0.85 }).setDepth(60));
+    keep(Ui.text(this, cx, cy - 48, t(v.name), { fontSize: '15px', color: UI.blueBright, fontStyle: 'bold' }).setOrigin(0.5).setDepth(61));
+    keep(Ui.text(this, cx, cy - 28, t(v.desc), { fontSize: '11px', color: '#9a9488', fontStyle: 'italic', align: 'center', wordWrap: { width: 560 } }).setOrigin(0.5, 0).setDepth(61));
+    keep(Ui.text(this, cx, cy + 18, t('shop.vehSpecs', { hp: v.horsepower, w: v.weight, sp: v.topSpeed }), { fontSize: '13px', color: UI.gold, fontStyle: 'bold' }).setOrigin(0.5).setDepth(61));
+    const stats = `❤ +${v.healthBonus}     🛡 +${v.armorBonus}     👥 ${v.survivorSlots}     ⚡ ×${v.speedMult}     🔫 ×${v.fireMult}`;
+    keep(Ui.text(this, cx, cy + 40, stats, { fontSize: '12px', color: UI.text }).setOrigin(0.5).setDepth(61));
+  }
+
+  private hideVehicleTooltip() {
+    this.vehicleTip.forEach(o => o.destroy());
+    this.vehicleTip = [];
   }
 
   // ─── Continue button ─────────────────────────────────────────────────────────

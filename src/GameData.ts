@@ -8,16 +8,20 @@ export interface VehicleData {
   healthBonus: number; armorBonus: number; speedMult: number; fireMult: number;
   /** Posti per i sopravvissuti (oltre al guidatore): cap di reclutamento nel negozio. */
   survivorSlots: number;
+  /** Specifiche descrittive (flavor/UI, NON gameplay): cavalli (CV), peso (kg), velocità max (km/h). */
+  horsepower: number; weight: number; topSpeed: number;
+  /** Chiave i18n della descrizione del veicolo. */
+  desc: string;
 }
 
 export const VEHICLES: Record<string, VehicleData> = {
-  civilian_car:   { name: 'vehicle.civilian_car.name',   price:    0, color: 0x4a6fa5, healthBonus:   0, armorBonus:  0, speedMult: 1.0,  fireMult: 1.0, survivorSlots: 4 },
-  pickup:         { name: 'vehicle.pickup.name',         price:  300, color: 0x8B4513, healthBonus:  20, armorBonus: 10, speedMult: 1.0,  fireMult: 1.0, survivorSlots: 2 },
-  armored_van:    { name: 'vehicle.armored_van.name',    price:  700, color: 0x556B2F, healthBonus:  40, armorBonus: 20, speedMult: 0.9,  fireMult: 1.1, survivorSlots: 5 },
-  military_suv:   { name: 'vehicle.military_suv.name',   price: 1200, color: 0x4a5c2a, healthBonus:  60, armorBonus: 25, speedMult: 1.1,  fireMult: 1.2, survivorSlots: 4 },
-  armored_truck:  { name: 'vehicle.armored_truck.name',  price: 2000, color: 0x3a3a3a, healthBonus:  80, armorBonus: 35, speedMult: 0.85, fireMult: 1.0, survivorSlots: 4 },
-  heavy_military: { name: 'vehicle.heavy_military.name', price: 3000, color: 0x2a3a2a, healthBonus: 100, armorBonus: 45, speedMult: 0.8,  fireMult: 1.3, survivorSlots: 3 },
-  experimental:   { name: 'vehicle.experimental.name',   price: 5000, color: 0x220044, healthBonus:  60, armorBonus: 20, speedMult: 1.2,  fireMult: 1.5, survivorSlots: 2 },
+  civilian_car:   { name: 'vehicle.civilian_car.name',   price:    0, color: 0x4a6fa5, healthBonus:   0, armorBonus:  0, speedMult: 1.0,  fireMult: 1.0, survivorSlots: 4, horsepower:  90, weight: 1200, topSpeed: 160, desc: 'vehicle.civilian_car.desc' },
+  pickup:         { name: 'vehicle.pickup.name',         price:  300, color: 0x8B4513, healthBonus:  20, armorBonus: 10, speedMult: 1.0,  fireMult: 1.0, survivorSlots: 2, horsepower: 150, weight: 1900, topSpeed: 170, desc: 'vehicle.pickup.desc' },
+  armored_van:    { name: 'vehicle.armored_van.name',    price:  700, color: 0x556B2F, healthBonus:  40, armorBonus: 20, speedMult: 0.9,  fireMult: 1.1, survivorSlots: 5, horsepower: 140, weight: 2800, topSpeed: 130, desc: 'vehicle.armored_van.desc' },
+  military_suv:   { name: 'vehicle.military_suv.name',   price: 1200, color: 0x4a5c2a, healthBonus:  60, armorBonus: 25, speedMult: 1.1,  fireMult: 1.2, survivorSlots: 4, horsepower: 250, weight: 2600, topSpeed: 185, desc: 'vehicle.military_suv.desc' },
+  armored_truck:  { name: 'vehicle.armored_truck.name',  price: 2000, color: 0x3a3a3a, healthBonus:  80, armorBonus: 35, speedMult: 0.85, fireMult: 1.0, survivorSlots: 4, horsepower: 300, weight: 7000, topSpeed: 120, desc: 'vehicle.armored_truck.desc' },
+  heavy_military: { name: 'vehicle.heavy_military.name', price: 3000, color: 0x2a3a2a, healthBonus: 100, armorBonus: 45, speedMult: 0.8,  fireMult: 1.3, survivorSlots: 3, horsepower: 520, weight: 12000, topSpeed: 110, desc: 'vehicle.heavy_military.desc' },
+  experimental:   { name: 'vehicle.experimental.name',   price: 5000, color: 0x220044, healthBonus:  60, armorBonus: 20, speedMult: 1.2,  fireMult: 1.5, survivorSlots: 2, horsepower: 600, weight: 1600, topSpeed: 240, desc: 'vehicle.experimental.desc' },
 };
 
 export const VEHICLE_KEYS = Object.keys(VEHICLES);

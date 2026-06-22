@@ -189,6 +189,14 @@ const it: Record<string, string> = {
   'vehicle.armored_truck.name': 'Camion Corazzato',
   'vehicle.heavy_military.name': 'Mezzo Pesante',
   'vehicle.experimental.name': 'Veicolo Sper.',
+  'vehicle.civilian_car.desc': 'Berlina di famiglia requisita in fretta: niente blindatura, ma porta tutta la famiglia.',
+  'vehicle.pickup.desc': 'Robusto pickup da lavoro: cassone per il bottino, cabina stretta per le persone.',
+  'vehicle.armored_van.desc': 'Ex furgone portavalori: lamiere spesse e tanto spazio dentro, ma pesante e lento.',
+  'vehicle.military_suv.desc': 'SUV da ricognizione: agile e corazzato il giusto, con mitragliatrice sul tetto.',
+  'vehicle.armored_truck.desc': 'Autocarro militare placcato: lento a partire, ma una volta lanciato non lo ferma niente.',
+  'vehicle.heavy_military.desc': 'Mezzo da combattimento cingolato: una fortezza mobile, poco spazio per i passeggeri.',
+  'vehicle.experimental.desc': 'Prototipo a reazione del programma nero: velocissimo e letale, ma claustrofobico.',
+  'shop.vehSpecs': '{hp} CV · {w} kg · {sp} km/h',
 
   // ── Armi (nomi + descrizioni) ────────────────────────────────────────────────────
   'weapon.mg.name': 'Mitragliatrice',

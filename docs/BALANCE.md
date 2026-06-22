@@ -135,6 +135,8 @@ Fonte: `VEHICLES` (`GameData.ts`). Prezzo e colore sono già validati dall'art b
 - **×Cadenza** (`fireMult`) si moltiplica con l'upgrade Torretta (×1.25); **×Velocità** (`speedMult`) con l'upgrade Motore (×1.15).
 - *Tensione di design:* i mezzi più corazzati (Camion, Pesante) sono **più lenti** → trade-off tra incassare e schivare.
 - *Sperimentale = "glass cannon" (B3):* resta il re di **velocità (1.2)** e **cadenza (1.5)** ma con salute/armatura **ridimensionate** (60/20, sotto SUV/Camion/Pesante) → non è più dominante su tutti gli assi: è una scelta aggressiva ad alto rischio, non un upgrade assoluto. Più punitivo con lo scaling NG+ (§5).
+- **Capienza sopravvissuti** (`survivorSlots`, NON validata — gameplay): posti oltre al guidatore — Auto Civile **4**, Pickup **2**, Furgone **5**, SUV **4**, Camion **4**, Pesante **3**, Sperimentale **2**. I mezzi da combattimento sacrificano posti → trade-off potenza/persone; cambiando mezzo gli eccedenti restano indietro.
+- **Specifiche descrittive** (`horsepower`/`weight`/`topSpeed`, solo flavor/UI, NON gameplay): cavalli, peso (kg) e velocità max (km/h) mostrati nella scheda al passaggio del mouse nel negozio. NON influenzano il gioco (la velocità reale è `speedMult`); servono a "sentire" il mezzo. Descrizioni in `vehicle.<key>.desc`.
 
 ---
 
