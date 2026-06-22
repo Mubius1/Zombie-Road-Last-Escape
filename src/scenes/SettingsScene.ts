@@ -88,6 +88,17 @@ export default class SettingsScene extends Phaser.Scene {
 
   // ─── Volume ─────────────────────────────────────────────────────────────────
 
+  /** Traccia invisibile sopra le celle di uno slider: regolabile a CLIC o TRASCINANDO il mouse.
+   *  `onFrac` riceve la frazione 0..1 (clamp); `onCommit` (opzionale) scatta al rilascio. */
+  private dragTrack(startX: number, total: number, yc: number, h: number, onFrac: (f: number) => void, onCommit?: () => void) {
+    const track = this.add.rectangle(startX + total / 2, yc, total, h, 0x000000, 0).setInteractive({ useHandCursor: true });
+    const apply = (worldX: number) => onFrac(Phaser.Math.Clamp((worldX - startX) / total, 0, 1));
+    let dragging = false;
+    track.on('pointerdown', (p: Phaser.Input.Pointer) => { dragging = true; apply(p.worldX); });
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => { if (dragging) apply(p.worldX); });
+    this.input.on('pointerup', () => { if (dragging) { dragging = false; onCommit?.(); } });
+  }
+
   private buildVolume(y: number) {
     const cx = this.designW / 2;
     Ui.text(this, cx - 230, y - 28, t('settings.volume'), { fontSize: '15px', fontStyle: 'bold', color: UI.goldDim });
@@ -97,12 +108,12 @@ export default class SettingsScene extends Phaser.Scene {
     const startX = cx - total / 2;
     for (let i = 0; i < VOL_STEPS; i++) {
       const x = startX + i * (cellW + gap) + cellW / 2;
-      const cell = this.add.rectangle(x, y + 6, cellW, 30, 0x1a1a24)
-        .setStrokeStyle(1, UI.strokeSoft)
-        .setInteractive({ useHandCursor: true });
-      cell.on('pointerdown', () => this.setVolume((i + 1) / VOL_STEPS));
-      this.volCells.push(cell);
+      this.volCells.push(this.add.rectangle(x, y + 6, cellW, 30, 0x1a1a24).setStrokeStyle(1, UI.strokeSoft));
     }
+    // Clic o TRASCINA per regolare (continuo); l'anteprima sonora suona al RILASCIO (non a ogni frame).
+    this.dragTrack(startX, total, y + 6, 34,
+      f => { Settings.volume = f; this.refreshVolume(); },
+      () => this.playPreview());
 
     this.muteBtn = Ui.text(this, cx, y + 42, t('settings.mute'), { fontSize: '14px', color: UI.muted })
       .setOrigin(0.5).setInteractive({ useHandCursor: true });
@@ -147,12 +158,11 @@ export default class SettingsScene extends Phaser.Scene {
     const startX = cx - total / 2;
     for (let i = 0; i < BRIGHT_STEPS; i++) {
       const x = startX + i * (cellW + gap) + cellW / 2;
-      const cell = this.add.rectangle(x, y + 6, cellW, 30, 0x1a1a24)
-        .setStrokeStyle(1, UI.strokeSoft)
-        .setInteractive({ useHandCursor: true });
-      cell.on('pointerdown', () => this.setBrightness(BRIGHT_MIN + i * BRIGHT_STEP));
-      this.brightCells.push(cell);
+      this.brightCells.push(this.add.rectangle(x, y + 6, cellW, 30, 0x1a1a24).setStrokeStyle(1, UI.strokeSoft));
     }
+    // Clic o TRASCINA per regolare (continuo); anteprima live via applyBrightness in setBrightness.
+    const bMax = BRIGHT_MIN + (BRIGHT_STEPS - 1) * BRIGHT_STEP;
+    this.dragTrack(startX, total, y + 6, 34, f => this.setBrightness(BRIGHT_MIN + f * (bMax - BRIGHT_MIN)));
     Ui.text(this, cx - 230, y + 30, t('settings.brightnessDesc'), { fontSize: '11px', color: UI.faint });
     this.refreshBrightness();
   }
@@ -407,8 +417,8 @@ export default class SettingsScene extends Phaser.Scene {
   /** Pagina GENERALE: lingua + accessibilità (daltonismo). */
   private buildGeneralPage() {
     this.pageHeader(t('settings.catGeneral'));
-    this.buildLanguage(H / 2 - 120);
-    this.buildBrightness(H / 2 + 10);
+    this.buildBrightness(H / 2 - 120); // Luminosità: prima opzione in alto
+    this.buildLanguage(H / 2 + 10);
     this.buildColorblind(H / 2 + 130);
     this.pageFooter();
   }
