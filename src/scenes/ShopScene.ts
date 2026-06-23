@@ -163,8 +163,8 @@ export default class ShopScene extends Phaser.Scene {
     const px = 14 + this.ox, py = 76;
     const vName = t(VEHICLES[this.currentVehicle]?.name ?? '');
     Ui.text(this, px, py, t('shop.upgrades'), { fontSize: '13px', color: UI.blueInfo, fontStyle: 'bold' });
-    // Sottotitolo: chiarisce che il catalogo è di QUESTO veicolo (potenziamenti per-veicolo).
-    Ui.text(this, px + 96, py + 1, t('shop.upgradesFor', { v: vName }), { fontSize: '10px', color: UI.faint });
+    // Sottotitolo (allineato a destra del pannello, così non tocca l'header): catalogo di QUESTO veicolo.
+    Ui.text(this, px + 434, py + 2, t('shop.upgradesFor', { v: vName }), { fontSize: '10px', color: UI.faint }).setOrigin(1, 0);
 
     // 'repair' è universale; gli altri dipendono dal catalogo del veicolo CORRENTE.
     const catalog = (VEHICLES[this.currentVehicle]?.upgrades ?? []) as string[];
@@ -201,9 +201,11 @@ export default class ShopScene extends Phaser.Scene {
   }
 
   private drawWeaponsPanel() {
-    const px = 14 + this.ox, py = 322;
-    this.drawDivider(py - 4);
-    Ui.text(this, px, py, t('shop.weapons'), { fontSize: '13px', color: '#ff9944', fontStyle: 'bold' });
+    // Alzato (la griglia potenziamenti compatta ha liberato spazio sopra) e ri-spaziato: titolo SOPRA
+    // le card, descrizione SOTTO le card e sopra il divisore dei veicoli (niente più sovrapposizioni).
+    const px = 14 + this.ox, py = 300;
+    this.drawDivider(py - 8);
+    Ui.text(this, px, py - 4, t('shop.weapons'), { fontSize: '13px', color: '#ff9944', fontStyle: 'bold' });
 
     WEAPON_KEYS.forEach((key, i) => {
       const w        = WEAPONS[key];
@@ -212,19 +214,20 @@ export default class ShopScene extends Phaser.Scene {
       const selected = this.currentWeapon === key;
       const canBuy   = !owned && this.money >= w.price;
       const bgColor  = selected ? 0x1a1200 : owned ? 0x0e0e0e : 0x080808;
+      const cy       = py + 50; // centro card (82×72 → top py+14, bottom py+86): sotto il titolo
 
-      const bg = Ui.box(this, wx + 40, py + 46, 82, 72, { fill: bgColor, radius: 7, stroke: UI.stroke, strokeAlpha: 0.5 })
+      const bg = Ui.box(this, wx + 40, cy, 82, 72, { fill: bgColor, radius: 7, stroke: UI.stroke, strokeAlpha: 0.5 })
         .setInteractive(true);
 
       // Anteprima reale: il proiettile dell'arma (razzo dedicato; bullet tinto per le altre)
       const projKey = key === 'rockets' ? 'rocket' : 'bullet';
       // bullet/rocket sono texture sovracampionate (OS_G) → scala ÷OVERSAMPLE.
-      this.add.image(wx + 40, py + 22, projKey)
+      this.add.image(wx + 40, cy - 24, projKey)
         .setTint(w.color).setScale((key === 'rockets' ? 1.7 : 2.4) / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
-      Ui.text(this, wx + 40, py + 32, t(w.name), { fontSize: '10px', color: owned ? UI.text : '#444444', wordWrap: { width: 78 }, align: 'center' }).setOrigin(0.5, 0);
+      Ui.text(this, wx + 40, cy - 14, t(w.name), { fontSize: '10px', color: owned ? UI.text : '#444444', wordWrap: { width: 78 }, align: 'center' }).setOrigin(0.5, 0);
 
       if (owned) {
-        Ui.text(this, wx + 40, py + 68, selected ? t('shop.activeWeapon') : t('shop.use'),
+        Ui.text(this, wx + 40, cy + 22, selected ? t('shop.activeWeapon') : t('shop.use'),
           { fontSize: '10px', color: selected ? UI.goldDim : UI.blueUse }).setOrigin(0.5);
         if (!selected) {
           bg.on('pointerover',  () => bg.setFillStyle(0x1a1400));
@@ -232,8 +235,8 @@ export default class ShopScene extends Phaser.Scene {
           bg.on('pointerdown',  () => this.selectWeapon(key));
         }
       } else {
-        Ui.text(this, wx + 40, py + 56, `★${w.price}`, { fontSize: '11px', color: canBuy ? UI.gold : '#443333' }).setOrigin(0.5);
-        Ui.text(this, wx + 40, py + 70, canBuy ? t('shop.buy') : '🔒', { fontSize: '11px', color: canBuy ? UI.amber : UI.disabled }).setOrigin(0.5);
+        Ui.text(this, wx + 40, cy + 10, `★${w.price}`, { fontSize: '11px', color: canBuy ? UI.gold : '#443333' }).setOrigin(0.5);
+        Ui.text(this, wx + 40, cy + 24, canBuy ? t('shop.buy') : '🔒', { fontSize: '11px', color: canBuy ? UI.amber : UI.disabled }).setOrigin(0.5);
         if (canBuy) {
           bg.on('pointerover',  () => bg.setFillStyle(0x1a1000));
           bg.on('pointerout',   () => bg.setFillStyle(bgColor));
@@ -244,7 +247,7 @@ export default class ShopScene extends Phaser.Scene {
       }
     });
 
-    // Descrizione arma attiva
+    // Descrizione arma attiva (sotto le card, ben sopra il divisore dei veicoli a y=418)
     Ui.text(this, px, py + 92, t('shop.weaponDesc', { desc: t(WEAPONS[this.currentWeapon].desc) }),
       { fontSize: '11px', color: '#888866' });
   }
@@ -359,11 +362,12 @@ export default class ShopScene extends Phaser.Scene {
       bg.on('pointerover', () => this.showVehicleTooltip(key)); // scheda completa (descrizione + specifiche)
       bg.on('pointerout',  () => this.hideVehicleTooltip());
 
-      // Anteprima reale: sprite veicolo (sbiadito se non posseduto) + torretta statica (canna mg, in avanti)
-      this.add.image(vx + 50, py + 30, `vehicle_${key}`).setScale(0.7 / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
-      this.add.image(vx + 50 + (TURRET_DX[key] ?? 8) * 0.7, py + 30, 'aim_turret_mg')
-        .setOrigin(0.11, 0.5).setScale(0.7 / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
-      Ui.text(this, vx + 50, py + 50, t(v.name), {
+      // Anteprima reale: sprite veicolo (sbiadito se non posseduto) + torretta statica (canna mg, in avanti).
+      // Scala 0.58 (era 0.7): i mezzi larghi (camion) restavano dentro al bordo della card da 106px.
+      this.add.image(vx + 50, py + 28, `vehicle_${key}`).setScale(0.58 / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
+      this.add.image(vx + 50 + (TURRET_DX[key] ?? 8) * 0.58, py + 28, 'aim_turret_mg')
+        .setOrigin(0.11, 0.5).setScale(0.58 / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
+      Ui.text(this, vx + 50, py + 46, t(v.name), {
         fontSize: '10px', color: owned ? UI.text : '#444444', wordWrap: { width: 100 }, align: 'center',
       }).setOrigin(0.5, 0);
 
