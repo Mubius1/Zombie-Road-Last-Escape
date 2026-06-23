@@ -300,6 +300,25 @@ Fonte: `SHOP_ITEMS` (`ShopScene.ts`).
 | Cecchino | colpo forte (danno 5) allo zombi più resistente davanti | ogni 2,2 s |
 | Artificiere | tasto C: granata ad area (raggio 110, danno 8) | ricarica 5,5 s |
 
+### Loop di sopravvivenza dei sopravvissuti (M1–M4 🔒)
+Reclutare non è più "prendili tutti": è un loop di gestione (recluta · sfama · proteggi · perdi · salva). Numeri-sorgente in `GameData.FOOD` e nelle costanti di `GameScene.ts`/`ShopScene.ts`.
+
+| Leva | Valore | Dove |
+|---|---|---|
+| Reclutamenti per sosta | **1** | `recruitLockMission` (M1) |
+| Cibo: scorta max · iniziale | **120 · 40** | `FOOD.max` · `FOOD.start` (M2) |
+| Fabbisogno per sopravvissuto / missione | **10** | `FOOD.perSurvivor` |
+| Razione (negozio) | **+40 cibo / 100★** | `FOOD.rationFood` · `FOOD.rationCost` |
+| Ferimento: prob. · soglia colpo · soglia salute | **25% · ≥8 danno · <35%** | `INJURY_CHANCE` · `INJURY_HEAVY_DMG` · `INJURY_HP_THRESHOLD` (M3) |
+| Cura ferito (negozio; ½ col Medico) | **60★** | `HEAL_COST` |
+| Fame → abbandono | **2 missioni consecutive** | `STARVE_MISSIONS_TO_LEAVE` |
+| Perdita alla morte | **1 sopravvissuto** (oltre al pedaggio monete) | `endGame` |
+| Salvataggio strada: raggio · scorta · finestra · ripiego | **72 · 4 s · 16 s · +60★** | `RESCUE_RADIUS` · `ESCORT_MS` · `RESCUE_DEADLINE_MS` · `RESCUE_FALLBACK_COINS` (M4) |
+
+- **Affamato/ferito** = abilità SPENTA per la missione (gancio `hasActiveSurvivor`, vale per tutti e 7). La fame si **proietta dal vivo** nel negozio (🍖✗) mentre compri razioni.
+- **Persistenza checkpoint:** cibo/fame consumati UNA volta a missione (`foodMission` evita il doppio addebito al retry dopo la morte); ferimento e reclutamento-su-strada entrano nel checkpoint solo a **fine missione** → si perdono alla morte (coerente col modello B).
+- Il salvataggio su strada (evento `rescue`) recupera le perdite: scortalo (stagli vicino per 4 s) per recuperarlo se hai **slot + cibo**, altrimenti monete di ripiego. La sosta espone a un cluster.
+
 ### Letture economiche di riferimento
 - **"Ripara tutto" (80)** è il pozzo ricorrente: a corazza/serbatoio rovinati è quasi sempre il miglior acquisto (rompe la spirale di §4).
 - Costo primo veicolo utile (Pickup 300) ≈ punteggio **2400** in una missione (`300·8`). Utile come metro per tarare la generosità degli spawn.

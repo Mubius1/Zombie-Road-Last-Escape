@@ -45,7 +45,7 @@ Questo documento è la **fonte di verità** del *design del gioco*: cosa fa il g
 1. **Missione** (`GameScene`): il veicolo è ancorato a sinistra (`VEHICLE_X = 150`) e si muove solo in verticale dentro la strada. Il mondo scorre, gli zombi arrivano da destra. **Miri col mouse** (la torretta segue il puntatore nell'arco frontale) e spari verso il mirino tenendo premuto. Avanzi accumulando **distanza**.
 2. **Boss** all'**82%** della distanza di missione: mentre il boss è vivo l'avanzamento si congela e gli spawn ordinari si fermano — è un duello.
 3. **Missione completata** (boss sconfitto → completamento): converti il punteggio in **monete**, salvi lo stato dei componenti, passi al **Negozio**.
-4. **Negozio** (`ShopScene` — "GARAGE"): spendi le monete in riparazioni, potenziamenti, armi, veicoli; recluti **gratis** un sopravvissuto tra 3 offerti. Poi parte la missione successiva.
+4. **Negozio** (`ShopScene` — "GARAGE"): spendi le monete in riparazioni, potenziamenti, armi, veicoli; recluti **un** sopravvissuto (max 1 a sosta) tra 3 offerti, compri **razioni** e **curi** i feriti. Poi parte la missione successiva.
 5. **Loop a cicli**: regioni e boss ciclano (§3). Completare il ciclo delle **7 regioni** dà una **vittoria di ciclo** (schermata dedicata), poi si prosegue in **endless+** con difficoltà crescente (§10). L'obiettivo di lungo termine resta il **record** di missione/punteggio (salvato, §11).
 
 ---
@@ -202,16 +202,19 @@ Tra le missioni, nel **GARAGE** (`ShopScene`):
 - **Potenziamenti** (una tantum): Corazza rinforzata (−20% danno), Motore potenziato (+15% velocità), Torretta migliorata (+25% cadenza), Serbatoio extra (+30 carburante max). Più **Ripara tutto** (ripetibile): componenti → 100%.
 - **Armi**: acquisto + equipaggiamento.
 - **Veicoli**: 7 mezzi da Auto Civile (gratis) a Veicolo Sperimentale (5000) — salute/armatura/velocità/cadenza crescenti.
-- **Sopravvissuti**: a ogni visita ne vengono offerti **3 a caso** tra i non reclutati; se ne prende **1 gratis**. Effetti passivi continui:
+- **Sopravvissuti — loop di sopravvivenza** (non più "collezione gratis"): a ogni visita **3 offerti** tra i non reclutati, **max 1 reclutamento per sosta** (M1). Ogni sopravvissuto a bordo **mangia** ogni missione (scorta di campagna; M2): a corto di cibo diventa **affamato** → abilità spenta finché non compri **razioni**. Un **colpo pesante** può **ferirlo** (abilità spenta finché non lo curi al negozio; M3); la **fame prolungata** (≥2 missioni) lo fa **andare via**, e la **morte** ne porta via **uno** (oltre al pedaggio monete). Le perdite si recuperano **salvandone uno sulla strada** (evento di scorta a rischio; M4). Le abilità sono attive **solo se sazio e illeso**:
 
 | Sopravvissuto | Abilità |
 |---|---|
 | **Meccanico** | +8 salute al componente messo peggio, ogni 5 s |
-| **Medico** | rigenera 0,3 salute/s |
+| **Medico** | rigenera 0,3 salute/s (e dimezza il costo di cura dei feriti) |
 | **Soldato** | colpo automatico verso lo zombi più vicino, ogni 1,6 s |
 | **Esploratore** | taniche di carburante ogni 5 s (anziché 7,5 s) |
+| **Saccheggiatore** | +12% monete a fine missione |
+| **Cecchino** | colpo forte allo zombi più resistente davanti, ogni 2,2 s |
+| **Artificiere** | tasto **C**: lancia una granata ad area a ricarica |
 
-> Prezzi, costi e curva di potere in [BALANCE.md §8](BALANCE.md#8--negozio-ed-economia).
+> Reclutamento, cibo, ferimento, cura, abbandono e salvataggio: numeri-sorgente in [BALANCE.md §8](BALANCE.md#8--negozio-ed-economia).
 
 ---
 
