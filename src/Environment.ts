@@ -36,25 +36,6 @@ const PW = 480;
 const DECAL_CAP = 24;       // decal vivi max a schermo
 const BLOOD_THROTTLE = 110; // ms minimi tra due pozze di sangue
 
-// ── Proiezione obliqua 3/4 (single source dell'angolo; vedi ART_BIBLE_AMBIENTE §15) ──
-// Tutto l'effetto 3/4 (lean, tetto, ombra) deriva da QUESTA costante: cambi l'angolo qui → cambia
-// coerente ovunque. Look "Dead Nation": gli oggetti dei bordi appoggiano a terra invece di galleggiare.
-const OBLIQUE = {
-  SHEAR:      0.20, // shift orizzontale per unità di altezza (un solo angolo condiviso)
-  TOP_DEPTH:  0.22, // frazione dell'altezza resa come "tetto" foreshortened
-  SHADOW_DX:  0.45, // direzione ombra a contatto (basso-DESTRA → luce alto-sinistra)
-  SHADOW_LEN: 0.55, // lunghezza ombra in frazione dell'altezza
-  SHADOW_A:   0.35, // alpha ombra a contatto
-  TOP_LIGHT:  0.18, // mix verso bianco del top-face (luce alto-sinistra)
-  FACE_DARK:  0.22, // mix verso nero della faccia in ombra (lato basso-destra)
-  FAR_SCALE:  0.85, // scala oggetti layer far (più lontani → più piccoli) — usata in M3
-  NEAR_SCALE: 1.15, // scala oggetti layer near (più vicini → più grandi) — usata in M3
-  NEAR_SHADOW_MUL: 1.6, // ombre near più lunghe (più vicino alla camera)
-} as const;
-const SKY_BAND = 0.45; // frazione di roadTop tenuta come striscia di cielo; il resto è piano di terra
-// Shear tiling-safe: lo shift dipende SOLO da y → preserva la periodicità orizzontale (tileable a PW).
-const shearX = (x: number, y: number, H: number) => x + OBLIQUE.SHEAR * (H - y);
-
 export default class Environment {
   private scene: Phaser.Scene;
   private g: RoadGeom;
@@ -105,38 +86,6 @@ export default class Environment {
     return this.scene.make.graphics({ add: false } as any) as TexGraphics;
   }
   private has(key: string) { return this.scene.textures.exists(key); }
-
-  /** Ombra a contatto: ellisse scura schiacciata alla base, offset verso basso-destra (luce alto-sinistra).
-   *  È ciò che fa "sedere" un oggetto sul piano di terra invece di farlo galleggiare. */
-  private contactShadow(g: TexGraphics, x: number, baseY: number, w: number, h: number, mul = 1) {
-    g.fillStyle(Environment.mix(this.env.groundColor, 0x000000, 0.55), OBLIQUE.SHADOW_A);
-    g.fillEllipse(x + w / 2 + w * OBLIQUE.SHADOW_DX * 0.5, baseY - 2, w * 1.1, Math.max(3, h * 0.16 * mul));
-  }
-
-  /** Volume 3/4 obliquo: ombra a contatto → corpo shearato (lean condiviso) → faccia destra in ombra →
-   *  top-face chiaro (accenno di tetto, luce alto-sinistra). Tiling-safe: lo shear dipende solo da y. */
-  private obliqueBox(g: TexGraphics, x: number, baseY: number, w: number, h: number, H: number, color: number, scale = 1, shadowMul = 1) {
-    const sw = w * scale, sh = h * scale, topY = baseY - sh;
-    this.contactShadow(g, x, baseY, sw, sh, shadowMul);
-    const bl = shearX(x, baseY, H), br = shearX(x + sw, baseY, H);
-    const tl = shearX(x, topY, H),  tr = shearX(x + sw, topY, H);
-    g.fillStyle(color);
-    g.fillPoints([{ x: bl, y: baseY }, { x: br, y: baseY }, { x: tr, y: topY }, { x: tl, y: topY }], true);
-    // faccia in ombra: striscia destra leggermente più scura (coerente con la luce alto-sinistra)
-    g.fillStyle(Environment.mix(color, 0x000000, OBLIQUE.FACE_DARK), 0.5);
-    g.fillPoints([
-      { x: shearX(x + sw * 0.82, baseY, H), y: baseY }, { x: br, y: baseY },
-      { x: tr, y: topY }, { x: shearX(x + sw * 0.82, topY, H), y: topY },
-    ], true);
-    // top-face: trapezio chiaro spostato in alto (profondità tetto foreshortened)
-    const td = sh * OBLIQUE.TOP_DEPTH;
-    g.fillStyle(Environment.mix(color, 0xffffff, OBLIQUE.TOP_LIGHT));
-    g.fillPoints([
-      { x: tl, y: topY }, { x: tr, y: topY },
-      { x: shearX(x + sw + td * 0.5, topY - td, H), y: topY - td },
-      { x: shearX(x + td * 0.5, topY - td, H), y: topY - td },
-    ], true);
-  }
 
   // ─── §4 Superficie: asfalto tileato + ciglio (rumble) ───────────────────────
   private buildAsphaltTexture() {
@@ -217,120 +166,110 @@ export default class Environment {
     if (!this.has(nearKey)) { const g = this.gfx(); this.drawNear(g, NH); g.generateTexture(nearKey, PW, NH); g.destroy(); }
   }
 
-  /** Skyline lontana 3/4 (volumi obliqui ancorati al piano di terra). Pattern periodici → tileable. */
+  /** Skyline lontana (ancorata in basso = orizzonte). Pattern periodici → tileable. */
   private drawFar(g: TexGraphics, FH: number) {
-    const B = FH; // baseline (orizzonte): i piedi degli oggetti appoggiano qui
+    const B = FH; // baseline (orizzonte)
     const lit = (i: number, j: number) => ((i * 7 + j * 13 + this.idx) % 3) === 0; // finestre deterministiche
-    // neon emissivo (M4) sul top-face dei palazzi della Città Finale; altrove un tetto neutro chiaro.
     switch (this.idx) {
-      case 0: { // Città Distrutta — palazzi (volumi 3/4 con finestre shearate)
+      case 0: { // Città Distrutta — palazzi
         for (let i = 0; i < 6; i++) {
           const bx = i * 80 + 6, bw = 56, bh = 48 + Math.round(Math.sin(i / 6 * Math.PI * 2) * 16) + (i % 2) * 14;
-          this.obliqueBox(g, bx, B, bw, bh, FH, 0x202028);
+          g.fillStyle(0x202028); g.fillRect(bx, B - bh, bw, bh);
           for (let wy = B - bh + 6, j = 0; wy < B - 6; wy += 12, j++)
             for (let wx = bx + 5, k = 0; wx < bx + bw - 5; wx += 12, k++) {
-              g.fillStyle(lit(j, k) ? 0x2a2a16 : 0x0c0c1c); g.fillRect(shearX(wx, wy, FH), wy, 5, 7);
+              g.fillStyle(lit(j, k) ? 0x2a2a16 : 0x0c0c1c); g.fillRect(wx, wy, 5, 7);
             }
         }
         break;
       }
-      case 1: { // Autostrada — alberi morti (volumi sottili) + guardrail shearato
+      case 1: { // Autostrada — guardrail + alberi morti
+        g.fillStyle(0x2a2418);
         for (let i = 0; i < 3; i++) {
           const tx = i * 160 + 50, th = 60 + (i % 2) * 16;
-          this.obliqueBox(g, tx, B, 5, th, FH, 0x2a2418);
-          g.fillStyle(0x2a2418);
-          g.fillRect(shearX(tx - 14, B - th + 8, FH), B - th + 8, 12, 4);
-          g.fillRect(shearX(tx + 5, B - th + 16, FH), B - th + 16, 13, 4);
+          g.fillRect(tx, B - th, 5, th);
+          g.fillRect(tx - 14, B - th + 8, 12, 4); g.fillRect(tx + 5, B - th + 16, 13, 4);
         }
         g.fillStyle(0x3a3830); g.fillRect(0, B - 14, PW, 4);
-        for (let x = 0; x < PW; x += 40) g.fillRect(shearX(x, B - 20, FH), B - 20, 4, 12);
+        for (let x = 0; x < PW; x += 40) g.fillRect(x, B - 20, 4, 12);
         break;
       }
-      case 2: { // Deserto — dune (terreno, restano piatte) + cactus (volume)
+      case 2: { // Deserto — dune + cactus
         g.fillStyle(0x3a2c14);
         for (let x = 0; x <= PW; x += 2) {
           const crest = 30 + Math.round(Math.sin(x / PW * Math.PI * 2 * 4) * 16 + Math.sin(x / PW * Math.PI * 2 * 8) * 7);
           g.fillRect(x, B - crest, 2, crest + 2);
         }
+        g.fillStyle(0x2a441a);
         for (let i = 0; i < 3; i++) {
           const x = i * 160 + 70;
-          this.obliqueBox(g, x + 4, B, 10, 50, FH, 0x2a441a);
-          g.fillStyle(0x2a441a);
-          g.fillRect(shearX(x - 8, B - 38, FH), B - 38, 12, 8); g.fillRect(shearX(x - 8, B - 50, FH), B - 50, 8, 14);
-          g.fillRect(shearX(x + 14, B - 33, FH), B - 33, 12, 8); g.fillRect(shearX(x + 20, B - 45, FH), B - 45, 8, 14);
+          g.fillRect(x + 4, B - 50, 10, 50);
+          g.fillRect(x - 8, B - 38, 12, 8); g.fillRect(x - 8, B - 50, 8, 14);
+          g.fillRect(x + 14, B - 33, 12, 8); g.fillRect(x + 20, B - 45, 8, 14);
         }
         break;
       }
-      case 3: { // Foresta — pini (triangoli shearati + ombra a contatto)
+      case 3: { // Foresta — pini a triangolo (periodo 40)
+        g.fillStyle(0x0a1e08);
         for (let i = 0; i < 12; i++) {
           const cx = i * 40 + 20, th = 56 + (i % 3) * 8;
-          this.contactShadow(g, cx - 17, B, 34, th);
-          for (let dy = 0; dy < th; dy++) { const hw = Math.round((dy / th) * 17), y = B - th + dy; g.fillStyle(0x0a1e08); g.fillRect(shearX(cx - hw, y, FH), y, hw * 2, 3); }
-          g.fillStyle(0x0a1e08); g.fillRect(shearX(cx - 4, B - 8, FH), B - 8, 8, 10);
-          // accenno di luce sul fianco alto-sinistra (volume)
-          g.fillStyle(Environment.mix(0x0a1e08, 0xffffff, OBLIQUE.TOP_LIGHT * 0.7));
-          for (let dy = 2; dy < th; dy += 3) { const hw = Math.round((dy / th) * 17), y = B - th + dy; g.fillRect(shearX(cx - hw, y, FH), y, Math.max(1, Math.round(hw * 0.5)), 2); }
+          for (let dy = 0; dy < th; dy++) { const hw = Math.round((dy / th) * 17); g.fillRect(cx - hw, B - th + dy, hw * 2, 3); }
+          g.fillRect(cx - 4, B - 8, 8, 10);
         }
         break;
       }
-      case 4: { // Zona Industriale — fabbrica (slab basso) + ciminiere (volumi)
+      case 4: { // Zona Industriale — fabbrica + ciminiere
         g.fillStyle(0x1e1c18); g.fillRect(0, B - 34, PW, 34);
+        g.fillStyle(0x2a2420);
         for (let i = 0; i < 4; i++) {
           const sx = i * 120 + 40, sh = 64 + (i % 3) * 18;
-          this.obliqueBox(g, sx, B, 20, sh, FH, 0x2a2420);
-          g.fillStyle(0x181614); g.fillCircle(shearX(sx + 10, B - sh, FH), B - sh, 9); // fumo alla bocca
+          g.fillRect(sx, B - sh, 20, sh); g.fillRect(sx - 4, B - sh, 28, 8);
+          g.fillStyle(0x181614); g.fillCircle(sx + 10, B - sh - 8, 9); g.fillStyle(0x2a2420);
         }
         break;
       }
-      case 5: { // Base Militare — torrette (volumi) + recinzione shearata
+      case 5: { // Base Militare — recinzione + torrette
+        g.fillStyle(0x1e2a14);
         for (let i = 0; i < 2; i++) {
           const tx = i * 240 + 90;
-          this.obliqueBox(g, tx + 4, B, 7, 74, FH, 0x1e2a14);
-          g.fillStyle(0x1e2a14);
-          g.fillRect(shearX(tx - 18, B - 80, FH), B - 80, 46, 18); g.fillRect(shearX(tx - 20, B - 86, FH), B - 86, 50, 8);
-          g.fillStyle(0x446644); g.fillRect(shearX(tx - 6, B - 74, FH), B - 74, 5, 10);
+          g.fillRect(tx + 4, B - 74, 7, 74); g.fillRect(tx - 18, B - 80, 46, 18); g.fillRect(tx - 20, B - 86, 50, 8);
+          g.fillStyle(0x446644); g.fillRect(tx - 6, B - 74, 5, 10); g.fillStyle(0x1e2a14);
         }
         g.fillStyle(0x2a3820); g.fillRect(0, B - 18, PW, 4);
-        for (let x = 0; x < PW; x += 16) g.fillRect(shearX(x, B - 26, FH), B - 26, 3, 12);
+        for (let x = 0; x < PW; x += 16) g.fillRect(x, B - 26, 3, 12);
         break;
       }
-      default: { // 6 Città Finale — grattacieli al neon (volumi + finestre shearate)
+      default: { // 6 Città Finale — grattacieli al neon
         for (let i = 0; i < 6; i++) {
           const bx = i * 80 + 4, bw = 60, bh = 64 + Math.round(Math.sin(i / 6 * Math.PI * 2) * 22);
-          this.obliqueBox(g, bx, B, bw, bh, FH, 0x1a0c22);
-          // M4: riflesso neon freddo sul tetto (cattura la luce obliqua)
-          g.fillStyle(Environment.mix(0x1a0c22, this.emissive, 0.25));
-          g.fillRect(shearX(bx + 4, B - bh, FH), B - bh - Math.round(bh * OBLIQUE.TOP_DEPTH) + 1, bw - 8, 2);
+          g.fillStyle(0x1a0c22); g.fillRect(bx, B - bh, bw, bh);
           for (let wy = B - bh + 6, j = 0; wy < B - 6; wy += 11, j++)
             for (let wx = bx + 5, k = 0; wx < bx + bw - 5; wx += 10, k++) {
-              g.fillStyle(lit(j, k) ? 0x4a1a6a : 0x0e060e); g.fillRect(shearX(wx, wy, FH), wy, 4, 6);
+              g.fillStyle(lit(j, k) ? 0x4a1a6a : 0x0e060e); g.fillRect(wx, wy, 4, 6);
             }
         }
       }
     }
   }
 
-  /** Dettaglio vicino (ancorato in alto = appena sotto la strada). M3: shear coerente col `far` → la
-   *  fascia che TOCCA la strada legge 3/4 come il resto, non alzato piatto. (Tiling-safe: shift solo da y.) */
-  private drawNear(g: TexGraphics, NH: number) {
-    const sx = (x: number, y: number) => shearX(x, y, NH); // stessa proiezione del far
+  /** Dettaglio vicino (ancorato in alto = appena sotto la strada). */
+  private drawNear(g: TexGraphics, _NH: number) {
     switch (this.idx) {
-      case 0: g.fillStyle(0x252520); for (let x = 0; x < PW; x += 96) g.fillRect(sx(x + 10, 4), 4, 38, 14); break;
+      case 0: g.fillStyle(0x252520); for (let x = 0; x < PW; x += 96) g.fillRect(x + 10, 4, 38, 14); break;
       case 1:
         g.fillStyle(0x3a3830); g.fillRect(0, 2, PW, 4); g.fillRect(0, 14, PW, 3);
-        for (let x = 0; x < PW; x += 40) g.fillRect(sx(x, 0), 0, 4, 18);
+        for (let x = 0; x < PW; x += 40) g.fillRect(x, 0, 4, 18);
         break;
       case 2: g.fillStyle(0x3a2c12); for (let x = 0; x <= PW; x += 2) { const h = Math.round(Math.sin(x / PW * Math.PI * 2 * 4) * 12 + 8); g.fillRect(x, 0, 2, h); } break;
-      case 3: g.fillStyle(0x0c1a08); for (let x = 0; x < PW; x += 48) g.fillRect(sx(x, 0), 0, 32, 8 + (x % 4) * 3); break;
+      case 3: g.fillStyle(0x0c1a08); for (let x = 0; x < PW; x += 48) g.fillRect(x, 0, 32, 8 + (x % 4) * 3); break;
       case 4:
         g.fillStyle(0x302820); g.fillRect(0, 4, PW, 10); g.fillRect(0, 20, PW, 6);
-        for (let x = 0; x < PW; x += 80) g.fillRect(sx(x, 0), 0, 14, 28);
+        for (let x = 0; x < PW; x += 80) g.fillRect(x, 0, 14, 28);
         break;
-      case 5: g.fillStyle(0x2a2a1a); for (let x = 0; x < PW; x += 48) { g.fillRect(sx(x, 2), 2, 42, 14); g.fillRect(sx(x + 5, 0), 0, 32, 10); } break;
+      case 5: g.fillStyle(0x2a2a1a); for (let x = 0; x < PW; x += 48) { g.fillRect(x, 2, 42, 14); g.fillRect(x + 5, 0, 32, 10); } break;
       default:
-        g.fillStyle(0x160820); g.fillRect(0, 0, PW, NH);
-        g.fillStyle(0x220c30); for (let x = 0; x < PW; x += 120) g.fillRect(sx(x, 0), 0, 50, 40);
-        g.fillStyle(this.emissive, 0.10); for (let x = 30; x < PW; x += 120) g.fillEllipse(sx(x, 18), 18, 60, 14);
+        g.fillStyle(0x160820); g.fillRect(0, 0, PW, _NH);
+        g.fillStyle(0x220c30); for (let x = 0; x < PW; x += 120) g.fillRect(x, 0, 50, 40);
+        g.fillStyle(this.emissive, 0.10); for (let x = 30; x < PW; x += 120) g.fillEllipse(x, 18, 60, 14);
     }
   }
 
@@ -385,14 +324,8 @@ export default class Environment {
     const sky = this.scene.add.graphics().setDepth(0.1);
     const top = Environment.mix(this.env.skyColor, 0x000000, 0.30);
     const hor = Environment.mix(this.env.skyColor, this.hazeColor, 0.7);
-    // M1: il cielo si comprime in una striscia alta velata; sotto, un PIANO DI TERRA continuo su cui i
-    // decoratori del layer far appoggiano (niente più skyline che galleggia all'orizzonte).
-    const skyH = Math.round(roadTop * SKY_BAND);
-    sky.fillGradientStyle(top, top, hor, hor, 1, 1, 1, 1); sky.fillRect(0, 0, W, skyH);
-    const gTop = Environment.mix(this.env.groundColor, this.hazeColor, 0.55);
-    const gBot = Environment.mix(this.env.groundColor, 0x000000, 0.22);
-    sky.fillGradientStyle(gTop, gTop, gBot, gBot, 1, 1, 1, 1); sky.fillRect(0, skyH, W, roadTop - skyH);
-    sky.fillStyle(this.hazeColor, 0.25); sky.fillRect(0, skyH - 6, W, 10); // foschia sulla linea d'orizzonte
+    sky.fillGradientStyle(top, top, hor, hor, 1, 1, 1, 1); sky.fillRect(0, 0, W, roadTop);
+    sky.fillStyle(this.hazeColor, 0.22); sky.fillRect(0, roadTop - 16, W, 16);
 
     // §5 parallasse: skyline lontana (lenta) + terreno vicino (veloce)
     this.far  = this.scene.add.tileSprite(W / 2, roadTop / 2, W, roadTop, `env_far_${this.idx}`).setDepth(0.2);
