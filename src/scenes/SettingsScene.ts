@@ -4,6 +4,7 @@ import Settings from '../Settings';
 import { enterScreen } from '../PostFx';
 import SoundManager from '../SoundManager';
 import Ui, { UI, MENU_VIGNETTE } from '../Ui';
+import MenuPad, { Focusable } from '../MenuPad';
 import { setupCamera, applyBrightness, DESIGN_W, RESOLUTIONS, currentResolution } from '../Config';
 import { t, LANGS } from '../i18n';
 
@@ -36,6 +37,14 @@ export default class SettingsScene extends Phaser.Scene {
   private preview?: SoundManager;
   /** Larghezza di design (800 in 4:3, maggiore in 16:9). */
   private designW = DESIGN_W;
+  /** Elementi navigabili col gamepad (con opzioni ←/→ per slider e selettori), raccolti a ogni create(). */
+  private navItems: Array<{ go: Focusable; opts?: { onLeft?: () => void; onRight?: () => void; onActivate?: () => void } }> = [];
+
+  /** Registra un elemento per la navigazione col pad e lo restituisce. */
+  private reg<T extends Focusable>(go: T, opts?: { onLeft?: () => void; onRight?: () => void; onActivate?: () => void }): T {
+    this.navItems.push({ go, opts });
+    return go;
+  }
 
   constructor() { super({ key: 'SettingsScene' }); }
 
@@ -49,6 +58,7 @@ export default class SettingsScene extends Phaser.Scene {
     this.designW = setupCamera(this).designW;
     this.volCells = [];
     this.brightCells = [];
+    this.navItems = [];
     const inGame = this.fromKey === 'GameScene';
 
     // In pausa: fondo semi-trasparente così si intravede la partita congelata.
@@ -72,6 +82,10 @@ export default class SettingsScene extends Phaser.Scene {
       default:         this.buildHub(inGame);
     }
 
+    // Navigazione col gamepad: B = indietro (dall'hub esce, da una categoria torna all'hub).
+    const pad = new MenuPad(this).setBack(() => { if (this.page === 'hub') this.goBack(); else this.goPage('hub'); });
+    for (const { go, opts } of this.navItems) pad.add(go, opts);
+
     // L'overlay filmico proprio serve solo a scena piena (dal menu); in pausa quello del
     // gioco è già sotto. Niente fade quando si naviga tra categorie (snappy).
     if (!this.nav) Juice.fadeIn(this);
@@ -82,7 +96,7 @@ export default class SettingsScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.preview?.dispose());
   }
 
-  update() {
+  override update() {
     Juice.jitterGrain(this.grain);
   }
 
@@ -90,13 +104,14 @@ export default class SettingsScene extends Phaser.Scene {
 
   /** Traccia invisibile sopra le celle di uno slider: regolabile a CLIC o TRASCINANDO il mouse.
    *  `onFrac` riceve la frazione 0..1 (clamp); `onCommit` (opzionale) scatta al rilascio. */
-  private dragTrack(startX: number, total: number, yc: number, h: number, onFrac: (f: number) => void, onCommit?: () => void) {
+  private dragTrack(startX: number, total: number, yc: number, h: number, onFrac: (f: number) => void, onCommit?: () => void): Phaser.GameObjects.Rectangle {
     const track = this.add.rectangle(startX + total / 2, yc, total, h, 0x000000, 0).setInteractive({ useHandCursor: true });
     const apply = (worldX: number) => onFrac(Phaser.Math.Clamp((worldX - startX) / total, 0, 1));
     let dragging = false;
     track.on('pointerdown', (p: Phaser.Input.Pointer) => { dragging = true; apply(p.worldX); });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => { if (dragging) apply(p.worldX); });
     this.input.on('pointerup', () => { if (dragging) { dragging = false; onCommit?.(); } });
+    return track;
   }
 
   private buildVolume(y: number) {
@@ -111,15 +126,19 @@ export default class SettingsScene extends Phaser.Scene {
       this.volCells.push(this.add.rectangle(x, y + 6, cellW, 30, 0x1a1a24).setStrokeStyle(1, UI.strokeSoft));
     }
     // Clic o TRASCINA per regolare (continuo); l'anteprima sonora suona al RILASCIO (non a ogni frame).
-    this.dragTrack(startX, total, y + 6, 34,
+    const track = this.dragTrack(startX, total, y + 6, 34,
       f => { Settings.volume = f; this.refreshVolume(); },
       () => this.playPreview());
+    // Col pad: ←/→ regolano a passi di 1/VOL_STEPS; A non fa nulla (no-op, evita il pointerdown della traccia).
+    const stepVol = (d: number) => { Settings.volume = Phaser.Math.Clamp(Settings.volume + d / VOL_STEPS, 0, 1); this.refreshVolume(); this.playPreview(); };
+    this.reg(track, { onLeft: () => stepVol(-1), onRight: () => stepVol(1), onActivate: () => {} });
 
     this.muteBtn = Ui.text(this, cx, y + 42, t('settings.mute'), { fontSize: '14px', color: UI.muted })
       .setOrigin(0.5).setInteractive({ useHandCursor: true });
     this.muteBtn.on('pointerover', () => this.muteBtn.setColor(UI.redSoft));
     this.muteBtn.on('pointerout',  () => this.refreshVolume());
     this.muteBtn.on('pointerdown', () => this.setVolume(0));
+    this.reg(this.muteBtn);
 
     this.refreshVolume();
   }
@@ -162,7 +181,9 @@ export default class SettingsScene extends Phaser.Scene {
     }
     // Clic o TRASCINA per regolare (continuo); anteprima live via applyBrightness in setBrightness.
     const bMax = BRIGHT_MIN + (BRIGHT_STEPS - 1) * BRIGHT_STEP;
-    this.dragTrack(startX, total, y + 6, 34, f => this.setBrightness(BRIGHT_MIN + f * (bMax - BRIGHT_MIN)));
+    const track = this.dragTrack(startX, total, y + 6, 34, f => this.setBrightness(BRIGHT_MIN + f * (bMax - BRIGHT_MIN)));
+    const stepBright = (d: number) => this.setBrightness(Phaser.Math.Clamp(Settings.brightness + d * BRIGHT_STEP, BRIGHT_MIN, bMax));
+    this.reg(track, { onLeft: () => stepBright(-1), onRight: () => stepBright(1), onActivate: () => {} });
     Ui.text(this, cx - 230, y + 30, t('settings.brightnessDesc'), { fontSize: '11px', color: UI.faint });
     this.refreshBrightness();
   }
@@ -208,6 +229,7 @@ export default class SettingsScene extends Phaser.Scene {
       chip.on('pointerover', () => chip.setFillStyle(on ? 0x1d3d22 : 0x32323c));
       chip.on('pointerout',  () => chip.setFillStyle(on ? 0x16301a : 0x26262e));
       chip.on('pointerdown', () => { set(!get()); this.scene.restart({ from: this.fromKey, page: this.page, nav: true }); });
+      this.reg(chip);
     });
   }
 
@@ -228,8 +250,10 @@ export default class SettingsScene extends Phaser.Scene {
       return;
     }
 
-    Ui.text(this, cx + 185, y - 5, res.label, { fontSize: '15px', fontStyle: 'bold', color: UI.blueBright }).setOrigin(0.5);
+    const label = Ui.text(this, cx + 185, y - 5, res.label, { fontSize: '15px', fontStyle: 'bold', color: UI.blueBright }).setOrigin(0.5);
     Ui.text(this, cx + 185, y + 13, res.aspect, { fontSize: '10px', color: UI.faint }).setOrigin(0.5);
+    // Col pad il selettore (label) si focalizza e ←/→ ciclano (A = avanti); le frecce restano per il mouse.
+    this.reg(label, { onLeft: () => this.cycleResolution(-1), onRight: () => this.cycleResolution(1), onActivate: () => this.cycleResolution(1) });
 
     const arrow = (x: number, char: string, dir: number) => {
       const a = Ui.text(this, x, y + 2, char, { fontSize: '24px', fontStyle: 'bold', color: UI.blue })
@@ -247,7 +271,7 @@ export default class SettingsScene extends Phaser.Scene {
     const n = RESOLUTIONS.length;
     const next = ((Settings.resolution % n) + n + dir) % n;
     Settings.resolution = next;
-    const r = RESOLUTIONS[next];
+    const r = RESOLUTIONS[next]!;
     this.scale.setGameSize(r.w, r.h);     // cambia la risoluzione interna nativa
     this.scene.restart({ from: this.fromKey, page: this.page, nav: true }); // ridisegna il layout alla nuova dimensione
   }
@@ -269,6 +293,7 @@ export default class SettingsScene extends Phaser.Scene {
       fontSize: '16px', fontStyle: 'bold', color: on ? UI.greenSoft : UI.blue,
     }).setOrigin(0.5);
 
+    this.reg(btn);
     btn.on('pointerover', () => btn.setFillStyle(this.scale.isFullscreen ? 0x1d3d22 : 0x2c2c48));
     btn.on('pointerout',  () => btn.setFillStyle(this.scale.isFullscreen ? 0x16301a : 0x222238));
     btn.on('pointerdown', () => {
@@ -300,6 +325,7 @@ export default class SettingsScene extends Phaser.Scene {
       fontSize: '15px', fontStyle: 'bold', color: on ? UI.greenSoft : UI.blue,
     }).setOrigin(0.5);
 
+    this.reg(btn);
     btn.on('pointerover', () => btn.setFillStyle(Settings.colorblind ? 0x1d3d22 : 0x2c2c48));
     btn.on('pointerout',  () => btn.setFillStyle(Settings.colorblind ? 0x16301a : 0x222238));
     btn.on('pointerdown', () => {
@@ -319,7 +345,8 @@ export default class SettingsScene extends Phaser.Scene {
     Ui.text(this, cx - 230, y + 8, t('settings.languageDesc'), { fontSize: '11px', color: UI.faint });
 
     const idx = Math.max(0, LANGS.findIndex(l => l.code === Settings.language));
-    Ui.text(this, cx + 185, y + 2, LANGS[idx].label, { fontSize: '15px', fontStyle: 'bold', color: UI.blueBright }).setOrigin(0.5);
+    const label = Ui.text(this, cx + 185, y + 2, LANGS[idx]!.label, { fontSize: '15px', fontStyle: 'bold', color: UI.blueBright }).setOrigin(0.5);
+    this.reg(label, { onLeft: () => this.cycleLanguage(-1), onRight: () => this.cycleLanguage(1), onActivate: () => this.cycleLanguage(1) });
 
     const arrow = (x: number, char: string, dir: number) => {
       const a = Ui.text(this, x, y + 2, char, { fontSize: '24px', fontStyle: 'bold', color: UI.blue })
@@ -337,7 +364,7 @@ export default class SettingsScene extends Phaser.Scene {
     const n = LANGS.length;
     const idx = Math.max(0, LANGS.findIndex(l => l.code === Settings.language));
     const next = ((idx % n) + n + dir) % n;
-    Settings.language = LANGS[next].code;
+    Settings.language = LANGS[next]!.code;
     // In pausa l'HUD vive in GameScene (congelata sotto l'overlay): ricostruiscilo nella nuova lingua.
     if (this.fromKey === 'GameScene') {
       (this.scene.get('GameScene') as Phaser.Scene & { refreshLanguage?: () => void }).refreshLanguage?.();
@@ -349,10 +376,10 @@ export default class SettingsScene extends Phaser.Scene {
 
   private buildBack(inGame: boolean) {
     const by = H / 2 + 236; // dentro il box 540×576 (REG5: prima a H-64 sbordava sotto il pannello)
-    Ui.button(this, this.designW / 2, by, 240, 46, inGame ? t('settings.resume') : t('settings.back'), {
+    this.reg(Ui.button(this, this.designW / 2, by, 240, 46, inGame ? t('settings.resume') : t('settings.back'), {
       fill: 0x14141f, hover: 0x1d1d2e, border: UI.blueLine, color: UI.blue,
       onClick: () => this.goBack(),
-    });
+    }).bg);
 
     if (inGame) {
       const exit = Ui.text(this, this.designW / 2, H / 2 + 264, t('settings.exitToMenu'), { fontSize: '12px', color: '#886677' })
@@ -360,6 +387,7 @@ export default class SettingsScene extends Phaser.Scene {
       exit.on('pointerover', () => exit.setColor(UI.redSoft));
       exit.on('pointerout',  () => exit.setColor('#886677'));
       exit.on('pointerdown', () => this.exitToMenu());
+      this.reg(exit);
     }
 
     this.input.keyboard?.on('keydown-ESC', () => this.goBack());
@@ -389,9 +417,9 @@ export default class SettingsScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     const cat = { fill: 0x14141f, hover: 0x1d1d2e, border: UI.blueLine, color: UI.blue } as const;
-    Ui.button(this, cx, H / 2 - 74, 320, 56, t('settings.catGraphics'), { ...cat, onClick: () => this.goPage('graphics') });
-    Ui.button(this, cx, H / 2,      320, 56, t('settings.catAudio'),    { ...cat, onClick: () => this.goPage('audio') });
-    Ui.button(this, cx, H / 2 + 74, 320, 56, t('settings.catGeneral'),  { ...cat, onClick: () => this.goPage('general') });
+    this.reg(Ui.button(this, cx, H / 2 - 74, 320, 56, t('settings.catGraphics'), { ...cat, onClick: () => this.goPage('graphics') }).bg);
+    this.reg(Ui.button(this, cx, H / 2,      320, 56, t('settings.catAudio'),    { ...cat, onClick: () => this.goPage('audio') }).bg);
+    this.reg(Ui.button(this, cx, H / 2 + 74, 320, 56, t('settings.catGeneral'),  { ...cat, onClick: () => this.goPage('general') }).bg);
 
     this.buildBack(inGame); // Riprendi/ESC (in pausa) o Indietro (dal menu) + "Esci al menu"
   }
@@ -433,10 +461,10 @@ export default class SettingsScene extends Phaser.Scene {
 
   /** Pulsante "‹ Categorie" → hub (stessa posizione di INDIETRO/RIPRENDI). */
   private pageFooter() {
-    Ui.button(this, this.designW / 2, H / 2 + 236, 240, 46, t('settings.backHub'), {
+    this.reg(Ui.button(this, this.designW / 2, H / 2 + 236, 240, 46, t('settings.backHub'), {
       fill: 0x14141f, hover: 0x1d1d2e, border: UI.blueLine, color: UI.blue,
       onClick: () => this.goPage('hub'),
-    });
+    }).bg);
   }
 
   /** Toggle booleano generico (opzioni Grafica): aggiornamento in-place, niente restart. */
@@ -454,6 +482,7 @@ export default class SettingsScene extends Phaser.Scene {
       fontSize: '15px', fontStyle: 'bold', color: on ? UI.greenSoft : UI.blue,
     }).setOrigin(0.5);
 
+    this.reg(btn);
     btn.on('pointerover', () => btn.setFillStyle(get() ? 0x1d3d22 : 0x2c2c48));
     btn.on('pointerout',  () => btn.setFillStyle(get() ? fillOn : fillOff));
     btn.on('pointerdown', () => {

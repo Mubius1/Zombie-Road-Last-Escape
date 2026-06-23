@@ -54,7 +54,7 @@ export const DEFAULT_RESOLUTION_INDEX = 0;
 
 /** Preset attualmente scelto (con fallback alla baseline se l'indice è fuori range). */
 export function currentResolution(): Resolution {
-  return RESOLUTIONS[Settings.resolution] ?? RESOLUTIONS[DEFAULT_RESOLUTION_INDEX];
+  return RESOLUTIONS[Settings.resolution] ?? RESOLUTIONS[DEFAULT_RESOLUTION_INDEX]!;
 }
 
 /** Larghezza dello spazio di design per la dimensione attuale del canvas. */

@@ -44,6 +44,7 @@ I tre pilastri del titolo (coesione · game feel · rifinitura) tradotti sulla U
 | **Banner d'ambiente** (nome regione, tween) | `GameScene.buildWorld()` (in fondo) |
 | **Barra del boss** (label + barra HP) | `GameScene.showBossHUD()` / `hideBossHUD()` / `updateBoss()` |
 | **Avviso "⚠ GIGANTE!"** | `GameScene` (spawn gigante) |
+| **Hint "🎮 Controller collegato"** | `GameScene.showPadHint()` (connessione gamepad) |
 | **Overlay esito** (missione completata · game over · boss sconfitto) | `GameScene` → `missionComplete()`, `gameOver()`, sezioni boss |
 | **Negozio / garage** (header, potenziamenti, armi, sopravvissuti, veicoli) | `src/scenes/ShopScene.ts` |
 | **Impostazioni** (volume, effetti schermo, risoluzione, schermo intero, daltonismo, indietro/riprendi) | `src/scenes/SettingsScene.ts` |
@@ -268,7 +269,7 @@ Niente icone importate: usiamo **caratteri** coerenti, sempre con lo stesso sign
 **Layout — fascia superiore `y 0–84`** (pannello `add.graphics`: `#000000` alpha `0.62`, linea divisoria `0x333333` alpha 0.7 a `y 46`):
 - **SALUTE** (x 8): label `11px` `#ff8888`; barra `110×10` su fondo `0x331111`, fill `0xff4444` (vedi soglie).
 - **CARBURANTE** (x 138): label `11px` `#ffaa66`; barra `110×10` su fondo `0x331800`, fill `0xff8800`; numero `%` `#ffaa66`.
-- **PUNTEGGIO** (x 290, y 6): `13px` `#ffffff`. · **MISS.N** (x 620): `12px` `#88ff88`. · **[N aggrappati]** (x 700): `11px` `#ff8800`. · **arma** (x 620, y 22): `10px` `#ffaa44` (nome arma in maiuscolo).
+- **PUNTEGGIO** (x 290, y 6): `13px` `#ffffff`. · **MISS.N** (x 620): `12px` `#88ff88`. · **[N aggrappati]** (x 700): `11px` `#ff8800`. · **arma + munizioni** (x 620, y 22): `10px` `#ffaa44` — `NOME · 24` per le armi finite, `NOME · ∞` per la MG (pivot horror). **Rosso** `#ff6666` quando la riserva è a **0** (a secco → ripiego sulla MG). Aggiornato per-frame (le munizioni calano sparando).
 - **COMBO** (x 470, y 6, visibile da catena ≥2): `13px` bold; testo `COMBO {n}  ×{mult}`; **colore per livello** del moltiplicatore (×1 `#888899` → ×2 oro `#ffee44` → ×3 ambra `#ffaa00` → ×4 `#ff8888` → ×5 rosso `#ff6666`) — `COMBO_COLORS` in `GameScene`; **pop di scala** a ogni uccisione.
 - **SCATTO** (x W-10, y 22, allineato a destra): `11px` bold; `↯ SCATTO` verde `#44cc44` quando pronto, `↯ Ns` `#556677` durante la ricarica (`DASH_COOLDOWN` 5s).
 - **SOVRACCARICO** (Overdrive, A3) (x 10, y 98, sotto il pannello a sinistra): label `10px` `#ffaa66` `SOVRACCARICO`; barra `120×9` su fondo `0x1a1a1a`, fill che sale di tono col carico — carica `#cc8a2a` → **pronto** `#ffcc33` → **attivo** `#fff0a0`; a destra `PRONTO ▶F` / `ATTIVO!` `10px` bold (oro) come ridondanza non cromatica. La barra si carica dalle uccisioni in combo; a piena, **F** la spende (vedi `GAME_DESIGN §7`, `BALANCE §1`). Palette ambra/oro **CB-safe**.
@@ -294,6 +295,7 @@ Niente icone importate: usiamo **caratteri** coerenti, sempre con lo stesso sign
 - **Banner d'ambiente** (`buildWorld`): nome regione in maiuscolo, `16px` bold `#ffffff` `stroke #000000` 4px, depth 18, **entra in tween** (alpha 0→1, sale di 8px in 400ms) e **si dissolve** dopo 1.6s. È il "cartello di livello" cinematografico.
 - **Barra del boss** (`showBossHUD`, cx, y 96): scatola `448×20` `#000000` alpha 0.85 (depth 22); **fill HP** `440×14` `0xcc0000` origine sinistra (depth 23); **label** nome boss `13px` bold `#ff6666` `stroke #000000` 3px. Entra/esce in tween alpha (400/500ms). Il rosso-sangue firma segnala "questa è LA minaccia".
 - **Avviso "⚠ GIGANTE!"** (centro schermo): testo d'allerta di breve durata all'arrivo del gigante — accento rosso/ambra, lettura immediata "in arrivo qualcosa di grosso".
+- **Hint "🎮 Controller collegato"** (alto carreggiata, `ROAD_TOP+24`): conferma discreta e transitoria alla connessione di un gamepad (la Gamepad API del browser espone il pad solo dopo il primo input). Accento `info` blu (`#88ccff`), `stroke #000000` 4px per leggibilità sul mondo vivo, fade-out dopo ~1,4 s. Stringa i18n `game.padConnected`. Non è un allarme: timbro neutro/informativo, mai rosso.
 
 **Reazione:** tutto via tween (entrata/uscita), mai pop secco. La barra boss si svuota mutando `displayWidth` del fill.
 
@@ -308,6 +310,8 @@ Niente icone importate: usiamo **caratteri** coerenti, sempre con lo stesso sign
 - **Missione completata** (`missionComplete`): scatola `500×260` `#000000` alpha 0.9 (depth 30); titolo **"MISSIONE COMPLETATA!"** `32px` bold verde-conferma `#88ff44` stroke `#006600`; righe valore `20/16/18/15px` — Punteggio `#ffffff`, Distanza `#aaaaff` (blu-info), Monete `+N` `#ffee44` (oro), Totale `#ffcc00`; hint `"[ SPAZIO ] per il negozio"` `13px` `#556677` (faint).
 - **Game over** (`gameOver`): scatola `440×300` `#000000` alpha 0.88 (depth 30); **"GAME OVER"** `46px` bold `#ff3333` stroke `#880000`; **motivo** `16px` `#ffaaaa` (rosso-pericolo); Punteggio `22px` `#ffffff`; Distanza `16px` `#aaaaff`; **"Riprendi dalla Missione N"** `14px` `#ffaa66` (campagna a checkpoint: si rigioca la missione) + eventuale **"Costo di recupero: −X★"** `12px` `#ffaaaa` (il pedaggio del 25%, solo se >0); hint `"[ SPAZIO ] riprova la missione"` `14px` `#556677` (faint). Più "[ M ] Torna al menu".
 - **Boss sconfitto:** testo centrale `"BOSS SCONFITTO! +N monete"` + nascondi barra boss; lega col **flash a schermo** (`Juice.flash`) e l'hit-stop dell'uccisione boss (vedi budget `ART_BIBLE_ZOMBIES`).
+
+> 🎮 **Prompt adattivi all'input (pad).** Gli hint di comando degli esiti mostrano i **tasti dell'input attivo** e si aggiornano **dal vivo**: con la tastiera `[ SPAZIO ]`/`[ M ]`, col **gamepad** `[ A ]`/`[ B ]` (chiavi i18n `game.toShop`/`game.restart`/`game.toMenu` + variante `…Pad`; pilotaggio in `GameScene.refreshOutcomePrompts`, deciso da `usingPad`). Il pad attiva gli esiti come la tastiera: **A**/Start = SPAZIO (negozio/riprova), **B** = M (menu).
 
 **Reazione:** transizione verso `ShopScene`/restart via `Juice.go` (fade). Il game over e l'uccisione boss sono accompagnati dal feedback schermo del titolo (flash/shake/hit-stop) — l'UI è l'**ultimo strato** di una risposta multisensoriale sincronizzata.
 

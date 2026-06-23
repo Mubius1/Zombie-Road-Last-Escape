@@ -21,7 +21,7 @@ export function buildVehicleTexture(scene: Phaser.Scene, vehicleKey: string) {
   const key = `vehicle_${vehicleKey}`;
   if (scene.textures.exists(key)) return;
 
-  const base    = VEHICLES[vehicleKey].color;
+  const base    = VEHICLES[vehicleKey]!.color;
   const light   = mixColor(base, 0xffffff, 0.30);
   const lighter = mixColor(base, 0xffffff, 0.52);
   const dark    = mixColor(base, 0x000000, 0.34);

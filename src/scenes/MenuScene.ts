@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import Juice from '../Juice';
 import Ui, { UI } from '../Ui';
+import MenuPad from '../MenuPad';
 import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { resetRunState, getRun, restoreRun } from '../RunState';
@@ -39,7 +40,7 @@ export default class MenuScene extends Phaser.Scene {
     this.grain = Ui.enter(this);
   }
 
-  update() {
+  override update() {
     Juice.jitterGrain(this.grain);
   }
 
@@ -184,6 +185,10 @@ export default class MenuScene extends Phaser.Scene {
       }));
     }
     for (const b of btns) { b.bg.setDepth(10); b.txt.setDepth(11); }
+
+    // Navigazione col gamepad: registra i pulsanti nell'ordine verticale (Start = attiva il focalizzato).
+    const nav = new MenuPad(this);
+    for (const b of btns) nav.add(b.bg);
   }
 
   /** Una corsa è in corso se il registry ha stato oltre i default (es. uscita al menu dalla pausa). */

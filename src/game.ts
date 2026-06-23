@@ -10,8 +10,6 @@ import { currentResolution } from './Config';
 import { PIPELINES } from './PostFx';
 
 export default class Game {
-  private game?: Phaser.Game;
-
   start() {
     // La risoluzione interna è quella scelta dal giocatore (Impostazioni → Config.RESOLUTIONS);
     // lo Scale Manager FIT la adatta poi a finestra/schermo intero mantenendo le proporzioni.
@@ -26,6 +24,9 @@ export default class Game {
         width: res.w,
         height: res.h,
       },
+      // Gamepad: schema di input alternativo (tastiera+mouse restano il default). La Gamepad API del
+      // browser non espone i pad finché l'utente non preme un tasto dopo il load → si attiva al primo input.
+      input: { gamepad: true },
       scene: [MenuScene, GameScene, ShopScene, RouteScene, DebugScene, SettingsScene, PauseScene],
       // Post-processing GLSL (WebGL): Phaser instrada le sottoclassi PostFXPipeline
       // al registro post-pipeline al boot. Su Canvas (fallback AUTO) viene ignorato.
@@ -40,6 +41,6 @@ export default class Game {
       },
     };
 
-    this.game = new Phaser.Game(config);
+    new Phaser.Game(config);
   }
 }

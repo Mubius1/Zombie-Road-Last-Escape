@@ -183,6 +183,16 @@ La regola di luce **alto-sinistra** vale anche qui. Obiettivo: **nessuna zona pi
 5. **Reazione di luce agli eventi** — ✅ `Juice.lightFlash()`/`flash()`/`bloomBurst()` su razzi ed esplosioni; la strada **riceve** il lampo (gli overlay non la coprono).
 6. **Overlay filmico** (L8) — ✅ `Juice.addOverlay()`: vignetta + grana animata (`jitterGrain`) + **scanline CRT** (`fx_scanline`, alpha `0.06`) + **aberrazione cromatica** ai bordi. Grana ≤ `0.05` alpha.
 
+### 6.2 🩸 Penombra & visione limitata (pivot survival horror)
+
+Il **buio è un avversario**, non solo un mood ([GAME_DESIGN §0](GAME_DESIGN.md), pilastro 3). Tre interventi, in `Environment.buildObjects` + grading:
+
+1. **Velo di penombra** — un rettangolo nero `alpha 0.32` su **tutto** il mondo a **depth 1.8**: sopra terreno/parallasse/asfalto (0.1–0.5), **sotto** i fari (2.6) e le **entità** (9–10). L'ambiente sprofonda nel nero, ma **veicolo e zombi restano leggibili** (la leggibilità della minaccia vince sempre). *Sempre attivo* (non gated da `screenFx`); la slider **Luminosità** resta la valvola del giocatore.
+2. **Fari = luce primaria** — il cono additivo passa da `alpha 0.5` a **0.62**: contro la penombra è la **sola luce affidabile** su cui leggere ciò che arriva. Perfora il velo (depth 2.6 > 1.8).
+3. **Corridoio + grading cupo** — i bordi corsia (`rl`) più scuri (gradiente `0.6`/`0.65`) → la carreggiata è un corridoio illuminato, il resto sprofonda. Il grading filmico (`filmParams`, solo con `screenFx`/WebGL) vira più cupo e desaturato: **exposure 0.9 · saturation 0.84 · contrast 1.12** (notte malata, meno "arcade").
+
+> **Regola horror:** abbassa l'ambiente, **non** la leggibilità del gameplay. Le minacce (entità, depth 9+) e la corsia centrale restano lette; sono lo **sfondo**, i **bordi** e le **distanze** a essere mangiati dal buio. Le cose "emergono" dal nero man mano che entrano nel cono dei fari / nella corsia illuminata.
+
 ---
 
 ## 7. Sistema di **decal** dinamici (L6) — la memoria della strada · ✅ fatto

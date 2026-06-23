@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { VEHICLES, Upgrades, WeaponType, WEAPONS, WEAPON_KEYS, FOOD, SURVIVORS } from '../GameData';
+import { VEHICLES, Upgrades, WeaponType, WEAPONS, WEAPON_KEYS, WEAPON_AMMO, weaponInfiniteAmmo, FOOD, SURVIVORS } from '../GameData';
 import SoundManager from '../SoundManager';
 import Juice from '../Juice';
 import { enterScreen, pulse, rampSpeed, resetKinetics } from '../PostFx';
@@ -17,17 +17,32 @@ import HudController from '../HudController';
 import BossController, { BossHost } from '../BossController';
 import { t } from '../i18n';
 import {
-  ROAD_TOP, ROAD_BOTTOM, ROAD_CENTER, BOSS_CONFIG, BOSS_ORDER,
+  ROAD_TOP, ROAD_BOTTOM, ROAD_CENTER,
 } from '../World';
-import type { BossType, ZombieType, ComponentKey } from '../World';
+import type { ZombieType, ComponentKey } from '../World';
 
 // Spazio di design: l'altezza è fissa (H), la larghezza varia col formato (designW,
 // più ampia in 16:9). La camera in zoom adatta tutto alla risoluzione nativa — vedi Config.ts.
 const H = 600;
 const VEHICLE_X = 150;
 const SCROLL_SPEED = 240;
+// Throttle del giocatore (pivot horror): l'acceleratore/freno modula lo scroll del mondo, con INERZIA.
+// 0 = fermo · 1 = scorrimento di riferimento (SCROLL_SPEED) · THROTTLE_MAX = tutto gas.
+// Senza gas il mezzo COASTA giù per attrito (niente auto-crociera): per restare in moto devi accelerare;
+// il freno aggiunge una decelerazione forte fino allo STOP totale. Valori derivati/in taratura (non 🔒).
+const THROTTLE_MAX = 1.6;
+const THROTTLE_ACCEL = 1.4;  // salita col gas (unità/s)
+const THROTTLE_DRAG = 0.5;   // attrito/inerzia: discesa quando NON acceleri (unità/s)
+const THROTTLE_BRAKE = 2.2;  // decelerazione extra del freno, sopra l'attrito (unità/s)
+// Gamepad (schema input alternativo): deadzone radiale stick, soglia minima grilletti, distanza mirino da stick.
+const PAD_DEADZONE = 0.25;
+const PAD_TRIGGER_MIN = 0.1;
+const PAD_AIM_DIST = 220;    // distanza fissa del mirino lungo l'angolo di mira (stick destro = direzione)
+// Indici standard mapping (Phaser Standard Gamepad) — nomi espliciti, non numeri magici sparsi.
+const PAD = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, START: 9, DUP: 12, DDOWN: 13, DLEFT: 14, DRIGHT: 15 } as const;
 const BASE_FUEL_DRAIN = 2.2;
 const MAX_FUEL = 100;
+const AMMO_PICKUP = 0.5;   // frazione di capacità ricaricata da una cassa di munizioni (mezzo caricatore)
 const BULLET_SPEED = 680;
 const STRIPE_W = 48, STRIPE_GAP = 82;
 const ATTACH_DAMAGE_INTERVAL = 1600;
@@ -96,8 +111,14 @@ const MAX_AIM = Phaser.Math.DegToRad(82); // arco frontale di mira (±82° da de
 const KNOCK = 220;        // impulso di rinculo dei colpi (px/s, decade) — solo game-feel
 const KNOCK_DECAY = 0.84; // decadimento del rinculo per frame
 // ── Densità "orda" (combat reboot): sferzate periodiche di nemici oltre allo spawn regolare. ──
-const SURGE_INTERVAL = 11500; // ms tra una sferzata e l'altra
-const SURGE_BASE = 4;         // chiamate di spawn extra per sferzata (cresce con la missione, ognuna può essere uno sciame)
+// Ritmo del terrore (pivot horror): il director alterna QUIETE tese (sagome isolate) e ONDATE serrate
+// (dread → burst), invece di una pressione costante. All'inizio di ogni ondata: stinger + drone al massimo.
+// La densità SCALA DAL BASSO: gentile alla missione 1 (veicolo base, solo MG, zero potenziamenti), sale
+// fino alla densità piena verso metà gioco (quando hai mezzi/armi/upgrade). Costanti derivate/in taratura (non 🔒).
+const CALM_INTERVAL = 3300;   // ms tra spawn nella quiete a M1 (cala ~110/missione, pavimento 1500)
+const BURST_INTERVAL = 760;   // ms tra spawn nell'ondata a M1 (cala ~40/missione, pavimento 300 → densità piena ~M12)
+const CALM_MS_MIN = 6500, CALM_MS_MAX = 10000; // durata della quiete (ms)
+const BURST_MS_BASE = 3000;   // durata base dell'ondata a M1 (+170 ms/missione)
 
 interface EnvConfig {
   name: string;
@@ -183,6 +204,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   zombies!: Phaser.Physics.Arcade.Group;
   private bullets!: Phaser.Physics.Arcade.Group;
   private fuelCans!: Phaser.Physics.Arcade.Group;
+  private ammoCrates!: Phaser.Physics.Arcade.Group; // casse di munizioni sulla strada (pivot horror)
   toxicClouds!: Phaser.Physics.Arcade.Group;
   private spitProjectiles!: Phaser.Physics.Arcade.Group; // proiettili dello Sputatore (A2)
   private hazards!: Phaser.Physics.Arcade.Group;         // ostacoli di corsia (A1)
@@ -253,6 +275,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private currentWeapon: WeaponType = 'mg';
   private ownedWeapons: WeaponType[] = ['mg'];
+  private ammo: Partial<Record<WeaponType, number>> = {}; // munizioni finite: riserva per arma (MG = ∞, non tracciata)
   private rockets!: Phaser.Physics.Arcade.Group;
 
   sfx: SoundManager | null = null;
@@ -270,6 +293,12 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wKey!: Phaser.Input.Keyboard.Key;
   private sKey!: Phaser.Input.Keyboard.Key;
+  private aKey!: Phaser.Input.Keyboard.Key; // freno (anche ←)
+  private dKey!: Phaser.Input.Keyboard.Key; // acceleratore (anche →)
+  private usingPad = false;                 // "last input wins": true mentre il giocatore usa il pad
+  // Prompt delle schermate di esito (game over / fine missione): mostrano i tasti TASTIERA o PAD secondo
+  // l'input attivo (aggiornati dal vivo). `base` = chiave i18n tastiera; la variante pad è `base + 'Pad'`.
+  private outcomePrompts: Array<{ txt: Phaser.GameObjects.Text; base: string }> = [];
   private spaceKey!: Phaser.Input.Keyboard.Key;
   private shiftKey!: Phaser.Input.Keyboard.Key;
   private cycleKey!: Phaser.Input.Keyboard.Key;
@@ -299,8 +328,13 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private lastFire = 0;
   private spawnTimer = 0;
-  private spawnInterval = 2100;
-  private surgeTimer = SURGE_INTERVAL;
+  private spawnPhase: 'calm' | 'burst' = 'calm'; // ritmo del terrore: quiete tesa ↔ ondata
+  private phaseTimer = 0;                          // ms residui nella fase corrente
+  // Atmosfera horror (pivot): cadenze di lamento e battito cardiaco (ms residui).
+  private moanTimer = 4000;
+  private heartTimer = 0;
+  private burstDreadUntil = 0;   // mentre un'ondata (ritmo dread→burst) è in corso, il drone va al massimo
+  private throttle = 1;          // throttle del giocatore: 0=fermo · 1=crociera · THROTTLE_MAX=gas (modula lo scroll)
 
   /** Larghezza dello spazio di design (800 in 4:3, maggiore in 16:9 → più strada). */
   designW = DESIGN_W;
@@ -330,7 +364,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       let streak = getRun(this.registry, 'starveStreak') ?? 0;
       streak = this.hungry.length > 0 ? streak + 1 : 0;
       if (streak >= STARVE_MISSIONS_TO_LEAVE && this.hungry.length > 0) {
-        const leaver = this.hungry[this.hungry.length - 1];
+        const leaver = this.hungry[this.hungry.length - 1]!;
         this.activeSurvivors = this.activeSurvivors.filter(k => k !== leaver);
         this.hungry  = this.hungry.filter(k => k !== leaver);
         this.injured = this.injured.filter(k => k !== leaver);
@@ -346,7 +380,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       setRun(this.registry, 'foodMission', this.missionNumber);
     }
 
-    const vData = VEHICLES[this.vehicleKey];
+    const vData = VEHICLES[this.vehicleKey]!;
     this.maxHealth       = 100 + vData.healthBonus + (this.upgrades.plating ? 30 : 0);
     this.health          = this.maxHealth;
     this.vehicleFireMult = vData.fireMult * (this.upgrades.turret ? 1.25 : 1.0);
@@ -361,15 +395,19 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
     this.score = 0;
     this.distance = 0;
+    this.throttle = 1;        // crociera a inizio missione (scene.restart non rilancia gli inizializzatori di campo)
+    this.outcomePrompts = []; // prompt esito ripuliti a ogni (ri)avvio
     this.alive = true;
     this.missionDone = false;
     // Track B1: nodo di percorso scelto in RouteScene → modificatori della missione (densità/hazard/monete).
     const route = routeNode(getRun(this.registry, 'routeModifier'));
     this.routeSpawnMult = route.spawnMult;
     this.routeMoneyMult = route.moneyMult;
-    this.spawnInterval = Math.round(Math.max(330, 1350 - (missionNum - 1) * 80) * route.spawnMult); // densità base × nodo
+    this.spawnPhase = 'calm';                                  // si parte nella quiete (tensione che monta)
+    // M1 (nuova partita): prima quiete PIENA = intro gentile col veicolo base e solo MG; dalle missioni
+    // successive è dimezzata (l'azione entra prima, hai più mezzi). Risolve "troppi nemici appena inizio".
+    this.phaseTimer = Phaser.Math.Between(CALM_MS_MIN, CALM_MS_MAX) * (this.missionNumber === 1 ? 1 : 0.5);
     this.spawnTimer = 0;
-    this.surgeTimer = SURGE_INTERVAL;
     this.stripes = [];
     this.attachedZombies = [];
     this.mechanicTimer = 0;
@@ -381,6 +419,12 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.currentWeapon = getRun(this.registry, 'currentWeapon') ?? 'mg';
     this.ownedWeapons  = getRun(this.registry, 'ownedWeapons')  ?? ['mg'];
     if (!this.ownedWeapons.includes(this.currentWeapon)) this.currentWeapon = this.ownedWeapons[0] ?? 'mg';
+    // Munizioni finite (pivot horror): riserva caricata dalla run; le armi finite possedute senza
+    // entry (acquisto vecchio / save migrato) partono cariche (migrazione benigna). La MG resta ∞.
+    this.ammo = { ...(getRun(this.registry, 'ammo') ?? {}) };
+    for (const w of this.ownedWeapons) {
+      if (!weaponInfiniteAmmo(w) && this.ammo[w] === undefined) this.ammo[w] = WEAPON_AMMO[w];
+    }
 
     // CHECKPOINT (campagna a checkpoint): salva su disco lo stato d'inizio missione → "CONTINUA"
     // cross-sessione e ripristino alla morte (vedi endGame). Il registry è autorevole qui.
@@ -426,6 +470,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     const fuelDelay = this.hasActiveSurvivor('explorer') ? 5000 : 7500;
     this.time.addEvent({ delay: fuelDelay, callback: this.spawnFuelCan, callbackScope: this, loop: true });
     this.time.addEvent({ delay: Math.round(HAZARD_SPAWN_INTERVAL / route.hazardMult), callback: this.spawnHazard, callbackScope: this, loop: true }); // Track B1: frequenza × nodo
+    this.time.addEvent({ delay: 13000, callback: this.spawnAmmoCrate, callbackScope: this, loop: true }); // munizioni: casse rade (scarsità)
 
     // Audio
     const webAudio = this.sound as Phaser.Sound.WebAudioSoundManager;
@@ -433,6 +478,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       this.sfx = new SoundManager(webAudio.context);
       this.sfx.setVolume(Settings.volume);
       this.sfx.startEngine();
+      this.sfx.startAmbience();                     // drone d'angoscia (pivot horror)
     }
     // Ritorno dalle impostazioni (pausa ESC): riallinea il volume e riavvia il motore — ma SOLO se
     // la partita è ancora in corso, così un RESUME residuo non riaccende il motore "da morto"
@@ -441,6 +487,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       if (!this.alive || this.missionDone) return;
       this.sfx?.setVolume(Settings.volume);
       this.sfx?.startEngine();
+      this.sfx?.startAmbience();
     };
     this.events.on(Phaser.Scenes.Events.RESUME, onResume);
 
@@ -468,14 +515,18 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     Juice.fadeIn(this);
   }
 
-  update(time: number, delta: number) {
+  override update(time: number, delta: number) {
     if (!this.alive || this.missionDone) {
       // SPACE = "ricomincia" SOLO al game over. A fine missione lo SPACE è già gestito
       // dal listener dedicato (→ ShopScene) in triggerMissionComplete(): senza questo
       // guard lo stesso tasto farebbe partire ANCHE scene.restart(), che riesegue create()
       // (nuovo SoundManager + startEngine) e rianima la GameScene dietro al negozio.
       if (!this.alive && Phaser.Input.Keyboard.JustDown(this.spaceKey)) Juice.fadeAndRun(this, () => this.scene.restart());
-      rampSpeed(0);                     // niente streak di velocità congelato sulle schermate di esito
+      // Muovere lo stick sull'esito porta i prompt al pad (se usingPad era "stantio" alla morte).
+      const epad = this.activePad();
+      if (epad && (epad.leftStick.length() > PAD_DEADZONE || epad.rightStick.length() > PAD_DEADZONE)) this.usingPad = true;
+      this.refreshOutcomePrompts(); // prompt tastiera↔pad aggiornati dal vivo se l'input attivo cambia
+      rampSpeed(0);                  // niente streak di velocità congelato sulle schermate di esito
       return;
     }
     if (this.frozen) return;            // hit-stop: tutto fermo, grana di pellicola inclusa (REG3)
@@ -509,16 +560,18 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.updateCombo(delta);
     this.updateFuel(dt);
     this.updateDistance(dt);
+    this.updateAmbience(delta);
     this.updateZombieSpawning(delta);
     this.updateGiantSpawning(delta);
     this.boss.update(delta);
     this.updateZombieMotion(time, delta);
+    this.applyWorldScroll();           // throttle: ri-allinea lo scroll dei pickup/hazard/nubi all'acceleratore
     this.updateAttachedZombies(delta);
     this.checkBulletsVsAttached();
     this.updateToxicClouds(delta);
     this.updateSurvivorEffects(delta, time);
-    this.updateStripes(dt);
-    this.environment?.update(dt, this.vehicle.x, this.vehicle.y);
+    this.updateStripes(dt, this.throttleScroll()); // throttle: strisce di corsia col gas/freno
+    this.environment?.update(dt * this.throttle, this.vehicle.x, this.vehicle.y); // throttle: asfalto/parallasse/decal
     this.cleanOffScreen();
     this.shadows?.update(this.shadowCasters());
     this.updateHUD();
@@ -537,6 +590,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     };
     push(this.zombies);
     push(this.fuelCans);
+    push(this.ammoCrates);
     push(this.hazards, true);
     if (this.boss?.group) push(this.boss.group);
     return out;
@@ -552,7 +606,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   // ─── World & entities ────────────────────────────────────────────────────────
 
   private buildWorld() {
-    const env = ENVIRONMENTS[this.envIndex];
+    const env = ENVIRONMENTS[this.envIndex]!;
 
     // Sfondo + fasce
     this.add.rectangle(this.designW/2, H/2, this.designW, H, env.bgColor);
@@ -621,6 +675,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.bullets         = this.physics.add.group();
     this.rockets         = this.physics.add.group();
     this.fuelCans        = this.physics.add.group();
+    this.ammoCrates      = this.physics.add.group();
     this.toxicClouds     = this.physics.add.group();
     this.spitProjectiles = this.physics.add.group();
     this.hazards         = this.physics.add.group();
@@ -634,6 +689,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       (_v,z) => this.onVehicleHitZombie(z as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.vehicle, this.fuelCans,
       (_v,f) => this.onCollectFuel(f as Phaser.Physics.Arcade.Sprite));
+    this.physics.add.overlap(this.vehicle, this.ammoCrates,
+      (_v,c) => this.onCollectAmmo(c as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.vehicle, this.toxicClouds,
       (_v,c) => this.onVehicleHitCloud(c as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.vehicle, this.spitProjectiles,
@@ -699,6 +756,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.fKey = this.input.keyboard!.addKey(KC.F); // Sovraccarico (Overdrive, A3)
     this.wKey = this.input.keyboard!.addKey(KC.W); // movimento anche con W/S (G8, come da GAME_DESIGN §2)
     this.sKey = this.input.keyboard!.addKey(KC.S);
+    this.aKey = this.input.keyboard!.addKey(KC.A); // freno  (anche ←) — throttle (pivot horror)
+    this.dKey = this.input.keyboard!.addKey(KC.D); // gas    (anche →)
     this.numberKeys = [KC.ONE, KC.TWO, KC.THREE, KC.FOUR, KC.FIVE]
       .map(k => this.input.keyboard!.addKey(k));
 
@@ -719,6 +778,86 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     kb.on('keydown-H', () => { this.health = this.maxHealth; this.fuel = this.maxFuel;
       (Object.keys(this.components) as ComponentKey[]).forEach(k => this.components[k].health = 100); });
     kb.on('keydown-E', () => this.debugCycleEvent()); // debug: cicla gli eventi B2 (notte/blocco/tempesta/convoglio)
+
+    // ── Gamepad (schema input alternativo; tastiera+mouse restano il default) ──
+    const gp = this.input.gamepad;
+    if (gp) {
+      if (gp.total > 0) this.usingPad = true;                  // pad già presente all'avvio
+      gp.on('connected', () => { this.usingPad = true; this.showPadHint(); }); // browser: dopo il 1° tasto
+      gp.on('down', (_pad: Phaser.Input.Gamepad.Gamepad, button: Phaser.Input.Gamepad.Button) => this.onPadButton(button.index));
+    }
+    // "Last input wins": il primo movimento del puntatore o tasto torna a mouse/tastiera (default).
+    this.input.on('pointermove', () => { this.usingPad = false; });
+    kb.on('keydown', () => { this.usingPad = false; });
+  }
+
+  /** Pad collegato e attivo (Gamepad API: connesso solo dopo il 1° input dell'utente). */
+  private activePad(): Phaser.Input.Gamepad.Gamepad | undefined {
+    const p = this.input.gamepad?.getPad(0);
+    return p?.connected ? p : undefined;
+  }
+
+  /** Bottoni edge-triggered del pad → riusano i metodi/azioni esistenti (niente logica duplicata). */
+  private onPadButton(index: number) {
+    // Schermate di esito (game over / missione completata): il pad le pilota come la tastiera —
+    // A/Start = SPAZIO (riavvia o vai al negozio), B = M (torna al menu). Senza, il pad restava bloccato.
+    if (!this.alive || this.missionDone) {
+      if (index === PAD.A || index === PAD.START) this.confirmOutcome();
+      else if (index === PAD.B) Juice.go(this, 'MenuScene');
+      return;
+    }
+    if (index === PAD.START) { this.openPauseMenu(); return; } // pausa
+    if (this.frozen || this.boss.defeated || this.scene.isPaused()) return;
+    this.usingPad = true;
+    const time = this.time.now;
+    switch (index) {
+      case PAD.A:  if (time >= this.dashReadyAt) this.performDash(time); break;                 // come SHIFT
+      case PAD.B:  if (!this.overdriveOn() && this.overdrive >= OVERDRIVE_MAX) this.activateOverdrive(time); break; // come F
+      case PAD.X:
+      case PAD.Y:  this.throwGrenade(); break;                                                  // come C (Artificiere)
+      case PAD.RB: if (this.ownedWeapons.length > 1) {                                          // come Q (ciclo) — dorsale destro
+        const cur = this.ownedWeapons.indexOf(this.currentWeapon);
+        this.selectWeapon(this.ownedWeapons[(cur + 1) % this.ownedWeapons.length]!);
+      } break;
+      // D-pad → selezione diretta armi 1-4 (la 5ª resta raggiungibile col ciclo RB, vista la croce a 4 vie).
+      case PAD.DUP:    this.selectWeapon(WEAPON_KEYS[0]!); break;
+      case PAD.DRIGHT: this.selectWeapon(WEAPON_KEYS[1]!); break;
+      case PAD.DDOWN:  this.selectWeapon(WEAPON_KEYS[2]!); break;
+      case PAD.DLEFT:  this.selectWeapon(WEAPON_KEYS[3]!); break;
+    }
+  }
+
+  /** Conferma col pad sulla schermata di esito: A/Start come SPAZIO (negozio a fine missione, riavvio al game over). */
+  private confirmOutcome() {
+    if (this.missionDone) Juice.go(this, 'ShopScene');                         // = keydown-SPACE a fine missione
+    else if (!this.alive) Juice.fadeAndRun(this, () => this.scene.restart());  // = SPAZIO al game over (vedi update())
+  }
+
+  /** Chiave i18n del prompt secondo l'input attivo: variante `…Pad` ([ A ]/[ B ]) col pad, base ([ SPAZIO ]/[ M ]) altrimenti. */
+  private padKey(base: string): string { return this.usingPad ? base + 'Pad' : base; }
+
+  /** Crea un testo-prompt di esito che si adatta a tastiera/pad e si aggiorna dal vivo (vedi refreshOutcomePrompts). */
+  private outcomeText(x: number, y: number, base: string, style: Phaser.Types.GameObjects.Text.TextStyle): Phaser.GameObjects.Text {
+    const txt = Ui.text(this, x, y, t(this.padKey(base)), style).setOrigin(0.5).setDepth(31);
+    this.outcomePrompts.push({ txt, base });
+    return txt;
+  }
+
+  /** Aggiorna i prompt di esito quando l'input attivo cambia (mouse/tastiera ↔ pad). Chiamato nello stato di esito. */
+  private refreshOutcomePrompts() {
+    for (const p of this.outcomePrompts) {
+      const s = t(this.padKey(p.base));
+      if (p.txt.active && p.txt.text !== s) p.txt.setText(s);
+    }
+  }
+
+  /** Hint discreto alla connessione del pad (i18n + stile coerente coi banner transitori, ART_BIBLE_INTERFACCE). */
+  private showPadHint() {
+    if (!this.alive || this.missionDone) return;
+    const txt = Ui.text(this, this.designW / 2, ROAD_TOP + 24, t('game.padConnected'), {
+      fontSize: '16px', color: '#88ccff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(60);
+    this.tweens.add({ targets: txt, alpha: 0, y: ROAD_TOP + 4, delay: 1400, duration: 900, onComplete: () => txt.destroy() });
   }
 
   /** Pausa la partita e apre le Impostazioni in overlay (ESC le richiude e riprende). */
@@ -742,14 +881,31 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   /** Chiave texture della torretta per l'arma corrente (aim_turret_<weapon>). */
   private turretTex(): string { return 'aim_turret_' + this.currentWeapon; }
 
-  /** Mira: puntatore → spazio design (la camera è in zoom) → angolo torretta clampato all'arco frontale. */
+  /**
+   * Mira commutabile (combat reboot + pad). Sorgente del puntamento:
+   *  • MOUSE (default): puntatore → spazio design (camera in zoom) → angolo torretta.
+   *  • PAD: lo stick destro oltre la deadzone dà una DIREZIONE (atan2 degli assi) → mirino a distanza fissa.
+   * Stesso clamp ±MAX_AIM in entrambi i casi. "Last input wins": l'attività su stick/grilletti accende il pad.
+   */
   private updateAim() {
-    const p = this.input.activePointer;
-    this.cameras.main.getWorldPoint(p.x, p.y, this._aim);
-    this.aimX = this._aim.x; this.aimY = this._aim.y;
     const ox = this.vehicle.x + this.turretDx, oy = this.vehicle.y;
-    const raw = Math.atan2(this.aimY - oy, this.aimX - ox);
-    this.aimAngle = Phaser.Math.Clamp(raw, -MAX_AIM, MAX_AIM);
+    const pad = this.activePad();
+    if (pad && (pad.leftStick.length() > PAD_DEADZONE || pad.rightStick.length() > PAD_DEADZONE
+        || pad.R2 > PAD_TRIGGER_MIN || pad.L2 > PAD_TRIGGER_MIN || pad.L1)) this.usingPad = true;
+
+    const rs = pad?.rightStick;
+    if (this.usingPad && rs && rs.length() > PAD_DEADZONE) {
+      const raw = Math.atan2(rs.y, rs.x);                       // lo stick è una DIREZIONE, non una posizione
+      this.aimAngle = Phaser.Math.Clamp(raw, -MAX_AIM, MAX_AIM);
+      this.aimX = ox + Math.cos(this.aimAngle) * PAD_AIM_DIST;  // mirino a distanza fissa lungo l'angolo
+      this.aimY = oy + Math.sin(this.aimAngle) * PAD_AIM_DIST;
+    } else {
+      const p = this.input.activePointer;
+      this.cameras.main.getWorldPoint(p.x, p.y, this._aim);
+      this.aimX = this._aim.x; this.aimY = this._aim.y;
+      const raw = Math.atan2(this.aimY - oy, this.aimX - ox);
+      this.aimAngle = Phaser.Math.Clamp(raw, -MAX_AIM, MAX_AIM);
+    }
     const rec = this.recoil; this.recoil = Math.max(0, this.recoil - 0.6);
     this.turret.setPosition(ox - Math.cos(this.aimAngle) * rec, oy - Math.sin(this.aimAngle) * rec).setRotation(this.aimAngle);
     this.crosshair.setPosition(this.aimX, this.aimY);
@@ -759,6 +915,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (!this.alive || this.missionDone) return; // non in game over / fine missione
     if (this.scene.isPaused()) return;            // già in pausa
     this.sfx?.stopEngine();                        // silenzia il motore durante la pausa
+    this.sfx?.stopAmbience();                       // ...e il drone d'angoscia
     this.scene.pause();
     this.scene.launch('PauseScene');
   }
@@ -769,15 +926,85 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     const body = this.vehicle.body as Phaser.Physics.Arcade.Body;
     body.setVelocity(0,0);
     const vSpeed = this.getEffectiveVerticalSpeed();
-    if (this.cursors.up?.isDown   || this.wKey.isDown) body.setVelocityY(-vSpeed);
-    if (this.cursors.down?.isDown || this.sKey.isDown) body.setVelocityY(vSpeed);
+    body.setVelocityY(this.verticalInput() * vSpeed); // tastiera (↑↓/WS) o stick sinistro del pad — stesso vettore
     this.vehicle.y = Phaser.Math.Clamp(this.vehicle.y, ROAD_TOP+22, ROAD_BOTTOM-22);
     const lean = body.velocity.y > 0 ? 4 : body.velocity.y < 0 ? -4 : 0;
     this.vehicle.angle = Phaser.Math.Linear(this.vehicle.angle, lean, 0.12);
 
+    this.updateThrottle(dt);
+
     const engineLoad = (this.components.engine.health / 100) *
-                       Math.max(0.3, 1 - this.attachedZombies.length * 0.15);
+                       Math.max(0.3, 1 - this.attachedZombies.length * 0.15) *
+                       Math.max(0.35, this.throttle); // il motore "tira" col gas, cala col freno (solo suono)
     this.sfx?.setEngineLoad(engineLoad);
+  }
+
+  /**
+   * Throttle del giocatore (pivot horror): acceleratore (→/D) e freno (←/A) modulano lo scroll del mondo.
+   * Il target è 0 (freno → STOP totale), 1 (crociera, a riposo) o `THROTTLE_MAX` (gas); `this.throttle` ci
+   * scivola sopra con un lerp. Sposta anche un filo la X del veicolo (feedback: avanti col gas, indietro col freno).
+   * Da qui leggono `throttleScroll()`, l'avanzamento (`updateDistance`), il carburante (`getEffectiveFuelDrain`)
+   * e lo scroll di ambiente/strisce/entità (`applyWorldScroll`). Solo movimento — nessun effetto su hitbox.
+   */
+  private updateThrottle(dt: number) {
+    const { accel, brake } = this.throttleInput();
+    // Modello a INERZIA (niente auto-crociera): il freno vince sul gas; senza gas il mezzo coasta giù per
+    // attrito; col gas accelera. Identico per tastiera (0/1) e grilletti analogici del pad (0..1) → un SOLO
+    // percorso accel/freno (vedi throttleInput). I valori (accel/drag/brake) sono continui col grilletto.
+    if (brake > 0) {
+      this.throttle -= (THROTTLE_DRAG + THROTTLE_BRAKE * brake) * dt; // freno: decelerazione forte fino allo STOP
+    } else if (accel > 0) {
+      this.throttle += THROTTLE_ACCEL * accel * dt;                   // gas: salita verso THROTTLE_MAX
+    } else {
+      this.throttle -= THROTTLE_DRAG * dt;                            // inerzia: coasti giù da solo
+    }
+    this.throttle = Phaser.Math.Clamp(this.throttle, 0, THROTTLE_MAX);
+    // Feedback visivo: il mezzo scivola avanti col gas, indietro da fermo (clamp morbido attorno a VEHICLE_X).
+    const targetX = VEHICLE_X + (this.throttle - 1) * 26;
+    this.vehicle.x = Phaser.Math.Linear(this.vehicle.x, targetX, Math.min(1, 5 * dt));
+  }
+
+  /**
+   * Input ACCELERATORE/FRENO unificato (0..1 ciascuno): tastiera (→/D, ←/A → digitale 0/1) **o** pad
+   * (grilletti RT/LT analogici). Il punto unico in cui le due sorgenti confluiscono: il throttle non sa
+   * (né deve sapere) da dove arriva il comando.
+   */
+  private throttleInput(): { accel: number; brake: number } {
+    let accel = (this.cursors.right?.isDown || this.dKey.isDown) ? 1 : 0;
+    let brake = (this.cursors.left?.isDown  || this.aKey.isDown)  ? 1 : 0;
+    const pad = this.activePad();
+    if (pad) {
+      accel = Math.max(accel, pad.L2 > PAD_TRIGGER_MIN ? pad.L2 : 0); // LT analogico (acceleratore, indice sinistro)
+      brake = Math.max(brake, pad.L1 ? 1 : 0);                        // LB (freno, intermittente)
+    }
+    return { accel, brake };
+  }
+
+  /**
+   * Input CORSIA (su/giù) unificato, −1..1: tastiera (↑/W = −1, ↓/S = +1) **o** stick sinistro del pad
+   * (asse Y analogico oltre la deadzone). Alimenta lo stesso vettore verticale di `updateVehicle`.
+   */
+  private verticalInput(): number {
+    let v = 0;
+    if (this.cursors.up?.isDown   || this.wKey.isDown) v -= 1;
+    if (this.cursors.down?.isDown || this.sKey.isDown) v += 1;
+    const ls = this.activePad()?.leftStick;
+    if (ls && Math.abs(ls.y) > PAD_DEADZONE) v = Phaser.Math.Clamp(v + ls.y, -1, 1);
+    return v;
+  }
+
+  /** Velocità di scorrimento VISIVA del mondo (px/s) col throttle: 0 a freno pieno, SCROLL_SPEED in crociera. */
+  private throttleScroll(): number {
+    return SCROLL_SPEED * this.throttle;
+  }
+
+  /** Riallinea ogni frame lo scroll dei gruppi che derivano SOLO dal mondo (no locomozione propria) al throttle. */
+  private applyWorldScroll() {
+    const sx = -this.throttleScroll();
+    this.fuelCans.setVelocityX(sx);
+    this.ammoCrates.setVelocityX(sx);
+    this.hazards.setVelocityX(sx);
+    this.toxicClouds.setVelocityX(sx);
   }
 
   private updateFiring(time: number) {
@@ -785,7 +1012,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // elemento UI cliccabile (es. selettore armi dell'HUD): altrimenti cliccare l'HUD farebbe partire un colpo.
     const mouseFire = this.input.activePointer.isDown &&
       this.input.hitTestPointer(this.input.activePointer).length === 0;
-    if ((mouseFire || this.spaceKey.isDown) && time - this.lastFire > this.getEffectiveCooldown()) {
+    const padFire = (this.activePad()?.R2 ?? 0) > PAD_TRIGGER_MIN; // RT (grilletto destro, tieni premuto)
+    if ((mouseFire || this.spaceKey.isDown || padFire) && time - this.lastFire > this.getEffectiveCooldown()) {
       this.lastFire = time;
       this.fireWeapon();
     }
@@ -794,11 +1022,11 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   // ─── Cambio arma a runtime ─────────────────────────────────────────────────
   private updateWeaponSwitch() {
     for (let i = 0; i < this.numberKeys.length; i++) {
-      if (Phaser.Input.Keyboard.JustDown(this.numberKeys[i])) this.selectWeapon(WEAPON_KEYS[i]);
+      if (Phaser.Input.Keyboard.JustDown(this.numberKeys[i]!)) this.selectWeapon(WEAPON_KEYS[i]!);
     }
     if (Phaser.Input.Keyboard.JustDown(this.cycleKey) && this.ownedWeapons.length > 1) {
       const cur = this.ownedWeapons.indexOf(this.currentWeapon);
-      this.selectWeapon(this.ownedWeapons[(cur + 1) % this.ownedWeapons.length]);
+      this.selectWeapon(this.ownedWeapons[(cur + 1) % this.ownedWeapons.length]!);
     }
   }
 
@@ -971,7 +1199,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   }
 
   private updateDistance(dt: number) {
-    this.distance += this.getEffectiveScroll() * dt; // M1: il motore regola il ritmo di avanzamento
+    this.distance += this.getEffectiveScroll() * this.throttle * dt; // M1: motore + throttle del giocatore regolano l'avanzamento
     this.updateEvents(); // Track B2: eventi in-run a soglie di distanza
     if (!this.boss.spawned && this.distance >= MISSION_DIST * BOSS_TRIGGER) {
       this.boss.spawn();
@@ -985,21 +1213,81 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (this.distance >= MISSION_DIST) this.triggerMissionComplete();
   }
 
+  /**
+   * Atmosfera horror (pivot): pilota il drone d'angoscia (`setDread`), i lamenti lontani e il battito
+   * cardiaco. La tensione è la combinazione di: ondata in corso, vicinanza/presenza del boss, salute
+   * bassa, carburante in riserva. Solo audio — nessun effetto su gameplay/hitbox.
+   */
+  private updateAmbience(delta: number) {
+    const hpPct   = this.health / this.maxHealth;
+    const fuelPct = this.fuel / this.maxFuel;
+    // Vicinanza boss: sale nell'ultimo 40% prima del trigger, max quando il boss è in campo.
+    const bossProx = this.boss.active ? 1
+      : Phaser.Math.Clamp((this.distance / (MISSION_DIST * BOSS_TRIGGER) - 0.6) / 0.4, 0, 1) * 0.7;
+    const lowHp   = hpPct < 0.4 ? (0.4 - hpPct) / 0.4 : 0;
+    const lowFuel = fuelPct < 0.25 ? (0.25 - fuelPct) / 0.25 * 0.5 : 0;
+    const burst   = this.time.now < this.burstDreadUntil ? 1 : 0;
+    this.sfx?.setDread(Phaser.Math.Clamp(Math.max(bossProx, lowHp, burst, lowFuel), 0, 1));
+
+    // Lamenti lontani: emergono nella quiete tesa (sospesi durante il duello col boss).
+    this.moanTimer -= delta;
+    if (this.moanTimer <= 0) {
+      if (!this.boss.active && !this.boss.defeated) this.sfx?.playMoan();
+      this.moanTimer = Phaser.Math.Between(5000, 11000);
+    }
+
+    // Battito cardiaco: parte sotto il 35% di salute, cadenza che si stringe col calo (morente = corsa).
+    if (hpPct < 0.35 && this.alive) {
+      this.heartTimer -= delta;
+      if (this.heartTimer <= 0) {
+        this.sfx?.playHeartbeat();
+        this.heartTimer = 360 + hpPct * 1450;   // ~360 ms in fin di vita → ~870 ms al 35%
+      }
+    } else {
+      this.heartTimer = 0;
+    }
+  }
+
+  /**
+   * Ritmo del terrore (pivot horror): director a fasi **dread → burst**. La QUIETE è tesa e quasi vuota
+   * (sagome isolate, il silenzio come minaccia); l'ONDATA è serrata e ti somerge. Al passaggio quiete→ondata
+   * scatta lo stinger e il drone d'angoscia va al massimo (`burstDreadUntil`). Sospeso durante il boss.
+   */
   private updateZombieSpawning(delta: number) {
     if (this.boss.active || this.boss.defeated) return;
+    this.phaseTimer -= delta;
+    if (this.phaseTimer <= 0) this.advanceSpawnPhase();
     this.spawnTimer -= delta;
     if (this.spawnTimer <= 0) {
       this.spawnZombie();
-      this.spawnInterval = Math.max(Math.round(290 * this.routeSpawnMult), this.spawnInterval - 3); // Track B1: pavimento × nodo
-      this.spawnTimer = this.spawnInterval;
+      this.spawnTimer = this.spawnPhase === 'burst' ? this.burstInterval() : this.calmInterval();
     }
-    // Sferzata: ogni SURGE_INTERVAL un'orda extra (ritmo a picchi, come l'arena).
-    this.surgeTimer -= delta;
-    if (this.surgeTimer <= 0) {
-      this.surgeTimer = SURGE_INTERVAL;
-      const n = Math.min(9, Math.round((SURGE_BASE + Math.floor((this.missionNumber - 1) / 2)) / this.routeSpawnMult)); // Track B1: sferzata × nodo
-      for (let i = 0; i < n; i++) this.spawnZombie();
+  }
+
+  /** Alterna quiete e ondata. Entrando in ondata: stinger + drone al massimo + un batch d'apertura. */
+  private advanceSpawnPhase() {
+    if (this.spawnPhase === 'calm') {
+      this.spawnPhase = 'burst';
+      this.phaseTimer = BURST_MS_BASE + (this.missionNumber - 1) * 170; // l'ondata dura di più avanti
+      this.burstDreadUntil = this.time.now + this.phaseTimer;            // drone d'angoscia al massimo per tutta l'ondata
+      this.sfx?.playWaveStinger();                                       // "sta arrivando"
+      const batch = Math.min(8, 2 + Math.floor((this.missionNumber - 1) / 2)); // colpo d'apertura dell'orda (M1=2, sale)
+      for (let i = 0; i < batch; i++) this.spawnZombie();
+      this.spawnTimer = this.burstInterval();
+    } else {
+      this.spawnPhase = 'calm';
+      this.phaseTimer = Phaser.Math.Between(CALM_MS_MIN, CALM_MS_MAX);   // la quiete tesa (respiro)
+      this.spawnTimer = this.calmInterval();
     }
+  }
+
+  /** Quiete: spawn radi (sagome isolate). Più fitti col progredire, ma sempre "vuoti". (× nodo percorso, B1.) */
+  private calmInterval(): number {
+    return Math.round(Math.max(1500, CALM_INTERVAL - (this.missionNumber - 1) * 110) * this.routeSpawnMult);
+  }
+  /** Ondata: spawn serrati (sciami). Più intensi col progredire (densità piena ~M12). (× nodo percorso, B1.) */
+  private burstInterval(): number {
+    return Math.round(Math.max(300, BURST_INTERVAL - (this.missionNumber - 1) * 40) * this.routeSpawnMult);
   }
 
   private updateGiantSpawning(delta: number) {
@@ -1013,9 +1301,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private updateAttachedZombies(delta: number) {
     for (let i = this.attachedZombies.length - 1; i >= 0; i--) {
-      const az = this.attachedZombies[i];
+      const az = this.attachedZombies[i]!;
       if (!az.sprite.active) { this.attachedZombies.splice(i,1); continue; }
-      const slot = ATTACH_SLOTS[az.slotIndex];
+      const slot = ATTACH_SLOTS[az.slotIndex]!;
       az.sprite.x = this.vehicle.x + slot.dx;
       az.sprite.y = this.vehicle.y + slot.dy;
       az.timer -= delta;
@@ -1034,7 +1322,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     for (const bullet of this.bullets.getChildren() as Phaser.Physics.Arcade.Sprite[]) {
       if (!bullet.active) continue;
       for (let i = this.attachedZombies.length - 1; i >= 0; i--) {
-        const az = this.attachedZombies[i];
+        const az = this.attachedZombies[i]!;
         if (Phaser.Math.Distance.Between(bullet.x,bullet.y,az.sprite.x,az.sprite.y) < 22) {
           this.killBullet(bullet);
           az.hp--;
@@ -1082,7 +1370,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         const damaged = keys.filter(k => this.components[k].health < 100)
                             .sort((a,b) => this.components[a].health - this.components[b].health);
         if (damaged.length > 0) {
-          this.components[damaged[0]].health = Math.min(100, this.components[damaged[0]].health + 8);
+          const worst = damaged[0]!;
+          this.components[worst].health = Math.min(100, this.components[worst].health + 8);
         }
       }
     }
@@ -1104,10 +1393,10 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     }
   }
 
-  private updateStripes(dt: number) {
+  private updateStripes(dt: number, speed = SCROLL_SPEED) {
     const totalW = this.stripes.length * STRIPE_GAP;
     this.stripes.forEach(s => {
-      s.x -= SCROLL_SPEED * dt;
+      s.x -= speed * dt;
       if (s.x < -(STRIPE_W/2)) s.x += totalW;
     });
   }
@@ -1122,6 +1411,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       overdrive: this.overdrive, overdriveMax: OVERDRIVE_MAX, overdriveActive: this.overdriveOn(),
       dashReadyAt: this.dashReadyAt, now: this.time.now,
       components: this.components,
+      ammoInfinite: weaponInfiniteAmmo(this.currentWeapon),
+      ammo: this.ammo[this.currentWeapon] ?? 0,
     });
   }
 
@@ -1130,6 +1421,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       (g.getChildren() as Phaser.Physics.Arcade.Sprite[]).forEach(s => { if (s.active && (s.x<l||s.x>r)) s.destroy(); });
     clean(this.zombies,    -100, this.designW+100);
     clean(this.fuelCans,   -80,  this.designW+80);
+    clean(this.ammoCrates, -80,  this.designW+80);
     clean(this.toxicClouds,-80,  this.designW+80);
     clean(this.spitProjectiles, -40, this.designW+60);
     clean(this.hazards,    -80,  this.designW+80);
@@ -1166,6 +1458,15 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       const type = (z.getData('type') as ZombieType) ?? 'common';
       const m = ZOMBIE_MOTION[type] ?? ZOMBIE_MOTION.common;
       const ph = (z.getData('rockPhase') as number) ?? 0;
+
+      // Throttle (pivot horror): la componente di SCORRIMENTO del mondo nella velocità dello zombi segue
+      // l'acceleratore/freno; la sua camminata propria resta → a mondo fermo continua a venirti addosso,
+      // ma non "scivola" sulla strada. Esclusi i Caricatori in telegrafo/carica (gestiscono la propria
+      // velocityX) e gli zombi in ingresso (tween di entrata).
+      const cs = z.getData('chargeState') as string | undefined;
+      if (!z.getData('entering') && cs !== 'telegraph' && cs !== 'charging') {
+        (z.body as Phaser.Physics.Arcade.Body).setVelocityX(-(ZOMBIE_STATS[type].speed + this.throttleScroll()));
+      }
 
       // Rollio con forma d'onda (pesante indugia agli estremi · agile frusta per il centro)
       const s = Math.sin(t * m.spd + ph);
@@ -1333,7 +1634,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   }
 
   private spawnZombie() {
-    const type = SPAWN_POOL[Math.floor(Math.random() * SPAWN_POOL.length)];
+    const type = SPAWN_POOL[Math.floor(Math.random() * SPAWN_POOL.length)]!;
     const stats = ZOMBIE_STATS[type];
 
     if (type === 'jumper') {
@@ -1383,7 +1684,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private updateEvents() {
     if (!this.boss.active && !this.boss.defeated && !this.missionDone
         && this.nextEventIdx < this.eventThresholds.length
-        && this.distance >= this.eventThresholds[this.nextEventIdx]) {
+        && this.distance >= this.eventThresholds[this.nextEventIdx]!) {
       this.nextEventIdx++;
       if (Math.random() < EVENT_CHANCE) this.triggerRandomEvent();
     }
@@ -1394,7 +1695,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private triggerRandomEvent() {
     const pool = ['night', 'roadblock', 'storm', 'convoy', 'rescue'].filter(e => e !== this.lastEvent);
-    const ev = pool[Math.floor(Math.random() * pool.length)];
+    const ev = pool[Math.floor(Math.random() * pool.length)]!;
     this.lastEvent = ev;
     if (ev === 'night') this.eventNightHorde();
     else if (ev === 'roadblock') this.eventRoadblock();
@@ -1563,7 +1864,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       this.sfx?.playFuelPickup();
       return;
     }
-    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    const pick = candidates[Math.floor(Math.random() * candidates.length)]!;
     this.rescueKey = pick.key;
     if (!this.textures.exists(`survivor_${pick.key}`)) buildSurvivorTextures(this); // assicura la texture
     this.announceEvent('event.rescue', '#ffdd55', { name: `${pick.properName} ${pick.surname}` });
@@ -1659,6 +1960,15 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     f.setVelocityX(-SCROLL_SPEED).setDepth(6).setScale(1 / OVERSAMPLE);
   }
 
+  /** Cassa di munizioni sulla strada (pivot horror): solo se possiedi un'arma finita (la MG è ∞ → inutile). */
+  private spawnAmmoCrate() {
+    if (!this.alive || this.missionDone || this.boss.active || this.boss.defeated) return;
+    if (!this.ownedWeapons.some(w => !weaponInfiniteAmmo(w))) return;
+    const y = Phaser.Math.Between(ROAD_TOP + 22, ROAD_BOTTOM - 22);
+    const c = this.ammoCrates.create(this.designW + 24, y, 'ammo_crate') as Phaser.Physics.Arcade.Sprite;
+    c.setVelocityX(-this.throttleScroll()).setDepth(6).setScale(1 / OVERSAMPLE); // throttle: scorre col mondo
+  }
+
   // ─── Hazard di corsia (A1) ───────────────────────────────────────────────────
   private spawnHazard() {
     if (!this.alive || this.missionDone || this.boss.active || this.boss.defeated) return;
@@ -1702,6 +2012,15 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   }
 
   private fireWeapon() {
+    // Munizioni finite (pivot horror): la MG è il fallback ∞; le altre consumano riserva.
+    if (!weaponInfiniteAmmo(this.currentWeapon)) {
+      if ((this.ammo[this.currentWeapon] ?? 0) <= 0) {        // a secco → click + ripiego sulla MG (disperazione)
+        this.sfx?.playDryFire();
+        this.selectWeapon('mg');
+        return;
+      }
+      this.ammo[this.currentWeapon] = (this.ammo[this.currentWeapon] ?? 0) - 1; // un colpo = una munizione
+    }
     const w = WEAPONS[this.currentWeapon];
     const dmg = w.damage + this.vehicleDamageBonus;            // potenziamento 'ammo': +1 danno proiettile
     const a = this.aimAngle;                                   // verso il mirino (combat reboot)
@@ -1828,7 +2147,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       }
     }
     for (let i = this.attachedZombies.length - 1; i >= 0; i--) {
-      const az = this.attachedZombies[i];
+      const az = this.attachedZombies[i]!;
       if (Phaser.Math.Distance.Between(x, y, az.sprite.x, az.sprite.y) <= GRENADE_AOE) {
         az.hp -= GRENADE_DMG;
         if (az.hp <= 0) { this.addKillScore(5); this.spawnHitParticles(az.sprite.x, az.sprite.y); az.sprite.destroy(); this.attachedZombies.splice(i, 1); }
@@ -2017,7 +2336,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       }
     }
     for (let i = this.attachedZombies.length - 1; i >= 0; i--) {
-      const az = this.attachedZombies[i];
+      const az = this.attachedZombies[i]!;
       if (Phaser.Math.Distance.Between(rx, ry, az.sprite.x, az.sprite.y) <= AOE) {
         az.hp -= dmg;
         if (az.hp <= 0) {
@@ -2044,6 +2363,35 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.sfx?.playFuelPickup();
     this.vehicle.setTint(0x88ff88);
     this.time.delayedCall(200, () => { if (this.vehicle?.active) this.vehicle.clearTint(); });
+  }
+
+  /** Raccolta cassa munizioni (pivot horror): ricarica l'arma equipaggiata (o la più scarica se hai la MG). */
+  private onCollectAmmo(crate: Phaser.Physics.Arcade.Sprite) {
+    if (!crate.active) return;
+    crate.destroy();
+    this.refillAmmo();
+    this.sfx?.playFuelPickup();            // arpeggio "ding" positivo (riuso: è una ricompensa)
+    this.vehicle.setTint(0xddcc66);
+    this.time.delayedCall(200, () => { if (this.vehicle?.active) this.vehicle.clearTint(); });
+  }
+
+  /** Ricarica `AMMO_PICKUP` della capacità all'arma equipaggiata (se finita), o — con la MG (∞) — alla
+   *  finita posseduta con la frazione di riserva più bassa, così la cassa non si spreca mai. */
+  private refillAmmo() {
+    let target: WeaponType | undefined;
+    if (!weaponInfiniteAmmo(this.currentWeapon)) {
+      target = this.currentWeapon;
+    } else {
+      let lowest = Infinity;
+      for (const w of this.ownedWeapons) {
+        if (weaponInfiniteAmmo(w)) continue;
+        const frac = (this.ammo[w] ?? 0) / WEAPON_AMMO[w];
+        if (frac < lowest) { lowest = frac; target = w; }
+      }
+    }
+    if (!target) return;
+    const max = WEAPON_AMMO[target];
+    this.ammo[target] = Math.min(max, (this.ammo[target] ?? 0) + Math.ceil(max * AMMO_PICKUP));
   }
 
   private onVehicleHitCloud(cloud: Phaser.Physics.Arcade.Sprite) {
@@ -2086,7 +2434,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     }
     if (slotIndex === -1) return;
 
-    const slot = ATTACH_SLOTS[slotIndex];
+    const slot = ATTACH_SLOTS[slotIndex]!;
     const type = zombie.getData('type') as ZombieType;
     const hp   = zombie.getData('hp') as number;
     zombie.destroy();
@@ -2137,7 +2485,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (dealt < INJURY_HEAVY_DMG && this.health >= INJURY_HP_THRESHOLD * this.maxHealth) return;
     const pool = this.activeSurvivors.filter(k => !this.injured.includes(k));
     if (pool.length === 0 || Math.random() >= INJURY_CHANCE) return;
-    const victim = pool[Math.floor(Math.random() * pool.length)];
+    const victim = pool[Math.floor(Math.random() * pool.length)]!;
     this.injured = [...this.injured, victim];
     setRun(this.registry, 'injured', this.injured);
     const s = SURVIVORS.find(sv => sv.key === victim);
@@ -2184,7 +2532,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   }
 
   private getEffectiveFuelDrain(): number {
-    return BASE_FUEL_DRAIN * (1 + (1 - this.components.tank.health / 100) * 2);
+    // Throttle (pivot): accelerare brucia di più, frenare di meno (ma il serbatoio drena comunque nel tempo →
+    // fermarsi non è gratis). Fattore 0.5 (freno pieno) · 1.0 (crociera, bilanciamento invariato) · 1.3 (gas).
+    return BASE_FUEL_DRAIN * (1 + (1 - this.components.tank.health / 100) * 2) * (0.5 + 0.5 * this.throttle);
   }
 
   /** M1 motore onesto: il motore regola il RITMO DI AVANZAMENTO (accumulo di distance/km). Sano →
@@ -2222,6 +2572,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       turret: this.components.turret.health,
     });
     setRun(this.registry, 'routeModifier', 'none'); // Track B1: il modificatore vale una sola missione → consumato
+    setRun(this.registry, 'ammo', this.ammo); // munizioni: il consumo della missione si porta avanti (checkpoint)
     // CHECKPOINT: lo stato è avanzato (ricompense + missione successiva) → persisti subito, così
     // chiudere il browser sull'overlay di fine missione o nel negozio non perde la missione (fix review).
     if (!this.debugRun) SaveData.saveRun(snapshotRun(this.registry));
@@ -2229,8 +2580,10 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.cleanupEvents(); // B2: via velo/debuff a fine missione
     this.sfx?.playMissionComplete();
     this.sfx?.stopEngine();
+    this.sfx?.stopAmbience();
     this.zombies.setVelocityX(0); this.zombies.setVelocityY(0); // anche Y per il Caricatore in carica (A2)
     this.fuelCans.setVelocityX(0);
+    this.ammoCrates.setVelocityX(0);
     this.bullets.setVelocityX(0); this.bullets.setVelocityY(0);
     this.crosshair?.setVisible(false); this.turret?.setVisible(false); // niente mirino sopra l'overlay di fine missione
     this.spitProjectiles.setVelocityX(0); this.spitProjectiles.setVelocityY(0);
@@ -2257,7 +2610,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     Ui.text(this, cx,cy-14,t('game.distanceLine', { n: Math.floor(this.distance/100) }),{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
     Ui.text(this, cx,cy+20,t('game.coinsEarned', { n: earned }),{fontSize:'18px',color:UI.gold}).setOrigin(0.5).setDepth(31);
     Ui.text(this, cx,cy+55,t('game.coinsTotal', { n: (getRun(this.registry, 'money') ?? 0) }),{fontSize:'15px',color:UI.goldDim}).setOrigin(0.5).setDepth(31);
-    Ui.text(this, cx,cy+82,t('game.toShop'),{fontSize:'13px',color:UI.faint}).setOrigin(0.5).setDepth(31);
+    this.outcomeText(cx, cy+82, 'game.toShop', { fontSize:'13px', color:UI.faint });
     this.addMenuReturn(cx, cy+108);
 
     this.time.delayedCall(600, () => {
@@ -2268,12 +2621,13 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   /** Voce cliccabile "Torna al menu" per le schermate di fine partita. */
   private addMenuReturn(x: number, y: number) {
-    const link = Ui.text(this, x, y, t('game.toMenu'), {
+    const link = Ui.text(this, x, y, t(this.padKey('game.toMenu')), {
       fontSize: '13px', color: '#7788aa',
     }).setOrigin(0.5).setDepth(31).setInteractive({ useHandCursor: true });
     link.on('pointerover', () => link.setColor('#aaccff'));
     link.on('pointerout',  () => link.setColor('#7788aa'));
     link.on('pointerdown', () => Juice.go(this, 'MenuScene'));
+    this.outcomePrompts.push({ txt: link, base: 'game.toMenu' }); // adattivo tastiera/pad, aggiornato dal vivo
   }
 
   // ─── Game over ───────────────────────────────────────────────────────────────
@@ -2299,7 +2653,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         this.deathToll = Math.floor(cp.money * DEATH_MONEY_PENALTY);
         // M3 permanenza: oltre al pedaggio monete, la morte porta via 1 sopravvissuto (se a bordo).
         const survLeft = [...cp.survivors];
-        this.lostSurvivor = survLeft.length > 0 ? survLeft.splice(Math.floor(Math.random() * survLeft.length), 1)[0] : '';
+        this.lostSurvivor = survLeft.length > 0 ? survLeft.splice(Math.floor(Math.random() * survLeft.length), 1)[0]! : '';
         const recovered = { ...cp, money: Math.max(0, cp.money - this.deathToll),
           survivors: survLeft, injured: cp.injured.filter(k => k !== this.lostSurvivor),
           hungry: cp.hungry.filter(k => k !== this.lostSurvivor) };
@@ -2313,12 +2667,14 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
     this.sfx?.playGameOver();
     this.sfx?.stopEngine();
+    this.sfx?.stopAmbience();
     this.vehicle.setTint(0xff2200);
     this.crosshair?.setVisible(false); this.turret?.setVisible(false); // niente mirino sopra "GAME OVER"
     this.cameras.main.shake(500, 0.018);
     this.zombies.setVelocityX(0); this.zombies.setVelocityY(0); // anche Y: il Caricatore in carica ha velocityY persistente (A2)
     this.bullets.setVelocityX(0); this.bullets.setVelocityY(0); // anche Y: i colpi mirati hanno velocità diagonale
     this.fuelCans.setVelocityX(0);
+    this.ammoCrates.setVelocityX(0);
     this.boss.projectiles.setVelocityX(0); // niente proiettili boss sospesi sopra l'overlay (X9)
     this.boss.group.setVelocityX(0);
     this.spitProjectiles.setVelocityX(0); this.spitProjectiles.setVelocityY(0);
@@ -2345,7 +2701,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       }
       if (this.deathToll > 0)
         Ui.text(this, cx,cy+98,t('game.deathToll', { n: this.deathToll }),{fontSize:'12px',color:UI.redSoft}).setOrigin(0.5).setDepth(31);
-      Ui.text(this, cx,cy+122,t('game.restart'),{fontSize:'14px',color:UI.faint}).setOrigin(0.5).setDepth(31);
+      this.outcomeText(cx, cy+122, 'game.restart', { fontSize:'14px', color:UI.faint });
       this.addMenuReturn(cx, cy+150);
       this.input.keyboard?.once('keydown-M', () => Juice.go(this, 'MenuScene'));
     });

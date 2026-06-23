@@ -5,6 +5,7 @@ import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleT
 import { VEHICLES, VEHICLE_KEYS, WEAPONS, WEAPON_KEYS, WeaponType, SURVIVORS } from '../GameData';
 import Juice from '../Juice';
 import Ui, { UI } from '../Ui';
+import MenuPad, { Focusable } from '../MenuPad';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { resetRunState, getRun, setRun } from '../RunState';
 import SaveData from '../SaveData';
@@ -37,6 +38,9 @@ const OBJECT_INFO: Array<{ key: string; label: string; scale: number; over?: boo
 export default class DebugScene extends Phaser.Scene {
   /** Larghezza di design (le gallerie restano ancorate a sinistra: è uno strumento di debug). */
   private designW = DESIGN_W;
+  /** Elementi navigabili col gamepad. */
+  private navItems: Focusable[] = [];
+  private reg<T extends Focusable>(go: T): T { this.navItems.push(go); return go; }
 
   constructor() { super({ key: 'DebugScene' }); }
 
@@ -57,6 +61,7 @@ export default class DebugScene extends Phaser.Scene {
       fontSize: '10px', color: UI.faint,
     }).setOrigin(0.5, 0);
 
+    this.navItems = [];
     this.drawVehicles(42);
     this.drawZombies(122);
     this.drawSurvivors(212);
@@ -64,6 +69,9 @@ export default class DebugScene extends Phaser.Scene {
     this.drawObjects(400);
     this.drawWeapons(468);
     this.drawButtons(522);
+
+    const pad = new MenuPad(this);
+    for (const it of this.navItems) pad.add(it);
     Juice.fadeIn(this, 250);
   }
 
@@ -92,9 +100,10 @@ export default class DebugScene extends Phaser.Scene {
       const cx = 60 + i * 103;
       const cell = this.cell(cx, top + 22, 98, 48, true);
       cell.on('pointerdown', () => this.testVehicle(key));
+      this.reg(cell);
       this.add.image(cx, top + 22, `vehicle_${key}`).setOrigin(0.5).setScale(1 / OVERSAMPLE);
       this.add.image(cx + (TURRET_DX[key] ?? 8), top + 22, 'aim_turret_mg').setOrigin(0.11, 0.5).setScale(1 / OVERSAMPLE);
-      Ui.text(this, cx, top + 48, t(VEHICLES[key].name), {
+      Ui.text(this, cx, top + 48, t(VEHICLES[key]!.name), {
         fontSize: '8px', color: '#bbbbcc', align: 'center', wordWrap: { width: 100 },
       }).setOrigin(0.5, 0);
     });
@@ -161,6 +170,7 @@ export default class DebugScene extends Phaser.Scene {
       const cx = 70 + i * 110;
       const cell = this.cell(cx, top + 18, 104, 34, true);
       cell.on('pointerdown', () => this.testWeapon(key));
+      this.reg(cell);
       this.add.rectangle(cx, top + 10, 70, 8, w.color);
       Ui.text(this, cx, top + 18, t(w.name), { fontSize: '9px', color: '#ffddaa' }).setOrigin(0.5, 0);
     });
@@ -173,6 +183,7 @@ export default class DebugScene extends Phaser.Scene {
       b.on('pointerover', () => b.setAlpha(0.8));
       b.on('pointerout',  () => b.setAlpha(1));
       b.on('pointerdown', cb);
+      this.reg(b);
     };
 
     // Riga 1: setup test
@@ -196,6 +207,7 @@ export default class DebugScene extends Phaser.Scene {
       b.on('pointerover', () => b.setAlpha(0.8));
       b.on('pointerout',  () => b.setAlpha(1));
       b.on('pointerdown', cb);
+      this.reg(b);
     };
     mk2(140, 220, t('debug.newGame'), 0x1a4a1a, () => this.startFresh());
     mk2(400, 150, t('debug.shop'), 0x2a2a5a, () => Juice.go(this, 'ShopScene'));

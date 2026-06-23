@@ -2,7 +2,9 @@
 ### Zombie Road: Last Escape · Direzione Sonora (qualità AAA)
 
 > **Stato:** v1.0 · vivo (living document) · chiude l'asimmetria "occhio/orecchio" (4 art bible visive, 0 audio).
-> **Ambito:** **tutti** i suoni del gioco — i 10 effetti gameplay (sparo, uccisione, aggancio zombi, pickup carburante, impatto, esplosione, sfrigolio tossico, game over, missione completata, **morte boss**), il **loop del motore** dinamico e l'**anteprima sonora** delle impostazioni. Tutto ciò che il giocatore **sente**.
+> **Ambito:** **tutti** i suoni del gioco — i 10 effetti gameplay (sparo, uccisione, aggancio zombi, pickup carburante, impatto, esplosione, sfrigolio tossico, game over, missione completata, **morte boss**), il **loop del motore** dinamico, il **drone d'angoscia** e gli effetti horror (lamento lontano, battito cardiaco, stinger d'ondata) del **pivot survival horror**, e l'**anteprima sonora** delle impostazioni. Tutto ciò che il giocatore **sente**.
+>
+> 🩸 **Pivot horror (giugno 2026).** Il gioco è diventato **survival horror su ruote** ([GAME_DESIGN §0](GAME_DESIGN.md)); **l'atmosfera sonora è un pilastro**, non un contorno. L'audio guadagna una **seconda voce persistente** — il **drone d'angoscia** (§6.1), che cresce con la tensione (`setDread`) sotto al motore — e tre effetti d'atmosfera (§5.15–5.17). Restano **descritti, non validati a numero** (come limiter e riverbero, §4): sono identità/atmosfera, non i numeri-firma portanti.
 > **Vincolo fondante:** audio **100% procedurale** (Web Audio API → oscillatori, rumore, filtri biquad, inviluppi di gain). **Nessun file audio, nessun sample, nessuna libreria esterna.** Tutto vive in [`src/SoundManager.ts`](../src/SoundManager.ts).
 
 Questo documento è la **fonte di verità** per chiunque (umano o AI) tocchi un suono. Se modifichi una forma d'onda, una frequenza o un inviluppo, **aggiorna anche la sua scheda qui**. È il quinto strato della direzione artistica: la voce del mondo all'orecchio.
@@ -42,6 +44,9 @@ I tre pilastri del titolo (coesione · game feel · rifinitura) tradotti sul suo
 | **Saturazione spari (grit)** | `SoundManager.driveCurve` (`makeDriveCurve()`) applicata nel `WaveShaperNode` di `crackTail()` |
 | **Generatore di rumore bianco** | `SoundManager.noise(duration)` |
 | **Loop del motore** | `startEngine()` / `setEngineLoad(factor)` / `stopEngine()` |
+| **Drone d'angoscia** (2ª voce persistente, pivot horror) | `startAmbience()` / `setDread(factor)` / `stopAmbience()` |
+| **Effetti horror** (one-shot) | `playMoan()` · `playHeartbeat()` · `playWaveStinger()` |
+| **Pilotaggio atmosfera** (dread/lamento/battito) | [`GameScene.updateAmbience(delta)`](../src/scenes/GameScene.ts) — chiamato ogni frame |
 | **Istanza in partita** + start/stop + gating volume | [`GameScene.create()`](../src/scenes/GameScene.ts) (`this.sfx = new SoundManager(...)`) |
 | **AudioContext condiviso** (da Phaser) | `(this.sound as Phaser.Sound.WebAudioSoundManager).context` |
 | **Trigger dei suoni** | chiamate `this.sfx?.play…()` sparse in `GameScene` (collisioni, fuoco, pickup, esito) |
@@ -120,7 +125,9 @@ Le ricompense e gli esiti usano invece un **attacco lineare morbido** (~0.02–0
 | **Limiter master** | `DynamicsCompressor`: soglia **−3 dB**, ratio **20:1**, knee **0**, attacco **3 ms**, rilascio **100 ms** | brick-wall tra `master` e `ctx.destination`. Trasparente ai livelli normali; interviene solo quando le voci sommate superano il fondo scala (morte boss: timbro-firma + ~3 esplosioni + motore). Evita il clipping senza dover riequilibrare ogni picco. È una *protezione*, non un'identità tonale → descritto qui, **non** validato a numero (come gli inviluppi di dettaglio, vedi §4.1). |
 | **Riverbero spari** | `ConvolverNode` con IR **procedurale** (`makeImpulse` 0.18 s, decay 2.6, stereo) · send **wet 0.3** · drive del `WaveShaper` **2.4** | coda d'aria/riflessi sugli spari impulsivi (mg/double/rifle/razzi) — NON sul lanciafiamme (a 70 ms impasterebbe). Catena: voce → `shotVerb` → `shotWet` → `master`. È *identità/effetto*, non un controllo di volume → descritto qui, **non** validato a numero (come il limiter e gli inviluppi). |
 
-**Gerarchia di volume di voce (gain di picco, prima del master):** esplosione 0.8 › impatto 0.55 › **morte boss (timbro-firma 0.3–0.5, layer SOTTO l'esplosione che la accompagna)** › **sparo** (lancio razzo 0.42 · crack rifle 0.42 / MG 0.40 / doppia 0.32 + corpo grave 0.24–0.32) › uccisione 0.32 › game over / missione / carburante 0.30–0.28 › aggancio 0.28 › sfrigolio 0.18 › **soffio lanciafiamme 0.16** › **motore 0.055**. Rispetta quest'ordine quando aggiungi un suono: la sua importanza per il giocatore = la sua posizione qui.
+**Gerarchia di volume di voce (gain di picco, prima del master):** esplosione 0.8 › impatto 0.55 › **morte boss (timbro-firma 0.3–0.5, layer SOTTO l'esplosione che la accompagna)** › **sparo** (lancio razzo 0.42 · crack rifle 0.42 / MG 0.40 / doppia 0.32 + corpo grave 0.24–0.32) › **stinger d'ondata 0.32** › uccisione 0.32 › game over / missione / carburante 0.30–0.28 › aggancio 0.28 › **battito cardiaco 0.22** › sfrigolio 0.18 › **soffio lanciafiamme 0.16** › **lamento lontano 0.12** › **drone d'angoscia 0.03–0.09** › **motore 0.055**. Rispetta quest'ordine quando aggiungi un suono: la sua importanza per il giocatore = la sua posizione qui.
+>
+> 🩸 **Voci horror (pivot).** Le tre voci d'atmosfera (stinger d'ondata, battito, lamento) e il drone (§6.1) stanno **volutamente basse** o nei momenti giusti: il battito esce solo a salute <35%, il lamento nella quiete, lo stinger sull'ondata. Nessuna copre l'azione. Il drone è un **bordone** sotto al motore: lo si **sente** salire (`setDread`) più che ascoltare. Sono atmosfera → descritte qui, **non** validate a numero (§4.1 resta ai numeri-firma portanti).
 
 ### 4.1 Valori-firma validati 🔒
 
@@ -238,6 +245,26 @@ Sottoinsieme di numeri verificato automaticamente da `npm run validate:audio` co
 - **Trigger:** un nemico **incassa** un colpo ma **sopravvive** (HP > 0) — `onBulletHitZombie` e `checkBulletsVsAttached` (zombi agganciato). Lato gioco è **throttellato a 45 ms** via `playHitSfx()` (anti-cacofonia a fuoco rapido / più colpi nello stesso frame).
 - **Intento:** *thwack* secco e cortissimo che chiude l'anello "ho premuto → l'ho preso" anche quando il bersaglio non muore (prima era **muto**, feedback assente). La frequenza variata per colpo evita l'affaticamento a raffica. Volutamente più leggero e più alto dell'uccisione (§5.2) e senza gesto discendente: dice "colpito", non "morto".
 
+### 5.15 LAMENTO LONTANO — `playMoan()` 🩸
+- **F:** sawtooth + vibrato (LFO 5.5 Hz, ±4 Hz) · **Freq:** `f` random **70–110 Hz**, sale a `f·1.18` (0.35 s) poi ricade a `f·0.8` (gemito) · **Filtro:** bandpass 480 Hz, Q 1.4 (formante = "bocca") · **Env:** attacco morbido a **0.12** in 0.18 s → 0.001 in ~0.95 s.
+- **Trigger:** `GameScene.updateAmbience()`, a cadenza random **5–11 s** durante la quiete; **sospeso** mentre il boss è in campo. Pitch variato per colpo.
+- **Intento:** un gemito grave e malato che **emerge dal buio** senza che tu veda da dove. Voce non-umana (sawtooth + vibrato lento) volutamente **debole e lontana**: dice "non sei solo", non "minaccia immediata". È la quiete tesa del pilastro *ritmo del terrore*.
+
+### 5.16 BATTITO CARDIACO — `playHeartbeat()` 🩸
+- **F:** 2 × sine ("lub-dub") · **Freq:** 62 → **34 Hz** (tonfo che affonda), il 2° sfalsato 0.17 s · **Env:** lub 0.001→**0.22**→0.001 in 0.16 s; dub picco **0.15** (più debole).
+- **Trigger:** `GameScene.updateAmbience()` quando la salute scende **sotto il 35%**, a cadenza che **si stringe col calo** (~870 ms al 35% → ~360 ms in fin di vita).
+- **Intento:** il classico battito del survival horror = "stai per morire". Grave, fisico, sotto l'azione. La cadenza accelerante traduce il panico senza una barra: lo **senti** che il cuore corre. Si spegne appena curi sopra il 35%.
+
+### 5.17 STINGER D'ONDATA — `playWaveStinger()` 🩸
+- **F/Filtro:** tonfo sub = `noise`+lowpass **220 Hz** (picco 0.32) + grappolo dissonante = 2 × sawtooth **660/700 Hz** (seconda minore) bandpass Q3 che **salgono** da `f·0.8` · **Env:** sub 0.001→0.32→0.001 in 0.4 s; grappolo →**0.13** in 0.1 s → 0.001 in 0.36 s.
+- **Trigger:** all'inizio di un'**ondata** del director dread→burst (`GameScene`, vedi [BALANCE §1bis](BALANCE.md)). Una volta per ondata.
+- **Intento:** "**sta arrivando**". Tonfo grave (la massa nel buio) + allarme dissonante che monta. Gesto ascendente **ammesso** qui (tensione, come `playBossWarn` §5.11), picco **sotto** l'esplosione (0.8). È il momento in cui la quiete si rompe.
+
+### 5.18 SCATTO A VUOTO — `playDryFire()` 🩸
+- **F/Filtro:** soffio del percussore = `noise`+highpass **2600 Hz** (picco 0.18, 0.04 s) + tick metallico = `square` **220 Hz** (picco 0.1, 0.03 s) · **Env:** entrambi cortissimi → 0.001.
+- **Trigger:** un'arma a **munizioni finite** prova a sparare a riserva **0** (`fireWeapon`) → click + ripiego automatico sulla MG.
+- **Intento:** il "click" del caricatore vuoto = "sei a secco". Secco, neutro (nessun gesto su/giù), leggero: dice "vuoto", non "minaccia". Chiude l'anello del pilastro *scarsità* (munizioni finite).
+
 > **Lifecycle (AU):** il `master` ha un **buffer di rumore condiviso** (`noiseBuffer`, generato una volta) riusato da tutte le voci a rumore; `startEngine()` fa `ctx.resume()` se il contesto è sospeso; `dispose()` (chiamato allo SHUTDOWN di GameScene e SettingsScene) ferma il motore e **scollega il bus riverbero (`shotWet`/`shotVerb`) + master + limiter** da `destination` → nessun nodo orfano sul context condiviso a ogni restart.
 
 ---
@@ -262,6 +289,24 @@ Nodi persistenti: `engineOsc` + `engineOsc2` (tonale), `engineLfo` + lfoGain (ch
 - **`stopEngine()`** — dissolve `engineGain` a 0.001 in **0.3 s**, poi ferma tutti gli oscillatori e il rumore a +1.2 s e azzera i riferimenti. **Mai un taglio secco.**
 
 **Ciclo di vita** (vedi [`ARCHITETTURA.md`](./ARCHITETTURA.md)): start in `GameScene.create()`; stop allo `SHUTDOWN` della scena, alla pausa (overlay impostazioni), a missione completata e a game over; **restart** all'evento `RESUME` (ritorno dalla pausa), che riallinea anche il volume.
+
+### 6.1 Drone d'angoscia 🩸 — la seconda voce con stato (pivot horror)
+
+Bordone d'**angoscia** sotto al motore, **sempre acceso** in partita: è il "respiro del buio" del survival horror. Distinto dal motore (sawtooth chug ritmico) per timbro: due **sine** gravi quasi all'unisono → **battimento lento e malato**, sotto un lowpass cupo, con un **respiro** d'ampiezza lentissimo. Non lo si ascolta, lo si **sente** salire con la tensione.
+
+Nodi persistenti: `droneOsc` + `droneOsc2` (tonale), `droneLowpass` (timbro), `droneLfo` (respiro), `droneGain` (livello).
+
+| Parte | Valore | Ruolo |
+|---|---|---|
+| Oscillatori tonali | 2 × `sine`, base **41 Hz** + gemello **×1.06** | battimento lento (~2.5 Hz) = "respiro" disturbante, non un drone pulito |
+| Lowpass | **200 Hz** (calmo) → **620 Hz** (tensione), Q 0.7 | apre con la paura: un "edge" che emerge dal nero |
+| LFO respiro | **0.12 Hz** → gain 0.25 → `trem.gain` (centro 0.75) | un gonfiore ogni ~8 s: il buio che inspira/espira |
+| Gain | **0.03** (idle) → **0.09** (max tensione) | sotto il motore (0.055): atmosfera, mai protagonista |
+
+- **`startAmbience()`** — crea e avvia i nodi (2 osc + LFO). **Idempotente** come `startEngine()`.
+- **`setDread(factor)`** — `factor` 0..1 alza il livello (**0.03 + factor·0.06**), apre il lowpass (**200 + factor·420 Hz**) e aumenta la **dissonanza** (detune di `droneOsc2`). Pilotato ogni frame da [`GameScene.updateAmbience()`](../src/scenes/GameScene.ts): `factor = max(vicinanzaBoss, saluteBassa, ondataInCorso, carburanteRiserva)`.
+- **`stopAmbience()`** — dissolve `droneGain` a 0.001 in **0.3 s**, ferma gli oscillatori a +1.0 s, azzera i riferimenti. Mai un taglio secco.
+- **Ciclo di vita** identico al motore (start in `create()`/`RESUME`; stop a pausa/esiti/`SHUTDOWN` via `dispose()`).
 
 ---
 

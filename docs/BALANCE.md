@@ -70,14 +70,37 @@ Fonte: costanti in testa a `GameScene.ts`. La colonna **Valore** è validata (un
 
 > La canna non è più "cotta" nelle 7 texture veicolo (resta solo il mozzo); è un overlay rotante che cambia texture al cambio arma (5 torrette: `aim_turret_mg/double_mg/rifle/rockets/flamethrower`). Dimensioni texture veicolo invariate (100×44) → validatori arte OK.
 
-**Sferzate (surge) — orde a picchi**
+**Throttle — acceleratore / freno (pivot horror, con inerzia)**
+
+> ⚠️ Derivate/in taratura, **non 🔒**. Vivono in testa a `GameScene.ts`; lette da `updateThrottle`/`throttleInput`, `getEffectiveScroll·throttle` (distanza), `getEffectiveFuelDrain` (carburante) e `applyWorldScroll`/`updateStripes`/`environment.update` (scroll visivo).
 
 | Costante | Valore | Effetto |
 |---|---|---|
-| `SURGE_INTERVAL` | 11500 | ms tra una sferzata e l'altra (sospese durante il duello col boss) |
-| `SURGE_BASE` | 4 | chiamate di spawn extra alla base di ogni sferzata |
+| `THROTTLE_MAX` | 1.6 | ×scroll a tutto gas (1 = `SCROLL_SPEED` di riferimento) |
+| `THROTTLE_ACCEL` | 1.4 | salita di `throttle` col gas (unità/s) |
+| `THROTTLE_DRAG` | 0.5 | attrito/**inerzia**: discesa quando NON acceleri (unità/s) |
+| `THROTTLE_BRAKE` | 2.2 | decelerazione extra del freno, sopra l'attrito (unità/s) |
 
-- Numero di chiamate per sferzata: `min(7, SURGE_BASE + ⌊(missione − 1)/2⌋)` → 4 alla missione 1, sale di 1 ogni 2 missioni, cap **7**. Ogni chiamata è un normale `spawnZombie()` e può quindi essere uno sciame (vedi sotto).
+- **Modello a inerzia** (`updateThrottle`): `throttle` ∈ [0, `THROTTLE_MAX`]. Freno → `throttle -= (DRAG + BRAKE·freno)·dt` (vince sul gas, fino allo **STOP**); gas → `throttle += ACCEL·gas·dt`; nessun input → `throttle -= DRAG·dt` (coast). **Niente auto-crociera**: per restare in moto devi accelerare.
+- **Sorgente unica** (`throttleInput`): tastiera (→/D, ←/A = 0/1) **o** pad (grilletti RT/LT = 0..1 analogici) confluiscono qui → throttle agnostico alla sorgente.
+- **Avanzamento:** `distance += getEffectiveScroll()·throttle·dt` (motore M1 **e** throttle regolano i km/boss/carburante-nel-tempo).
+- **Scroll visivo:** ambiente (`dt·throttle`), strisce, pickup/hazard/nubi (`-SCROLL_SPEED·throttle`) e velocità di scorrimento degli zombi seguono il throttle; la **locomozione propria** dei nemici resta (a mondo fermo continuano a camminare verso di te). Bullet/proiettili boss e oggetti-evento (convoglio/salvataggio) **non** seguono il throttle (transienti) — limite noto, accettato.
+
+**Ritmo del terrore — director a fasi dread → burst (pivot horror)**
+
+> Sostituisce le vecchie *sferzate* (`SURGE_*`, rimosse): non più pressione costante con picchi periodici, ma **alternanza di QUIETE tese e ONDATE**. Derivate/in taratura, **non 🔒**. In `GameScene.updateZombieSpawning`/`advanceSpawnPhase`.
+
+> 🎚️ **Scala dal basso (tuning playtest):** alla **missione 1** (nuova partita: veicolo base, solo MG, zero potenziamenti) la densità è volutamente **gentile** e sale fino alla densità piena verso **metà gioco** (M~12), quando il giocatore ha mezzi/armi/upgrade. Risolve il feedback "troppi nemici appena inizio".
+
+| Costante | Valore (M1) | Effetto |
+|---|---|---|
+| `CALM_INTERVAL` | 3300 | ms tra spawn nella **quiete** (cala ~110/missione, pavimento 1500) → sagome isolate |
+| `BURST_INTERVAL` | 760 | ms tra spawn nell'**ondata** (cala ~40/missione, pavimento 300 → densità piena ~M12) → sciami serrati |
+| `CALM_MS_MIN`/`CALM_MS_MAX` | 6500 / 10000 | durata della quiete (ms, random nel range) |
+| `BURST_MS_BASE` | 3000 | durata base dell'ondata a M1 (+170 ms/missione) |
+
+- **Fasi** (`advanceSpawnPhase`): si parte in **quiete** (a **M1 piena** = intro gentile; dalle missioni successive dimezzata, l'azione entra prima). Allo scadere, **quiete → ondata**: parte lo **stinger** (`playWaveStinger`), il **drone d'angoscia va al massimo** per tutta l'ondata (`burstDreadUntil`), e si genera un **batch d'apertura** di `min(8, 2 + ⌊(missione−1)/2⌋)` spawn (M1 = 2). Allo scadere dell'ondata, **ondata → quiete** (respiro). Sospeso durante il boss.
+- **Intento:** il **silenzio è minaccia**, non riposo — sai che l'ondata arriverà. La difficoltà cresce **con la missione** (proxy della potenza accumulata): a M1 ondate rade/corte, da metà gioco serrate. Gli intervalli (e ogni `spawnZombie`, che per i *fodder* è uno **sciame** 1-3) scalano anche col nodo di percorso (`routeSpawnMult`, B1).
 
 ---
 
@@ -150,8 +173,10 @@ I **4 componenti** (salute 0–100) si danneggiano per aggancio zombi (14/1,6 s)
 |---|---|---|---|
 | **Motore** → ritmo avanz. | `SCROLL_SPEED · (ENGINE_SCROLL_MIN + (1−ENGINE_SCROLL_MIN)·mot/100)` | pieno (240 u/s) | 45% (108 u/s) — **NON game over** |
 | **Ruote** → velocità vert. | `230 · speedMult · (0.15 + 0.85·ruote/100) · max(0.3, 1 − agganciati·0.12)` | piena | 15% (× malus aggancio) |
-| **Serbatoio** → consumo | `2.2 · (1 + (1 − serb/100)·2)` | 2.2/s | 6.6/s (3×) |
+| **Serbatoio** → consumo | `2.2 · (1 + (1 − serb/100)·2) · (0.5 + 0.5·throttle)` | 2.2/s¹ | 6.6/s (3×)¹ |
 | **Torretta** → cooldown | `(base/fireMult) · (1 + (1 − torr/100)·1.4)` | base | +140% · **a 0 = non spara** |
+
+> ¹ **Throttle (pivot horror):** il consumo è ora moltiplicato dal fattore `0.5 + 0.5·throttle` → **crociera (throttle=1) = invariato** (le colonne "A 100%/0%" valgono a crociera), **gas (1.6) ≈ ×1.3**, **freno/fermo (0) = ×0.5** (drena comunque: fermarsi non è gratis). Vedi §1bis.
 
 > **Motore onesto (M1):** il motore non uccide più a 0 — regola il **ritmo di avanzamento** (accumulo di `distance` → km, soglia boss, carburante-nel-tempo). Sano = missione breve; rovinato = arranchi (più lunga, più esposizione, più carburante). `ENGINE_SCROLL_MIN = 0.45`.
 
@@ -264,6 +289,22 @@ Fonte: `WEAPONS`. Sono validati **Prezzo · Cooldown · Danno** (valori-sorgente
 - **Doppia MG (rivisto):** cooldown allineato alla MG base (280) → DPS/linea **3.6** identico, ma con **due linee** distanziate di **±14 px** (vedi `fireWeapon`) per coprire più corsia. A parità di per-linea non è mai peggio della MG gratuita, e su bersagli sparsi/orde rende ~2×: il valore dei 200 ★ è la **larghezza di copertura**.
 - **Lanciafiamme (rivisto):** danno per colpo **2** (era 1) → DPS/linea **28.6**, il più alto del gioco, **giustificato dal raggio corto** (440) che costringe a lasciar avvicinare i nemici. Identità chiara vs Fucile (14.3 DPS / raggio ∞ / 350 ★): trade-off DPS↔raggio, non più scelta dominata. Il danno è derivato da `WEAPONS.flamethrower.damage` in `fireWeapon` (niente più valore cablato).
 
+### §7 bis · Munizioni finite (pivot horror) — derivate, NON validate
+
+> ⚠️ Capacità per arma in `GameData.WEAPON_AMMO` (derivate/in taratura, **non 🔒**). La **MG base è il FALLBACK illimitato** (`0` = ∞): non lascia mai a secco. Stato corrente in `RunData.ammo`; consumo in `fireWeapon` (1 munizione/colpo); a secco → click (`playDryFire`) + ripiego automatico sulla MG.
+
+| Arma | Riserva max | ≈ durata a fuoco continuo |
+|---|---|---|
+| `mg` | ∞ | — (fallback disperato) |
+| `double_mg` | 120 | ~34 s |
+| `rifle` | 90 | ~13 s |
+| `rockets` | 18 | ~16 s |
+| `flamethrower` | 200 | ~14 s |
+
+- **Rifornimento:** casse di munizioni sulla strada (`ammo_crate`, ogni ~13 s; ricaricano `AMMO_PICKUP = 0.5` della capacità all'arma equipaggiata — o, con la MG, alla finita più scarica) **o** il `restock` al garage (§8, ricarica tutto al massimo). Le casse compaiono solo se possiedi un'arma finita.
+- **Persistenza:** la riserva si carica a inizio missione, si consuma sparando, si **porta avanti** a missione completata (checkpoint); alla morte si **ripristina** quella d'inizio missione (coerente col modello forgiving B). Acquistare un'arma la fa arrivare **carica**.
+- *Intento:* ogni colpo delle armi forti **pesa** (scarsità survival horror); la MG gratis evita la frustrazione del soft-lock (sei rallentato, non bloccato).
+
 ---
 
 ## §8 · Negozio ed economia degli acquisti
@@ -274,6 +315,7 @@ Fonte: `SHOP_ITEMS` (`ShopScene.ts`).
 | `chiave` | Voce | Costo ★ | Tipo | Effetto |
 |---|---|---|---|---|
 | `repair` | Ripara tutto | 80 | ripetibile | tutti i componenti → 100% |
+| `restock` | Rifornimento munizioni | 120 | ripetibile | ricarica al **massimo** le armi finite possedute (pivot horror); compare solo se possiedi un'arma finita |
 | `armor` | Corazza rinforzata | 150 | una tantum | +20 armatura (≈ −20% danno, §4) |
 | `engine` | Motore potenziato | 120 | una tantum | velocità verticale ×1.15 |
 | `turret` | Torretta migliorata | 100 | una tantum | cadenza ×1.25 |
@@ -287,7 +329,7 @@ Fonte: `SHOP_ITEMS` (`ShopScene.ts`).
 
 > **Potenziamenti per-veicolo:** ogni potenziamento si applica al SOLO veicolo su cui è comprato
 > (`RunData.upgrades` = `Record<vehicleKey, Upgrades>`). Il negozio mostra solo il catalogo del mezzo
-> selezionato (`VEHICLES[key].upgrades` in `GameData.ts`); `repair` è universale per tutti i veicoli.
+> selezionato (`VEHICLES[key].upgrades` in `GameData.ts`); `repair` è universale per tutti i veicoli, e `restock` (munizioni) è universale ma compare solo se possiedi un'arma finita.
 >
 > | Veicolo | Catalogo |
 > |---|---|

@@ -174,6 +174,12 @@ export class RoundRect {
     return this;
   }
   on(event: string, fn: (...a: unknown[]) => void): this { this.gfx.on(event, fn); return this; }
+  /** Inoltra un evento al Graphics interattivo sottostante (per la navigazione col pad: A → 'pointerdown'). */
+  emit(event: string, ...args: unknown[]): boolean { return this.gfx.emit(event, ...args); }
+  /** Rettangolo di ingombro nel mondo (il Graphics è centrato in gfx.x/gfx.y). Per il cursore di focus del pad. */
+  getBounds(): Phaser.Geom.Rectangle {
+    return new Phaser.Geom.Rectangle(this.gfx.x - this.hw, this.gfx.y - this.hh, this.hw * 2, this.hh * 2);
+  }
   setDepth(d: number): this { this.gfx.setDepth(d); return this; }
   setAlpha(a: number): this { this.gfx.setAlpha(a); return this; }
   setOrigin(): this { return this; } // sempre centrato: no-op per compatibilità con Rectangle

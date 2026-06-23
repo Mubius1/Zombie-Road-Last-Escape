@@ -61,9 +61,12 @@ Se cambi una **regola di gioco** (core loop, game over, ruoli) aggiorna `GAME_DE
 | `npm run validate:balance` | allineamento codice ↔ `BALANCE.md` |
 | `npm run validate:audio` | allineamento codice ↔ `ART_BIBLE_AUDIO.md` |
 | `npm run validate:i18n` | dizionari `src/locales/` completi e coerenti vs `it.ts` |
+| `npm run lint` | **ESLint** type-checked (typescript-eslint): floating/misused-promises, inutilizzati, ecc. — `lint:fix` per l'autofix |
 | `npm run preview` | anteprima della build |
 
-> **CI:** `.github/workflows/ci.yml` esegue `npm run build` a ogni push/PR (gate anti-deriva + type-check + build). ESLint e test unitari delle formule pure restano da aggiungere (richiedono nuove devDependencies).
+> **CI:** `.github/workflows/ci.yml` esegue `npm run build` + `npm run lint` a ogni push/PR (gate anti-deriva + type-check + lint + build). Test unitari delle formule pure restano da aggiungere.
+>
+> **Type-check stretto** (`tsconfig.json`): oltre a `strict`, sono attivi `noUnusedLocals`/`noUnusedParameters`, `noImplicitOverride`, `noFallthroughCasesInSwitch`, `noUncheckedIndexedAccess` (→ gli accessi indicizzati sono `T | undefined`: asserisci `!` alla fonte solo dove l'indice è provabilmente valido), e `moduleResolution: "Bundler"`.
 
 ## Mappa del codice
 

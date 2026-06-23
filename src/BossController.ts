@@ -76,7 +76,7 @@ export default class BossController {
     this.phase2 = false;
 
     const missionNum: number = getRun(host.registry, 'missionNumber') ?? 1;
-    const bossType = BOSS_ORDER[(missionNum - 1) % BOSS_ORDER.length];
+    const bossType = BOSS_ORDER[(missionNum - 1) % BOSS_ORDER.length]!;
     const cfg = BOSS_CONFIG[bossType];
     // Scaling NG+ (G2/B4): gli HP del boss crescono di 0.2 a ogni ciclo di 7 regioni, come gli zombi
     // (stessa formula di GameScene.difficultyMult — tenerle in sync).
@@ -138,7 +138,7 @@ export default class BossController {
 
     // Comportamento per tipo. In 2ª fase (G4) il timer si scarica più in fretta → attacchi più
     // frequenti, senza toccare i valori di reset di ogni caso.
-    let t1 = (boss.getData('timer1') as number) - delta * (this.phase2 ? 1.8 : 1);
+    const t1 = (boss.getData('timer1') as number) - delta * (this.phase2 ? 1.8 : 1);
     boss.setData('timer1', t1);
 
     switch (bossType) {

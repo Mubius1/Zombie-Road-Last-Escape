@@ -81,6 +81,8 @@ const pt: Record<string, string> = {
 
   'item.repair.label': 'Reparar tudo',
   'item.repair.desc': 'Todos os componentes a 100%',
+  'item.restock.label': 'Reabastecer munição',
+  'item.restock.desc': 'Recarrega ao máximo as armas finitas',
   'item.armor.label': 'Blindagem reforçada',
   'item.armor.desc': 'Dano recebido reduzido (-20%)',
   'item.engine.label': 'Motor turbinado',
@@ -137,6 +139,7 @@ const pt: Record<string, string> = {
   'region.finalCity': 'Cidade Final',
 
   'game.giantWarn': '⚠ GIGANTE!',
+  'game.padConnected': '🎮 Controle conectado',
   'game.overdriveOn': '⚡ SOBRECARGA!',
   'game.over.fuel': 'Sem combustível!',  'game.over.vehicle': 'Veículo destruído!',
   'game.victoryCycle': '🏆 VITÓRIA · Ciclo {n}',
@@ -148,6 +151,9 @@ const pt: Record<string, string> = {
   'game.coinsTotal': 'Total: {n}',
   'game.toShop': '[ ESPAÇO ] para a loja',
   'game.toMenu': '[ M ]  Voltar ao menu',
+  'game.toShopPad': '[ A ] para a loja',
+  'game.toMenuPad': '[ B ]  Voltar ao menu',
+  'game.restartPad': '[ A ] tentar de novo',
   'game.gameOver': 'GAME OVER',
   'game.checkpointResume': 'Retoma da Missão {n}',
   'game.deathToll': 'Custo de recuperação: −{n}★',

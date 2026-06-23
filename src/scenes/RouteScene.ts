@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
-import Ui, { UI } from '../Ui';
+import Ui, { UI, RoundRect } from '../Ui';
 import Juice from '../Juice';
+import MenuPad from '../MenuPad';
 import { setupCamera, DESIGN_W } from '../Config';
 import { setRun, getRun } from '../RunState';
 import { ROUTE_NODES, RouteNode } from '../Routes';
@@ -38,12 +39,13 @@ export default class RouteScene extends Phaser.Scene {
     const cardW = 232, gap = 26, n = ROUTE_NODES.length;
     const totalW = n * cardW + (n - 1) * gap;
     const startX = cx - totalW / 2 + cardW / 2;
-    ROUTE_NODES.forEach((node, i) => this.drawCard(startX + i * (cardW + gap), 312, cardW, node));
+    const nav = new MenuPad(this);
+    ROUTE_NODES.forEach((node, i) => nav.add(this.drawCard(startX + i * (cardW + gap), 312, cardW, node)));
 
     Juice.fadeIn(this);
   }
 
-  private drawCard(cx: number, cy: number, w: number, node: RouteNode) {
+  private drawCard(cx: number, cy: number, w: number, node: RouteNode): RoundRect {
     const h = 248, fill = 0x1c1c2a, fillHover = 0x26263a;
     const card = Ui.box(this, cx, cy, w, h, { fill, radius: 12, stroke: node.accent, strokeAlpha: 0.7 });
     card.setInteractive(true);
@@ -67,6 +69,7 @@ export default class RouteScene extends Phaser.Scene {
     card.on('pointerover', () => { card.setFillStyle(fillHover); this.input.setDefaultCursor('pointer'); });
     card.on('pointerout',  () => { card.setFillStyle(fill); this.input.setDefaultCursor('default'); });
     card.on('pointerdown', () => this.choose(node));
+    return card;
   }
 
   private choose(node: RouteNode) {

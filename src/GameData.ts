@@ -90,4 +90,21 @@ export const WEAPONS: Record<WeaponType, WeaponData> = {
   flamethrower: { name: 'weapon.flamethrower.name', desc: 'weapon.flamethrower.desc', price: 400, cooldown: 70,  damage: 2, speed: 480, color: 0xff6600, range: 440  },
 };
 
+/**
+ * Munizioni finite (pivot survival horror): riserva massima per arma. La **MG base è il FALLBACK
+ * illimitato** (`0` = ∞): l'arma della disperazione che non lascia mai a secco. Le altre bruciano
+ * munizioni raccolte sulla strada (cassa) o ricomprate al garage (rifornimento). Valori derivati/in
+ * taratura (non 🔒, documentati in BALANCE §7). Vedi `weaponInfiniteAmmo`.
+ */
+export const WEAPON_AMMO: Record<WeaponType, number> = {
+  mg: 0,            // ∞ — fallback disperato
+  double_mg: 120,
+  rifle: 90,
+  rockets: 18,
+  flamethrower: 200,
+};
+
+/** True se l'arma ha munizioni illimitate (solo la MG base). */
+export const weaponInfiniteAmmo = (w: WeaponType): boolean => WEAPON_AMMO[w] === 0;
+
 export const WEAPON_KEYS: WeaponType[] = ['mg', 'double_mg', 'rifle', 'rockets', 'flamethrower'];

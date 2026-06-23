@@ -44,6 +44,8 @@ export interface HudState {
   overdrive: number; overdriveMax: number; overdriveActive: boolean;
   dashReadyAt: number; now: number;
   components: Record<ComponentKey, ComponentData>;
+  /** Munizioni dell'arma equipaggiata (pivot horror). `ammoInfinite` = MG (∞), `ammo` = riserva delle altre. */
+  ammo?: number; ammoInfinite?: boolean;
 }
 
 /**
@@ -68,13 +70,14 @@ export default class HudController {
   private fuelNum!: Phaser.GameObjects.Text;
   private attachedTxt!: Phaser.GameObjects.Text;
   private weaponTxt!: Phaser.GameObjects.Text;
+  private weaponLabel = ''; // nome arma corrente (le munizioni si compongono per-frame in update)
   private comboTxt!: Phaser.GameObjects.Text;
   private dashTxt!: Phaser.GameObjects.Text;
   private overdriveFill!: Phaser.GameObjects.Rectangle;
   private overdriveTxt!: Phaser.GameObjects.Text;
   private debugTxt!: Phaser.GameObjects.Text;
   private weaponSlots: { key: WeaponType; txt: Phaser.GameObjects.Text }[] = [];
-  private cache = { score: -1, km: -1, fuel: -1, health: -1, attached: -1, combo: '', dash: '', overdrive: '' };
+  private cache = { score: -1, km: -1, fuel: -1, health: -1, attached: -1, combo: '', dash: '', overdrive: '', weapon: '' };
   // Tutti gli oggetti creati da build(): tracciati per poterli distruggere su un re-build
   // (es. cambio lingua a partita in pausa → l'HUD va ridisegnato nella nuova lingua).
   private objects: { destroy(): void }[] = [];
@@ -94,7 +97,7 @@ export default class HudController {
     for (const obj of this.objects) obj.destroy();
     this.objects = [];
     // I Text vengono (ri)creati a ogni build: azzera la cache così il primo update li popola.
-    this.cache = { score: -1, km: -1, fuel: -1, health: -1, attached: -1, combo: '', dash: '', overdrive: '' };
+    this.cache = { score: -1, km: -1, fuel: -1, health: -1, attached: -1, combo: '', dash: '', overdrive: '', weapon: '' };
     const s = this.scene, dW = this.designW;
     const D = 20, BAR_W = 110, COMP_BAR_W = 120;
     // Blocco di destra ancorato a dW: in 4:3 (dW=800) coincide con i vecchi 620/700; in 16:9 si
@@ -212,6 +215,15 @@ export default class HudController {
     if (km !== this.cache.km)            { this.distTxt.setText(t('hud.km',{n:km}));          this.cache.km    = km; }
     if (o.attachedCount !== this.cache.attached) { this.attachedTxt.setText(o.attachedCount > 0 ? t('hud.attached',{n:o.attachedCount}) : ''); this.cache.attached = o.attachedCount; }
 
+    // Arma + munizioni (pivot horror): "NOME · 24" oppure "NOME · ∞" per la MG. Rosso quando a secco.
+    const ammoStr = o.ammoInfinite ? '∞' : `${o.ammo ?? 0}`;
+    const wlabel = `${this.weaponLabel} · ${ammoStr}`;
+    if (wlabel !== this.cache.weapon) {
+      this.weaponTxt.setText(wlabel);
+      this.weaponTxt.setColor(!o.ammoInfinite && (o.ammo ?? 0) <= 0 ? UI.red : '#ffaa44');
+      this.cache.weapon = wlabel;
+    }
+
     // Combo
     if (o.combo >= 2) {
       const m = o.comboMult;
@@ -270,7 +282,9 @@ export default class HudController {
 
   private refreshWeapon(currentWeapon: WeaponType) {
     this.currentWeaponKey = currentWeapon;
-    this.weaponTxt.setText(t(WEAPONS[currentWeapon].name).toUpperCase());
+    this.weaponLabel = t(WEAPONS[currentWeapon].name).toUpperCase();
+    this.weaponTxt.setText(this.weaponLabel); // le munizioni si aggiungono al prossimo update()
+    this.cache.weapon = '';                   // forza il ricomposto nome+munizioni
     for (const slot of this.weaponSlots) {
       slot.txt.setColor(slot.key === currentWeapon ? UI.gold : UI.muted);
     }

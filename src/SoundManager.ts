@@ -12,6 +12,13 @@ export default class SoundManager {
   private engineLfo?: OscillatorNode;
   private engineNoise?: AudioBufferSourceNode;
   private engineLowpass?: BiquadFilterNode;
+  // ── Drone d'angoscia (pivot horror): seconda voce persistente, sotto il motore.
+  //    Bordone grave dissonante che "respira" e cresce con la tensione (setDread).
+  private droneOsc?: OscillatorNode;
+  private droneOsc2?: OscillatorNode;
+  private droneGain?: GainNode;
+  private droneLowpass?: BiquadFilterNode;
+  private droneLfo?: OscillatorNode;
   private shotVerb: ConvolverNode;   // riverbero CORTO condiviso degli spari (coda d'aria/riflessi)
   private shotWet: GainNode;         // livello del riverbero spari (mix wet)
   private driveCurve: Float32Array<ArrayBuffer>;  // curva di saturazione (grit) condivisa dagli schiocchi
@@ -501,6 +508,100 @@ export default class SoundManager {
     src.start(t0); src.stop(t0 + 0.32);
   }
 
+  // ─── Horror (pivot survival horror) ──────────────────────────────────────────
+
+  /** LAMENTO LONTANO: gemito grave e ondeggiante che emerge dal buio. Atmosfera, volutamente debole.
+   *  Pitch randomizzato per colpo (mai due gemiti uguali). Vedi §5.15. */
+  playMoan() {
+    const t0 = this.ctx.currentTime;
+    const f = 70 + Math.random() * 40;                 // 70..110 Hz, voce grave non-umana
+    const osc = this.ctx.createOscillator(); osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(f, t0);
+    osc.frequency.linearRampToValueAtTime(f * 1.18, t0 + 0.35); // sale...
+    osc.frequency.exponentialRampToValueAtTime(f * 0.8, t0 + 0.9); // ...e ricade (gemito)
+    // vibrato lento = voce instabile/malata
+    const vib = this.ctx.createOscillator(); vib.frequency.value = 5.5;
+    const vibG = this.ctx.createGain(); vibG.gain.value = 4;
+    vib.connect(vibG); vibG.connect(osc.frequency);
+    // formante: bandpass medio per dare "bocca" alla voce
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 480; bp.Q.value = 1.4;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.001, t0);
+    g.gain.linearRampToValueAtTime(0.12, t0 + 0.18);   // attacco morbido (lontano)
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.95);
+    osc.connect(bp); bp.connect(g); g.connect(this.master);
+    osc.start(t0); osc.stop(t0 + 1.0);
+    vib.start(t0); vib.stop(t0 + 1.0);
+  }
+
+  /** BATTITO CARDIACO: "lub-dub" grave a salute bassa. GameScene lo richiama a cadenza che si stringe
+   *  col calo di salute. Spara-e-dimentica (la cadenza è in GameScene). Vedi §5.16. */
+  playHeartbeat() {
+    const t0 = this.ctx.currentTime;
+    [[0, 0.22], [0.17, 0.15]].forEach(([dt, peak]) => {     // lub (forte) → dub (più debole)
+      const t = t0 + dt!;
+      const osc = this.ctx.createOscillator(); osc.type = 'sine';
+      osc.frequency.setValueAtTime(62, t);
+      osc.frequency.exponentialRampToValueAtTime(34, t + 0.12);   // tonfo che affonda
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.linearRampToValueAtTime(peak!, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+      osc.connect(g); g.connect(this.master);
+      osc.start(t); osc.stop(t + 0.18);
+    });
+  }
+
+  /** STINGER D'ONDATA (dread→burst): "sta arrivando". Tonfo grave + grappolo dissonante che monta e taglia.
+   *  Gesto ascendente ammesso (tensione, come playBossWarn), picco SOTTO l'esplosione (0.8). Vedi §5.17. */
+  playWaveStinger() {
+    const t0 = this.ctx.currentTime;
+    // Tonfo sub: rumore lowpass grave (la massa che si muove nel buio).
+    const src = this.noise(0.4);
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 220;
+    const lg = this.ctx.createGain();
+    lg.gain.setValueAtTime(0.001, t0);
+    lg.gain.linearRampToValueAtTime(0.32, t0 + 0.05);
+    lg.gain.exponentialRampToValueAtTime(0.001, t0 + 0.4);
+    src.connect(lp); lp.connect(lg); lg.connect(this.master);
+    src.start(t0); src.stop(t0 + 0.42);
+    // Grappolo dissonante (seconda minore: 660 + 700 Hz) che sale = allarme che monta.
+    [660, 700].forEach((f) => {
+      const osc = this.ctx.createOscillator(); osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(f * 0.8, t0);
+      osc.frequency.linearRampToValueAtTime(f, t0 + 0.28);
+      const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 3;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.001, t0);
+      g.gain.linearRampToValueAtTime(0.13, t0 + 0.1);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.36);
+      osc.connect(bp); bp.connect(g); g.connect(this.master);
+      osc.start(t0); osc.stop(t0 + 0.38);
+    });
+  }
+
+  /** SCATTO A VUOTO: click meccanico secco quando un'arma finisce le munizioni (→ fallback alla MG). Vedi §5.18. */
+  playDryFire() {
+    const t0 = this.ctx.currentTime;
+    // soffio del percussore a vuoto (rumore acuto cortissimo)
+    const src = this.noise(0.04);
+    const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2600;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.18, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.04);
+    src.connect(hp); hp.connect(g); g.connect(this.master);
+    src.start(t0); src.stop(t0 + 0.05);
+    // tick metallico del cane a vuoto
+    const osc = this.ctx.createOscillator(); osc.type = 'square';
+    osc.frequency.value = 220;
+    const og = this.ctx.createGain();
+    og.gain.setValueAtTime(0.001, t0);
+    og.gain.linearRampToValueAtTime(0.1, t0 + 0.003);
+    og.gain.exponentialRampToValueAtTime(0.001, t0 + 0.03);
+    osc.connect(og); og.connect(this.master);
+    osc.start(t0); osc.stop(t0 + 0.035);
+  }
+
   // ─── Engine loop ─────────────────────────────────────────────────────────────
 
   startEngine() {
@@ -601,6 +702,82 @@ export default class SoundManager {
     this.engineLowpass = undefined;
   }
 
+  // ─── Drone d'angoscia (seconda voce persistente, pivot horror) ────────────────
+
+  /**
+   * Avvia il bordone d'angoscia: due sine gravi leggermente discordi (battimento lento ≈ "respiro"
+   * del buio) sotto un lowpass cupo, con un LFO d'ampiezza lentissimo (0.12 Hz) che lo fa gonfiare e
+   * ritirare. Volutamente SOTTO il motore (0.055): è atmosfera, non protagonista. Cresce con `setDread`.
+   * Idempotente come `startEngine()`.
+   */
+  startAmbience() {
+    if (this.droneOsc) return;
+    this.resumeIfSuspended();
+    const t = this.ctx.currentTime;
+
+    // Due sine gravi quasi all'unisono → battimento lento e malato (≈2.5 Hz), non un drone "pulito".
+    this.droneOsc = this.ctx.createOscillator();
+    this.droneOsc.type = 'sine';
+    this.droneOsc.frequency.value = 41;
+    this.droneOsc2 = this.ctx.createOscillator();
+    this.droneOsc2.type = 'sine';
+    this.droneOsc2.frequency.value = 41 * 1.06;     // ~2.5 Hz di battimento
+    const mix = this.ctx.createGain(); mix.gain.value = 0.5;
+    this.droneOsc.connect(mix); this.droneOsc2.connect(mix);
+
+    // Lowpass cupo: apre un filo con la tensione (setDread) → "edge" che emerge dal nero.
+    this.droneLowpass = this.ctx.createBiquadFilter();
+    this.droneLowpass.type = 'lowpass';
+    this.droneLowpass.frequency.value = 200;
+    this.droneLowpass.Q.value = 0.7;
+    mix.connect(this.droneLowpass);
+
+    // Respiro: tremolo d'ampiezza lentissimo.
+    const trem = this.ctx.createGain(); trem.gain.value = 0.75;
+    this.droneLfo = this.ctx.createOscillator();
+    this.droneLfo.type = 'sine';
+    this.droneLfo.frequency.value = 0.12;           // un gonfiore ogni ~8 s
+    const lfoGain = this.ctx.createGain(); lfoGain.gain.value = 0.25;
+    this.droneLfo.connect(lfoGain); lfoGain.connect(trem.gain);
+    this.droneLowpass.connect(trem);
+
+    // Livello del drone: idle bassissimo (quiete tesa); sale con la tensione.
+    this.droneGain = this.ctx.createGain();
+    this.droneGain.gain.value = 0.03;
+    trem.connect(this.droneGain);
+    this.droneGain.connect(this.master);
+
+    this.droneOsc.start(t);
+    this.droneOsc2.start(t);
+    this.droneLfo.start(t);
+  }
+
+  /** factor 0..1: tensione (vicinanza boss / salute bassa / ondata in arrivo). Alza livello e apre il filtro. */
+  setDread(factor: number) {
+    if (!this.droneGain) return;
+    const f = factor < 0 ? 0 : factor > 1 ? 1 : factor;
+    const t = this.ctx.currentTime;
+    this.droneGain.gain.setTargetAtTime(0.03 + f * 0.06, t, 0.5);          // 0.03..0.09
+    this.droneLowpass?.frequency.setTargetAtTime(200 + f * 420, t, 0.5);   // 200..620 Hz
+    this.droneOsc2?.frequency.setTargetAtTime(41 * (1.06 + f * 0.02), t, 0.5); // più dissonante sotto tensione
+  }
+
+  stopAmbience() {
+    if (!this.droneGain || !this.droneOsc) return;
+    const stopAt = this.ctx.currentTime + 1.0;
+    this.droneGain.gain.setTargetAtTime(0.001, this.ctx.currentTime, 0.3);
+    const oldGain = this.droneGain;
+    this.droneOsc.onended = () => { try { oldGain.disconnect(); } catch { /* già scollegato */ } };
+    this.droneOsc.stop(stopAt);
+    this.droneOsc2?.stop(stopAt);
+    this.droneLfo?.stop(stopAt);
+    this.droneOsc     = undefined;
+    this.droneOsc2    = undefined;
+    this.droneGain    = undefined;
+    this.droneLfo     = undefined;
+    this.droneLowpass = undefined;
+  }
+
   /**
    * Smonta il manager: ferma il motore e **scollega master+limiter** da `destination`. Da chiamare allo
    * SHUTDOWN della scena: senza, ogni restart di GameScene (e ogni anteprima di SettingsScene) lascerebbe
@@ -610,6 +787,7 @@ export default class SoundManager {
    */
   dispose() {
     this.stopEngine();
+    this.stopAmbience();
     try { this.shotWet.disconnect(); } catch { /* già scollegato */ }
     try { this.shotVerb.disconnect(); } catch { /* già scollegato */ }
     try { this.master.disconnect(); } catch { /* già scollegato */ }

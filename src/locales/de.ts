@@ -81,6 +81,8 @@ const de: Record<string, string> = {
 
   'item.repair.label': 'Alles reparieren',
   'item.repair.desc': 'Alle Komponenten auf 100%',
+  'item.restock.label': 'Munition auffüllen',
+  'item.restock.desc': 'Füllt endliche Waffen auf max',
   'item.armor.label': 'Verstärkte Panzerung',
   'item.armor.desc': 'Erlittener Schaden reduziert (-20%)',
   'item.engine.label': 'Getunter Motor',
@@ -137,6 +139,7 @@ const de: Record<string, string> = {
   'region.finalCity': 'Letzte Stadt',
 
   'game.giantWarn': '⚠ RIESE!',
+  'game.padConnected': '🎮 Controller verbunden',
   'game.overdriveOn': '⚡ OVERDRIVE!',
   'game.over.fuel': 'Kein Treibstoff mehr!',  'game.over.vehicle': 'Fahrzeug zerstört!',
   'game.victoryCycle': '🏆 SIEG · Zyklus {n}',
@@ -148,6 +151,9 @@ const de: Record<string, string> = {
   'game.coinsTotal': 'Gesamt: {n}',
   'game.toShop': '[ LEER ] für den Shop',
   'game.toMenu': '[ M ]  Zurück zum Menü',
+  'game.toShopPad': '[ A ] für den Shop',
+  'game.toMenuPad': '[ B ]  Zurück zum Menü',
+  'game.restartPad': '[ A ] Mission wiederholen',
   'game.gameOver': 'GAME OVER',
   'game.checkpointResume': 'Weiter ab Mission {n}',
   'game.deathToll': 'Bergungskosten: −{n}★',

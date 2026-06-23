@@ -23,6 +23,9 @@ export interface RunData {
   ownedVehicles: string[];
   ownedWeapons: WeaponType[];
   currentWeapon: WeaponType;
+  /** Munizioni finite (pivot horror): riserva corrente per arma. La MG (∞) non è tracciata; le altre sì.
+   *  Caricata a inizio missione, consumata sparando, ricaricata da casse/garage, persistita a fine missione. */
+  ammo: Partial<Record<WeaponType, number>>;
   /** Salute (0..100) per componente, tramandata negozio→gioco; null = veicolo fresco. */
   components: Record<ComponentKey, number> | null;
   /** Punteggio dell'ultima partita conclusa (per overlay/record). */
@@ -68,6 +71,7 @@ export function resetRunState(registry: Phaser.Data.DataManager) {
   setRun(registry, 'ownedVehicles', ['civilian_car']);
   setRun(registry, 'ownedWeapons', ['mg']);
   setRun(registry, 'currentWeapon', 'mg');
+  setRun(registry, 'ammo', {}); // solo MG (∞) all'inizio → nessuna riserva da tracciare
   setRun(registry, 'components', null);
   setRun(registry, 'routeModifier', 'none');
   setRun(registry, 'recruitLockMission', -1);
@@ -93,6 +97,7 @@ export function snapshotRun(registry: Phaser.Data.DataManager): RunData {
     ownedVehicles: getRun(registry, 'ownedVehicles') ?? ['civilian_car'],
     ownedWeapons:  getRun(registry, 'ownedWeapons') ?? ['mg'],
     currentWeapon: getRun(registry, 'currentWeapon') ?? 'mg',
+    ammo:          getRun(registry, 'ammo') ?? {},
     components:    getRun(registry, 'components') ?? null,
     lastScore:     getRun(registry, 'lastScore') ?? 0,
     routeModifier: getRun(registry, 'routeModifier') ?? 'none',
@@ -115,6 +120,7 @@ export function restoreRun(registry: Phaser.Data.DataManager, run: RunData): voi
   setRun(registry, 'ownedVehicles', run.ownedVehicles);
   setRun(registry, 'ownedWeapons',  run.ownedWeapons);
   setRun(registry, 'currentWeapon', run.currentWeapon);
+  setRun(registry, 'ammo',          run.ammo ?? {});
   setRun(registry, 'components',    run.components);
   setRun(registry, 'lastScore',     run.lastScore);
   setRun(registry, 'routeModifier', run.routeModifier ?? 'none');

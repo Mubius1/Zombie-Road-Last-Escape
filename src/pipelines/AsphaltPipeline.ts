@@ -74,12 +74,12 @@ export default class AsphaltPipeline extends Phaser.Renderer.WebGL.Pipelines.Pos
       game,
       name: 'Asphalt',
       fragShader: frag,
-    } as Phaser.Types.Renderer.WebGL.WebGLPipelineConfig);
+    });
   }
 
   // onPreRender() è chiamata ogni frame (evento PRE_RENDER, nessun argomento): gli uniform
   // vanno sul currentShader, come per la pipeline di camera.
-  onPreRender(): void {
+  override onPreRender(): void {
     this.set1f('uScroll', asphaltParams.scroll);
     this.set1f('uIntensity', asphaltParams.intensity);
   }

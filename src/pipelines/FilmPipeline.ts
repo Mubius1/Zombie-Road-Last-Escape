@@ -56,11 +56,12 @@ export interface FilmParams {
 
 export const filmParams: FilmParams = {
   intensity: 1,
-  contrast: 1.08,
-  saturation: 0.92,
+  // Penombra (pivot horror): grading più cupo e desaturato → notte malata, meno "arcade".
+  contrast: 1.12,
+  saturation: 0.84,
   warmth: 0.0,
   tone: 0.5,
-  exposure: 1.05,
+  exposure: 0.9,
   aberration: 0.006,
   grain: 0.045,
   scanline: 0.035,
@@ -162,11 +163,11 @@ export default class FilmPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFX
       game,
       name: 'Film',
       fragShader: frag,
-    } as Phaser.Types.Renderer.WebGL.WebGLPipelineConfig);
+    });
   }
 
   // Chiamata una volta per frame, prima del draw: posto qui gli uniform animati/per-camera.
-  onPreRender(): void {
+  override onPreRender(): void {
     this.elapsed += this.game.loop.delta / 1000;
     const p = filmParams;
     p.shock *= 0.88; // lo shock di impatto decade da solo

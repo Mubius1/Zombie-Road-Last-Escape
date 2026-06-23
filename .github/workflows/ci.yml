@@ -2,7 +2,8 @@ name: CI
 
 # Gate continuo: ogni push/PR ricostruisce il progetto. `npm run build` esegue in sequenza
 # i 4 validatori anti-deriva (art · balance · audio · i18n), poi `tsc` (type-check) e la build Vite.
-# Se codice e documenti divergono — o se i dizionari di lingua non sono allineati — la CI fallisce.
+# In più `npm run lint` (ESLint type-checked). Se codice e documenti divergono — o se i dizionari
+# di lingua non sono allineati, o il lint trova problemi — la CI fallisce.
 
 on:
   push:
@@ -25,3 +26,6 @@ jobs:
 
       - name: Build (validatori anti-deriva + tsc + vite)
         run: npm run build
+
+      - name: Lint (ESLint type-checked)
+        run: npm run lint

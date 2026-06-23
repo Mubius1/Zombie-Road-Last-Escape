@@ -806,7 +806,7 @@ export function buildEntityTextures(scene: Phaser.Scene) {
       g.fillStyle(0x000000,0.28); g.fillEllipse(X(54),40,80,7);
       // dal fondo (coda) verso la testa: la testa copre i segmenti dietro
       for (let i = seg.length - 1; i >= 0; i--) {
-        const [sx,r] = seg[i]; const sy = wy(i+1);
+        const [sx,r] = seg[i]!; const sy = wy(i+1);
         g.fillStyle(wfSh); g.fillEllipse(X(sx),sy+1,r*2+2,r*2);
         g.fillStyle(wf);   g.fillEllipse(X(sx),sy,r*2,r*2-2);
         g.fillStyle(ring); g.fillEllipse(X(sx+r-2),sy+1,3,r*2-3); // solco sul lato trailing/basso (§3.2)
@@ -866,8 +866,8 @@ export function buildEntityTextures(scene: Phaser.Scene) {
       g.fillStyle(st);   g.fillRoundedRect(X(12),25,36,27,7);
       g.fillStyle(stHi); g.fillRoundedRect(X(14),27,14,10,4);
       g.fillStyle(stSh); g.fillRect(X(30),26,1,26);
-      g.fillStyle(cav); [[15,30],[45,30],[15,48],[45,48]].forEach(([x,y]) => g.fillCircle(X(x),y,1.6));         // 4 rivetti "eroe" (no griglia fitta, §9)
-      g.fillStyle(stHi,0.6); [[15,30],[45,30],[15,48],[45,48]].forEach(([x,y]) => g.fillCircle(X(x-0.6),y-0.6,0.8));
+      g.fillStyle(cav); [[15,30],[45,30],[15,48],[45,48]].forEach(([x,y]) => g.fillCircle(X(x!),y!,1.6));         // 4 rivetti "eroe" (no griglia fitta, §9)
+      g.fillStyle(stHi,0.6); [[15,30],[45,30],[15,48],[45,48]].forEach(([x,y]) => g.fillCircle(X(x!-0.6),y!-0.6,0.8));
       g.fillStyle(rust,0.8); g.fillRect(X(20),34,2,16); g.fillRect(X(38),30,2,20);
       g.fillStyle(rustD,0.7); g.fillRect(X(20),44,2,6); g.fillRect(X(38),44,2,6);
       g.fillStyle(verd,0.5); g.fillRect(X(12),48,36,2); g.fillRect(X(13),25,34,1.5);
@@ -1052,6 +1052,36 @@ export function buildEntityTextures(scene: Phaser.Scene) {
     g.fillStyle(0xffcc00); g.fillTriangle(10,13.6, 9,15.8, 11,15.8);
     g.fillStyle(0xcc1800); g.fillRect(8,16,4,1);
     g.generateTexture('fuel_can', 22, 26);
+    g.destroy();
+  }
+
+  // ── AMMO CRATE (24×18) — cassa di munizioni · sovracampionata (OS_G) ──────────
+  // Pickup munizioni (pivot horror): legge "rifornimento" a distanza — verde militare + ottone,
+  // volutamente DIVERSA dalla tanica rossa (luce alto-sinistra, rinforzi metallo, banda gialla stencil).
+  {
+    const g = OS_G(24,18);
+    g.fillStyle(0x000000,0.22); g.fillEllipse(12,17,20,4);                     // ombra di contatto a terra
+    // Corpo: cassa verde oliva, luce alto-sinistra → ombra basso-destra
+    g.fillStyle(0x222a16); g.fillRoundedRect(2,3,20,13,2);
+    g.fillStyle(0x4a5a2a); g.fillRoundedRect(2,3,19,12,2);
+    g.fillStyle(0x5e7236); g.fillRoundedRect(2,3,10,12,{tl:2,tr:0,bl:2,br:0});
+    g.fillStyle(0x7a9248,0.7); g.fillRect(3,4,16,1);
+    g.fillStyle(0x2c3618);     g.fillRect(3,14,17,1);
+    // Rinforzi metallici agli angoli (kit metallo scuro condiviso §3.2)
+    g.fillStyle(0x26262c); g.fillRect(2,3,2,12); g.fillRect(19,3,2,12);
+    g.fillStyle(0x4a4a52); g.fillRect(2,3,1,12); g.fillRect(19,3,1,12);
+    // Coperchio / chiusura
+    g.fillStyle(0x3a4622); g.fillRect(3,3,17,2);
+    g.fillStyle(0x6a8240,0.6); g.fillRect(4,3,15,1);
+    // Banda gialla stencil (gancio di lettura) + 3 proiettili ottone
+    g.fillStyle(0xb89000); g.fillRect(6,8,12,4);
+    g.fillStyle(0xffdd00); g.fillRect(6,8,12,3);
+    for (let i = 0; i < 3; i++) {
+      const x = 7 + i * 4;
+      g.fillStyle(0x8a6a1a); g.fillRect(x,9,2,3);   // bossolo ottone
+      g.fillStyle(0xc99a2a); g.fillRect(x,9,2,1);   // luce sulla punta
+    }
+    g.generateTexture('ammo_crate', 24, 18);
     g.destroy();
   }
 

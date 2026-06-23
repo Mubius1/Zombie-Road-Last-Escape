@@ -11,17 +11,25 @@ Questo documento è la **fonte di verità** del *design del gioco*: cosa fa il g
 
 ## §0 · Visione e pilastri
 
-**Pitch.** Arcade survival top-down: guidi un veicolo lungo una strada infinita che scorre verso sinistra, falci orde di zombi, sopravvivi al boss di regione e usi il bottino tra una missione e l'altra per potenziarti — finché carburante o scocca non cedono.
+**Genere.** **Survival horror su ruote** (top-down). Non un arcade verniciato di scuro: la paura è una **meccanica**, non una decorazione. Guidi nel buio, vedi poco, conti ogni proiettile, e la strada alterna **quiete tese** a **ondate** che ti travolgono.
+
+**Pitch.** Sopravvivi alla notte alla guida di un relitto su ruote lungo una strada che scorre verso sinistra. L'oscurità nasconde ciò che arriva; i fari sono l'unica luce affidabile e l'orecchio avverte prima dell'occhio. Le **munizioni sono finite** — ogni colpo pesa — e la **doppia risorsa** (carburante + scocca) non perdona. Sopravvivi al **terrore di regione** (boss) e usa il poco bottino tra una missione e l'altra per non spegnerti.
 
 **Pilastri di design**
 
-1. **Tensione a doppia risorsa.** Non muori solo perché ti colpiscono: muori anche se finisci il **carburante**. Ogni secondo conta; fermarsi non è un'opzione.
-2. **Campagna a checkpoint.** Una "corsa" è una catena di missioni che il gioco **salva a ogni missione** (su disco, anche tra sessioni del browser → "CONTINUA"). La morte **non azzera tutto**: rigiochi la missione corrente pagando un **pedaggio** (−25% monete), tenendo veicolo/armi/sopravvissuti/potenziamenti. Solo **Nuova Partita** ricomincia da capo. La posta resta (morire costa), ma il progresso del viaggio non si perde — **non è un roguelike**.
-3. **Degrado significativo.** I componenti del veicolo si danneggiano e questo **cambia come si guida** (più lento, spara peggio, beve più carburante) — non è solo una barra che cala.
-4. **Mira attiva.** Spari **dove punti**: il combat è un verbo che il giocatore esercita di continuo, non un automatismo di sfondo. Lo Scatto e l'Overdrive aggiungono verbi tattici sopra alla mira.
-5. **Leggibilità arcade.** Lettura immediata della minaccia, feedback tattile su ogni colpo (vedi Standard di Produzione AAA nell'art bible zombi).
+1. **Tensione a doppia risorsa + throttle.** Non muori solo perché ti colpiscono: muori anche se finisci il **carburante**. Il giocatore **modula la velocità** (acceleratore/freno): accelerare brucia più carburante e raggiunge prima il boss; **rilasciare** fa rallentare il mezzo per **inerzia** (niente auto-crociera: per restare in moto devi accelerare); **frenare** può portarlo allo **STOP totale**. Fermarsi è ora possibile — ma è una scelta *costosa e rischiosa*, non un riposo: il carburante drena comunque nel tempo e l'orda continua a chiudersi addosso (gli zombi camminano verso di te anche a mondo fermo). La tensione si sposta da "non puoi fermarti" a "andare veloce ti svuota, fermarti ti circonda". *(Modello in [BALANCE §1bis](BALANCE.md).)*
+2. **Scarsità (munizioni finite).** Sparare consuma munizioni **contate**. L'arma base (Mitragliatrice) ha un fondo di emergenza pressoché inesauribile — il *fallback disperato* — ma le armi forti **bruciano** munizioni raccolte sulla strada o comprate al garage. Niente più potenza illimitata: ogni raffica è una **scelta**, non un riflesso. *(Numeri: [BALANCE §7/§8](BALANCE.md).)*
+3. **Penombra e visione limitata.** Il **buio è un avversario**. La luce ambiente è bassa, i fari illuminano solo un cono davanti a te, la foschia mangia i bordi: le minacce **emergono** dall'oscurità invece di essere sempre leggibili. Si anticipa col suono e con la lettura del cono, non con la visione totale. *(Direzione: [art bible ambiente](ART_BIBLE_AMBIENTE.md).)*
+4. **Ritmo del terrore (dread → burst).** La pressione non è costante: lunghe **quiete cariche** (silenzio, qualche sagoma isolata) montano in **ondate improvvise** che ti sommergono, poi si ritirano. Il **silenzio è minaccia**, non riposo: è quando sai che sta per arrivare qualcosa. *(Director di spawn: [BALANCE §1bis/§5](BALANCE.md).)*
+5. **Degrado significativo.** I componenti del veicolo si danneggiano e questo **cambia come si guida** (più lento, spara peggio, beve più carburante) — non è solo una barra che cala.
+6. **Mira attiva sotto pressione.** Spari **dove punti**: il combat è un verbo che il giocatore esercita di continuo, non un automatismo di sfondo. Con le munizioni contate ogni colpo mirato vale di più. Lo Scatto e l'Overdrive restano i verbi tattici di sfogo.
+7. **Atmosfera che pesa.** L'audio è un pilastro, non un contorno: drone d'angoscia, lamenti lontani, battito cardiaco quando la salute crolla, stinger sulle ondate. Leggibilità della minaccia e feedback tattile su ogni colpo restano la base (Standard di Produzione AAA nell'art bible zombi); l'horror **aggiunge** tensione, non toglie chiarezza dove conta.
+
+**Campagna a checkpoint (cornice, invariata).** Una "corsa" è una catena di missioni che il gioco **salva a ogni missione** (su disco, anche tra sessioni del browser → "CONTINUA"). La morte **non azzera tutto**: rigiochi la missione corrente pagando un **pedaggio** (−25% monete), tenendo veicolo/armi/sopravvissuti/potenziamenti. Solo **Nuova Partita** ricomincia da capo. La posta resta (morire costa), ma il progresso del viaggio non si perde — **non è un roguelike**. L'horror cambia il *tono* e la *pressione*, non lo scheletro.
 
 > 🔁 **Decisione — Combat reboot.** Nelle prime versioni il fuoco era **automatico in avanti**: il fun-gate ha mostrato che rendeva il giocatore **passivo** (bastava posizionarsi in verticale). Il combat è stato riprogettato sulla **mira col mouse**: la torretta ruota verso il puntatore (arco frontale ±82°) e si spara attivamente verso il mirino. La struttura della campagna (km → boss all'82% → 7 regioni → negozio, componenti, carburante, armi, sopravvissuti, Track A, scaling NG+) resta **invariata**.
+>
+> 🩸 **Decisione — Pivot horror (giugno 2026).** Il comparto *visivo* virava all'horror da tempo (l'art bible ambiente cita *Dead Nation* come riferimento); il design *meccanico* era rimasto "arcade survival" → tensione di identità. Decisione: **far seguire le meccaniche all'estetica**. Quattro leve spostano il gioco dal registro *power-fantasy arcade* a quello *vulnerabilità tesa* — **munizioni finite** (pilastro 2), **penombra/visione limitata** (3), **ritmo dread→burst** (4), **atmosfera sonora** (7). Restano invariati: campagna a checkpoint, mira-col-mouse, doppia risorsa, degrado, scaling NG+. La combo/punteggio sopravvive ma è ridimensionata da padrona del feel a *contatore di efficienza* (non più la valuta-dopamina centrale).
 
 ---
 
@@ -52,17 +60,39 @@ Questo documento è la **fonte di verità** del *design del gioco*: cosa fa il g
 
 ## §2 · Comandi
 
+### Tastiera + mouse (default)
+
 | Input | Azione |
 |---|---|
 | **↑ / ↓** (o W/S) | Muovi il veicolo su/giù nella strada |
+| **→ / ←** (o D/A) | **Acceleratore / Freno** (throttle): → accelera (più veloce, più carburante); ← frena fino allo **STOP**. Senza input il mezzo rallenta per **inerzia**. *(Modello [BALANCE §1bis](BALANCE.md).)* |
 | **MOUSE** | **Mira**: la torretta ruota verso il puntatore, vincolata all'arco frontale **±82°**; il mirino segna il punto mirato |
 | **CLIC / SPAZIO** | **Sparo**: tieni premuto per fare fuoco verso il mirino, secondo l'arma equipaggiata (cliccare l'HUD non spara) |
 | **Shift** | **Scatto** (dash): scrolla via gli zombi aggrappati · ricarica 5 s |
 | **F** | **Sovraccarico** (overdrive): a barra piena, ~3 s di cadenza ×2 + veicolo-ariete + onda d'urto frontale. La barra si carica dalle uccisioni in combo (§7). |
+| **C** | **Granata** (Artificiere): lancio AoE a ricarica (solo col sopravvissuto attivo) |
 | **1–5** | Cambia arma posseduta al volo |
 | **ESC** | Pausa / Impostazioni (mette in pausa la scena) |
 | **SPAZIO** | Avanza nelle schermate di esito (negozio / restart) |
 | **M** | Torna al menu dalle schermate di esito |
+
+### Gamepad (schema alternativo, "last input wins")
+
+Supporto pad via **Gamepad API** standard del browser (plugin abilitato in `game.ts`). Tastiera+mouse restano il **default**; il pad si attiva al primo input su stick/grilletti/bottoni e si **disattiva** al primo movimento del puntatore o tasto. Caveat browser: il pad è invisibile finché il giocatore non preme un tasto dopo il caricamento → un hint discreto (`game.padConnected`) lo conferma alla connessione. Gli input pad **riusano gli stessi metodi/percorsi** della tastiera (nessuna logica duplicata): mira, corsia e **accel/freno** confluiscono in un solo hook.
+
+| Controllo pad | Azione (equivalente tastiera/mouse) |
+|---|---|
+| **Stick sinistro** (asse Y) | Corsia su/giù (= ↑/↓), analogico con deadzone |
+| **Stick destro** | **Mira**: direzione (`atan2` degli assi) → stesso clamp ±82°, mirino a distanza fissa (= mouse) |
+| **RT** (grilletto destro) | **Fuoco**, tieni premuto (= CLIC/SPAZIO) |
+| **LT** (grilletto sinistro) | **Acceleratore** analogico (= →/D) |
+| **LB** (dorsale sinistro) | **Freno**, intermittente (= ←/A) |
+| **RB** (dorsale destro) | Cambio arma ciclico (= Q) |
+| **A** | Scatto (= Shift) · **B** | Sovraccarico (= F) |
+| **X / Y** | Granata (= C) · **Croce direzionale** | Armi 1–4 dirette (la 5ª col ciclo RB) |
+| **Start** | Pausa (= ESC) | |
+
+> **Comodità a due mani (Idea 2):** **fuoco** (RT) e **acceleratore** (LT) sono i due "tieni premuto" e stanno su **mani opposte** → si reggono insieme senza scomodità; il **freno** è un input intermittente sul bumper **LB**. Il pad è **solo input**: non altera hitbox, bilanciamento, clamp di mira né le costanti di accel/freno. Deadzone radiale (~0.25) sugli stick e soglia minima sui grilletti per evitare drift.
 
 **Tasti debug** (non per il giocatore finale): `G` god-mode, `H` cura tutto, `N` completa missione, più la galleria modelli in `DebugScene`. Vedi [BALANCE.md §9](BALANCE.md#9--debug--leve-di-tuning).
 
@@ -107,20 +137,19 @@ Tutto vive in uno **spazio di design alto 600** (vedi [CLAUDE.md → Risoluzione
 |---|---|---|
 | Distanza missione | `MISSION_DIST = 18000` u | ~**180 km** mostrati; ~75 s di guida pura a `SCROLL_SPEED=240 u/s` |
 | Trigger boss | `82%` (`BOSS_TRIGGER`) | il boss appare a 14 760 u; l'avanzamento si congela finché vive |
-| Spawn zombi | a intervallo decrescente | parte da `max(330, 1350 − (missione−1)·80)` ms, accelera (§5) |
-| Sferzata d'orda | ogni `SURGE_INTERVAL = 11 500` ms | onda extra `min(7, 4 + ⌊(missione−1)/2⌋)` spawn; sospesa durante il boss |
+| Spawn zombi (ritmo del terrore) | director a fasi **dread → burst** | **quiete** tesa (spawn radi, `CALM_INTERVAL`) ↔ **ondata** serrata (`BURST_INTERVAL` + batch d'apertura + stinger); sospeso durante il boss (§5, [BALANCE §1bis](BALANCE.md)) |
 | Gigante | ogni `22 000` ms | spawn speciale fuori dal pool ordinario |
 | Hazard di corsia | ogni `4500` ms | relitto/olio/mina che scorrono col mondo, da schivare (A1) |
 | Eventi in-run (B2) | a ~30% e ~62% (prob. 80%) | picco situazionale, mai prima del boss: **Orda Notturna** (velo scuro + raffica), **Blocco Stradale** (muro di relitti con varco), **Tempesta** (sterzo molle + visibilità ridotta), **Convoglio** (scorta un van alleato → bonus monete + carburante) |
 
-**Densità "orda".** La mira attiva regge una pressione più alta: la strada è **affollata**. Tre leve danno il ritmo:
-- **Intervallo più fitto** — lo spawn ordinario parte molto più stretto di prima (pavimento `290` ms vs `500`), così la massa cresce in fretta.
-- **Sciami** — i *fodder* (Comune/Corridore) arrivano in gruppo da 1-3, il Tossico da 1-2, gli altri singoli: piccoli grappoli da falciare, non file isolate.
-- **Sferzate** — ogni `SURGE_INTERVAL` un'**orda extra** (più chiamate di spawn, ognuna eventualmente uno sciame), che cresce con la missione. È un ritmo a **picchi** (calma → ondata → calma); le sferzate si **fermano durante il duello col boss**.
+**Ritmo del terrore (dread → burst).** Niente più pressione costante: il director **alterna due fasi** (pilastro 4):
+- **Quiete tesa** — spawn radi (`CALM_INTERVAL`, sagome isolate), il **silenzio come minaccia**: sai che l'ondata arriverà. Lamenti lontani e drone basso (audio).
+- **Ondata** — al passaggio scatta uno **stinger**, il drone d'angoscia va al **massimo** e parte un **batch d'apertura**; poi spawn serrati (`BURST_INTERVAL`), sciami che ti sommergono. Poi si ritira → quiete (respiro).
+- **Sciami** — i *fodder* (Comune/Corridore) arrivano in gruppo da 1-3, il Tossico da 1-2, gli altri singoli: grappoli da falciare, non file isolate.
 
-> ⚠️ Le costanti di densità (intervallo, sciami, `SURGE_INTERVAL`/base) sono **derivate / in taratura**, non valori 🔒 di bilanciamento.
+> ⚠️ Le costanti del ritmo (`CALM_INTERVAL`, `BURST_INTERVAL`, durate fase, sciami) sono **derivate / in taratura**, non valori 🔒 di bilanciamento. Sostituiscono le vecchie *sferzate* (`SURGE_*`, rimosse).
 
-**Sequenza:** guida e sopravvivi → all'82% **spawn boss** (gli zombi ordinari e le sferzate smettono) → sconfiggi il boss → schermata *BOSS SCONFITTO* → dopo 2,2 s **MISSIONE COMPLETATA** → bottino → Negozio.
+**Sequenza:** guida e sopravvivi (quiete ↔ ondate) → all'82% **spawn boss** (zombi ordinari e ondate smettono) → sconfiggi il boss → schermata *BOSS SCONFITTO* → dopo 2,2 s **MISSIONE COMPLETATA** → bottino → Negozio.
 
 ---
 
@@ -176,6 +205,7 @@ Il veicolo è definito da `VEHICLES[key]` (salute/armatura/velocità/cadenza bas
 - **Punteggio / Combo**: ogni uccisione dà punti × moltiplicatore combo. La **combo** sale a ogni kill entro 2,5 s dal precedente e moltiplica fino a **×5** (cap a 13 kill di fila, vedi [BALANCE §2](BALANCE.md#2--economia--flusso-delle-monete)). Il punteggio è la valuta-sorgente: a fine missione diventa **monete** (= ⌊punteggio/8⌋). Il **boss** dà inoltre una **ricompensa in monete diretta** (accreditata subito) **più** +500 punteggio — due accrediti distinti a fine missione.
 - **Sovraccarico (Overdrive)** (A3): una barra che si carica dalle uccisioni in combo. A barra piena, **F** scatena ~3 s di cadenza di fuoco ×2, veicolo-ariete (il contatto uccide senza danneggiare i componenti) e un'onda d'urto frontale. È la valvola **attiva** legata alla combo — premia l'aggressività e aggiunge un secondo verbo oltre allo Scatto. Numeri in [BALANCE §1](BALANCE.md#1--costanti-di-missione-).
 - **Monete (★)**: spese solo al Negozio. **Non** sopravvivono al game over.
+- **Munizioni** (pivot horror, pilastro 2): riserva **finita** per ogni arma forte; la **Mitragliatrice base è ∞** (fallback). Si raccolgono dalle **casse** sulla strada (~13 s) o si ricomprano al garage (`restock`). A secco → click + ripiego automatico sulla MG. Numeri in [BALANCE §7bis](BALANCE.md#7--armi).
 
 ---
 
@@ -191,7 +221,7 @@ Il veicolo è definito da `VEHICLES[key]` (salute/armatura/velocità/cadenza bas
 | **Razzi** | missile mirato con esplosione ad area (r≈90px), lenta — anti-orda/boss |
 | **Lanciafiamme** | ventaglio breve attorno alla mira a corto raggio (range 440) |
 
-Le armi si **comprano** una volta e si **equipaggiano** liberamente (tasti 1–5 o dal Negozio).
+Le armi si **comprano** una volta e si **equipaggiano** liberamente (tasti 1–5 o dal Negozio). **Munizioni finite** (pilastro 2): le armi forti consumano riserva (∞ solo per la MG); si riforniscono con le **casse** su strada o il **rifornimento** al garage (§9). Vedi [BALANCE §7bis](BALANCE.md#7--armi).
 
 ---
 
@@ -199,7 +229,7 @@ Le armi si **comprano** una volta e si **equipaggiano** liberamente (tasti 1–5
 
 Tra le missioni, nel **GARAGE** (`ShopScene`):
 
-- **Potenziamenti** (una tantum): Corazza rinforzata (−20% danno), Motore potenziato (+15% velocità), Torretta migliorata (+25% cadenza), Serbatoio extra (+30 carburante max). Più **Ripara tutto** (ripetibile): componenti → 100%.
+- **Potenziamenti** (una tantum): Corazza rinforzata (−20% danno), Motore potenziato (+15% velocità), Torretta migliorata (+25% cadenza), Serbatoio extra (+30 carburante max). Più **Ripara tutto** (ripetibile): componenti → 100%, e **Rifornimento munizioni** (ripetibile, pivot horror): ricarica al massimo le armi finite (compare solo se ne possiedi una).
 - **Armi**: acquisto + equipaggiamento.
 - **Veicoli**: 7 mezzi da Auto Civile (gratis) a Veicolo Sperimentale (5000) — salute/armatura/velocità/cadenza crescenti.
 - **Sopravvissuti — loop di sopravvivenza** (non più "collezione gratis"): a ogni visita **3 offerti** tra i non reclutati, **max 1 reclutamento per sosta** (M1). Ogni sopravvissuto a bordo **mangia** ogni missione (scorta di campagna; M2): a corto di cibo diventa **affamato** → abilità spenta finché non compri **razioni**. Un **colpo pesante** può **ferirlo** (abilità spenta finché non lo curi al negozio; M3); la **fame prolungata** (≥2 missioni) lo fa **andare via**, e la **morte** ne porta via **uno** (oltre al pedaggio monete). Le perdite si recuperano **salvandone uno sulla strada** (evento di scorta a rischio; M4). Le abilità sono attive **solo se sazio e illeso**:

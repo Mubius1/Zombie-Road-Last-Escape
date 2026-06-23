@@ -94,6 +94,8 @@ const it: Record<string, string> = {
   // ── Voci negozio (potenziamenti) ─────────────────────────────────────────────────
   'item.repair.label': 'Ripara tutto',
   'item.repair.desc': 'Tutti i componenti tornano al 100%',
+  'item.restock.label': 'Rifornimento munizioni',
+  'item.restock.desc': 'Ricarica al massimo le armi finite',
   'item.armor.label': 'Corazza rinforzata',
   'item.armor.desc': 'Danno ricevuto ridotto (-20%)',
   'item.engine.label': 'Motore potenziato',
@@ -154,6 +156,7 @@ const it: Record<string, string> = {
 
   // ── Gioco: esiti e avvisi ────────────────────────────────────────────────────────
   'game.giantWarn': '⚠ GIGANTE!',
+  'game.padConnected': '🎮 Controller collegato',
   'game.overdriveOn': '⚡ SOVRACCARICO!',
   'game.over.fuel': 'Carburante esaurito!',  'game.over.vehicle': 'Veicolo distrutto!',
   'game.victoryCycle': '🏆 VITTORIA · Ciclo {n}',
@@ -165,6 +168,9 @@ const it: Record<string, string> = {
   'game.coinsTotal': 'Totale: {n}',
   'game.toShop': '[ SPAZIO ] per il negozio',
   'game.toMenu': '[ M ]  Torna al menu',
+  'game.toShopPad': '[ A ] per il negozio',
+  'game.toMenuPad': '[ B ]  Torna al menu',
+  'game.restartPad': '[ A ] riprova la missione',
   'game.gameOver': 'GAME OVER',
   'game.checkpointResume': 'Riprendi dalla Missione {n}',
   'game.deathToll': 'Costo di recupero: −{n}★',

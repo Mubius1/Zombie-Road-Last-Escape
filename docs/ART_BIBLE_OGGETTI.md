@@ -285,6 +285,19 @@ corpo rosso — base `#cc3300`, mezzo-tono `#e23d12`, **luce alto-sinistra `#ff5
 
 ---
 
+### 4.9 🩸 CASSA DI MUNIZIONI — `ammo_crate` · **24×18** · *il 2° pickup (pivot horror)*
+**Concept:** col pivot **munizioni finite**, le armi forti vanno rifornite. La cassa è il pickup di munizioni e deve leggere "**rifornimento**" a colpo d'occhio, **distinta dalla tanica rossa**: **cassa militare verde oliva** con rinforzi metallici e **banda gialla stencil + 3 proiettili ottone**.
+
+**Palette (sovracampionata `OS_G` 2×):** corpo oliva (ombra `#222a16` / base `#4a5a2a` / mezzo-tono `#5e7236` / luce `#7a9248`), rinforzi metallo scuro (`#26262c` / `#4a4a52`), banda gialla (`#b89000` / `#ffdd00`), proiettili ottone (`#8a6a1a` / luce `#c99a2a`). Regola di luce alto-sinistra + **ombra di contatto** a terra come la tanica.
+
+**Silhouette:** cassa bassa e larga con coperchio e rinforzi agli angoli — chiaramente un **contenitore**, non una tanica. Il **verde militare** vs il **rosso tanica** è la prima linea di lettura (raccolgo *munizioni* ≠ *carburante*).
+
+**VFX:** alla raccolta → ricarica l'arma equipaggiata (o la più scarica) + SFX positivo (`playFuelPickup`) + tinta ottone breve sul veicolo. Scorre col mondo (segue il **throttle**, come tanica/hazard).
+
+**Note di gameplay:** spawn ogni **~13 s** (rado = scarsità), **solo se possiedi un'arma finita** (la MG è ∞ → inutile). Ricarica `AMMO_PICKUP = 0.5` della capacità (vedi [BALANCE §7bis](BALANCE.md)). **Sovracampionata** (`setScale(1/OVERSAMPLE)`), hitbox = frame×scala (24×18). Texture in `buildEntityTextures()`; **non** validata a dimensione (texture nuova fuori dalla lista 🔒 di `validate:art`).
+
+---
+
 ### 4.8 bis · HAZARD DI CORSIA (A1) — *ostacoli su strada da schivare*
 **Concept:** la strada non è più vuota. Tre ostacoli scorrono col mondo e rendono la **posizione verticale** una decisione continua, indipendente dall'autofire: o li schivi (su/giù, Scatto), o paghi. Le **taniche** tendono a uscire nella corsia di un hazard recente → "su o giù?" diventa rischio/ricompensa. Tutti **sovracampionati `OS_G` 2×** (sprite a `setScale(1/OVERSAMPLE)`, hitbox = frame×scala). Texture in `buildEntityTextures()`; dimensioni validate da `npm run validate:art`.
 

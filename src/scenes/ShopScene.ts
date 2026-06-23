@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { VEHICLES, VEHICLE_KEYS, SURVIVORS, SurvivorData, Upgrades, WEAPONS, WEAPON_KEYS, WeaponType, FOOD } from '../GameData';
+import { VEHICLES, VEHICLE_KEYS, SURVIVORS, SurvivorData, Upgrades, WEAPONS, WEAPON_KEYS, WEAPON_AMMO, weaponInfiniteAmmo, WeaponType, FOOD } from '../GameData';
 import { buildEntityTextures, buildSurvivorTextures } from '../EntityTextures';
 import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import Juice from '../Juice';
@@ -7,6 +7,7 @@ import Settings from '../Settings';
 import { enterScreen } from '../PostFx';
 import SoundManager from '../SoundManager';
 import Ui, { UI, MENU_VIGNETTE } from '../Ui';
+import MenuPad, { Focusable } from '../MenuPad';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { getRun, setRun, snapshotRun } from '../RunState';
 import SaveData from '../SaveData';
@@ -24,6 +25,7 @@ interface ShopItem {
 // dipende dal veicolo corrente (VEHICLES[key].upgrades). Acquisti = per-veicolo (RunData.upgrades).
 const SHOP_ITEMS: ShopItem[] = [
   { key: 'repair',     label: 'item.repair.label',     cost:  80, desc: 'item.repair.desc',     oneTime: false },
+  { key: 'restock',    label: 'item.restock.label',    cost: 120, desc: 'item.restock.desc',    oneTime: false }, // munizioni: ricarica al massimo le armi finite (pivot horror)
   { key: 'armor',      label: 'item.armor.label',      cost: 150, desc: 'item.armor.desc',      oneTime: true  },
   { key: 'engine',     label: 'item.engine.label',     cost: 120, desc: 'item.engine.desc',     oneTime: true  },
   { key: 'turret',     label: 'item.turret.label',     cost: 100, desc: 'item.turret.desc',     oneTime: true  },
@@ -63,6 +65,11 @@ export default class ShopScene extends Phaser.Scene {
   private ox = 0;
   /** Oggetti del tooltip veicolo (scheda al passaggio del mouse), distrutti all'uscita. */
   private vehicleTip: Array<{ destroy(): void }> = [];
+  /** Elementi navigabili col gamepad, raccolti a ogni drawUI (la scena fa restart a ogni acquisto). */
+  private navItems: Focusable[] = [];
+
+  /** Registra un elemento per la navigazione col pad e lo restituisce (per concatenare). */
+  private nav<T extends Focusable>(go: T): T { this.navItems.push(go); return go; }
 
   constructor() { super({ key: 'ShopScene' }); }
 
@@ -90,7 +97,7 @@ export default class ShopScene extends Phaser.Scene {
     // comprare/vendere rimescola la terna e permette il reroll gratis). Cache nel registry (non nel checkpoint).
     if (!this.replay) {
       const available = SURVIVORS.filter(s => !this.survivors.includes(s.key));
-      this.offeredSurvivors = Phaser.Utils.Array.Shuffle([...available]).slice(0, 3) as SurvivorData[];
+      this.offeredSurvivors = Phaser.Utils.Array.Shuffle([...available]).slice(0, 3);
       this.registry.set('offeredSurvivors', this.offeredSurvivors.map(s => s.key));
     } else {
       const keys = (this.registry.get('offeredSurvivors') as string[] | undefined) ?? [];
@@ -114,7 +121,7 @@ export default class ShopScene extends Phaser.Scene {
     if (!this.replay) Juice.fadeIn(this);
   }
 
-  update() {
+  override update() {
     Juice.jitterGrain(this.grain);
   }
 
@@ -133,6 +140,7 @@ export default class ShopScene extends Phaser.Scene {
   }
 
   private drawUI() {
+    this.navItems = []; // ricostruiti a ogni disegno (restart post-acquisto)
     // Background: gradiente verticale (più chiaro del vecchio piatto quasi-nero) per dare
     // profondità e tenere leggibili pannelli e card. Scena-locale, non un token di chrome.
     const bg = this.add.graphics();
@@ -159,6 +167,11 @@ export default class ShopScene extends Phaser.Scene {
     this.drawDivider(418);
     this.drawVehiclesPanel();
     this.drawContinueButton();
+
+    // Navigazione col gamepad: tutti gli elementi attivabili raccolti durante il disegno.
+    // B = prosegui (come il pulsante CONTINUA) → non si resta intrappolati nel negozio.
+    const pad = new MenuPad(this).setBack(() => this.continueGame());
+    for (const it of this.navItems) pad.add(it);
   }
 
   private drawDivider(y: number) {
@@ -174,9 +187,14 @@ export default class ShopScene extends Phaser.Scene {
     // Sottotitolo (allineato a destra del pannello, così non tocca l'header): catalogo di QUESTO veicolo.
     Ui.text(this, px + 434, py + 2, t('shop.upgradesFor', { v: vName }), { fontSize: '10px', color: UI.faint }).setOrigin(1, 0);
 
-    // 'repair' è universale; gli altri dipendono dal catalogo del veicolo CORRENTE.
+    // 'repair' è universale; 'restock' compare solo se possiedi un'arma finita (la MG è ∞ → inutile);
+    // gli altri dipendono dal catalogo del veicolo CORRENTE.
     const catalog = (VEHICLES[this.currentVehicle]?.upgrades ?? []) as string[];
-    const items = SHOP_ITEMS.filter(it => it.key === 'repair' || catalog.includes(it.key));
+    const hasFinite = this.ownedWeapons.some(w => !weaponInfiniteAmmo(w));
+    const items = SHOP_ITEMS.filter(it =>
+      it.key === 'repair'  ? true :
+      it.key === 'restock' ? hasFinite :
+      catalog.includes(it.key));
 
     const colW = 216, rowH = 50, boxW = 208;
     items.forEach((item, i) => {
@@ -193,6 +211,7 @@ export default class ShopScene extends Phaser.Scene {
         bg.on('pointerover', () => { if (canAfford) bg.setFillStyle(0x181830); });
         bg.on('pointerout',  () => bg.setFillStyle(bgColor));
         bg.on('pointerdown', () => { if (canAfford) this.buyItem(item); else this.denyPurchase(); });
+        this.nav(bg);
       }
 
       const lc = bought ? UI.greenDim : canAfford ? UI.text : '#554444';
@@ -241,6 +260,7 @@ export default class ShopScene extends Phaser.Scene {
           bg.on('pointerover',  () => bg.setFillStyle(0x1a1400));
           bg.on('pointerout',   () => bg.setFillStyle(bgColor));
           bg.on('pointerdown',  () => this.selectWeapon(key));
+          this.nav(bg);
         }
       } else {
         Ui.text(this, wx + 40, cy + 10, `★${w.price}`, { fontSize: '11px', color: canBuy ? UI.gold : '#443333' }).setOrigin(0.5);
@@ -252,6 +272,7 @@ export default class ShopScene extends Phaser.Scene {
         } else {
           bg.on('pointerdown',  () => this.denyPurchase()); // feedback "monete insufficienti" anche sulle armi (REG7)
         }
+        this.nav(bg);
       }
     });
 
@@ -282,6 +303,7 @@ export default class ShopScene extends Phaser.Scene {
       rat.on('pointerover', () => rat.setColor(UI.white));
       rat.on('pointerout',  () => rat.setColor(UI.greenOk));
       rat.on('pointerdown', () => this.buyRations());
+      this.nav(rat);
     }
 
     // Recruited list (sotto la riga del cibo). Chi è oltre la capienza di cibo → segnato "affamato".
@@ -306,6 +328,7 @@ export default class ShopScene extends Phaser.Scene {
             heal.on('pointerover', () => heal.setColor(UI.white));
             heal.on('pointerout',  () => heal.setColor(UI.greenOk));
             heal.on('pointerdown', () => this.healSurvivor(key));
+            this.nav(heal);
           }
         }
         // ✕ = fai scendere dal veicolo (libera un posto).
@@ -314,6 +337,7 @@ export default class ShopScene extends Phaser.Scene {
         off.on('pointerover', () => off.setColor(UI.red));
         off.on('pointerout',  () => off.setColor(UI.amberSoft));
         off.on('pointerdown', () => this.dismissSurvivor(key));
+        this.nav(off);
       });
     }
 
@@ -336,6 +360,7 @@ export default class ShopScene extends Phaser.Scene {
         bg.on('pointerover', () => bg.setFillStyle(0x1e1e14));
         bg.on('pointerout',  () => bg.setFillStyle(UI.panelWarm));
         bg.on('pointerdown', () => this.recruitSurvivor(s.key));
+        this.nav(bg);
       }
 
       // Ritratto procedurale (sbiadito se non reclutabile: a bordo, veicolo pieno o reclutamento speso).
@@ -356,7 +381,7 @@ export default class ShopScene extends Phaser.Scene {
     Ui.text(this, 14 + this.ox, py, t('shop.vehicles'), { fontSize: '13px', color: UI.blueBright, fontStyle: 'bold' });
 
     VEHICLE_KEYS.forEach((key, i) => {
-      const v = VEHICLES[key];
+      const v = VEHICLES[key]!;
       const vx = 14 + this.ox + i * 112;
       const owned    = this.ownedVehicles.includes(key);
       const selected = this.currentVehicle === key;
@@ -386,6 +411,7 @@ export default class ShopScene extends Phaser.Scene {
           bg.on('pointerover',  () => bg.setFillStyle(0x14142a));
           bg.on('pointerout',   () => bg.setFillStyle(bgColor));
           bg.on('pointerdown',  () => this.selectVehicle(key));
+          this.nav(bg);
         }
       } else {
         Ui.text(this, vx + 50, py + 74, `★ ${v.price}`,
@@ -399,6 +425,7 @@ export default class ShopScene extends Phaser.Scene {
         } else {
           bg.on('pointerdown',  () => this.denyPurchase()); // feedback "monete insufficienti" anche sui veicoli (REG7)
         }
+        this.nav(bg);
       }
     });
   }
@@ -406,7 +433,7 @@ export default class ShopScene extends Phaser.Scene {
   /** Scheda veicolo (al passaggio del mouse): nome, descrizione e specifiche CV/peso/velocità + bonus. */
   private showVehicleTooltip(key: string) {
     this.hideVehicleTooltip();
-    const v = VEHICLES[key];
+    const v = VEHICLES[key]!;
     const cx = this.designW / 2, cy = 352;
     const keep = <T extends { destroy(): void }>(o: T): T => { this.vehicleTip.push(o); return o; };
     keep(Ui.box(this, cx, cy, 600, 116, { fill: 0x0a0a14, fillAlpha: 0.98, radius: 10, stroke: UI.blueLine, strokeAlpha: 0.85 }).setDepth(60));
@@ -425,21 +452,29 @@ export default class ShopScene extends Phaser.Scene {
   // ─── Continue button ─────────────────────────────────────────────────────────
 
   private drawContinueButton() {
-    Ui.button(this, this.designW/2, H - 28, 240, 44, t('shop.continue'), {
+    const cont = Ui.button(this, this.designW/2, H - 28, 240, 44, t('shop.continue'), {
       fill: 0x1a3a1a, hover: 0x224422, color: UI.green,
       onClick: () => this.continueGame(),
     });
+    this.nav(cont.bg);
   }
 
   // ─── Actions ─────────────────────────────────────────────────────────────────
 
   private buyItem(item: ShopItem) {
     if (this.money < item.cost) return;
+    // Rifornimento munizioni: niente acquisto a vuoto se non c'è nulla da ricaricare (evita spreco monete).
+    if (item.key === 'restock' && !this.restockNeeded()) { this.denyPurchase(); return; }
     this.money -= item.cost;
     setRun(this.registry, 'money', this.money);
 
     if (item.key === 'repair') {
       setRun(this.registry, 'components', { engine: 100, wheels: 100, tank: 100, turret: 100 }); // M2: 4 componenti
+    } else if (item.key === 'restock') {
+      // Munizioni (pivot horror): ricarica al MASSIMO ogni arma finita posseduta.
+      const ammo = { ...(getRun(this.registry, 'ammo') ?? {}) } as Partial<Record<WeaponType, number>>;
+      for (const wk of this.ownedWeapons) if (!weaponInfiniteAmmo(wk)) ammo[wk] = WEAPON_AMMO[wk];
+      setRun(this.registry, 'ammo', ammo);
     } else {
       // Potenziamento applicato al SOLO veicolo corrente (catalogo per-veicolo).
       (this.upgrades as Record<string,boolean>)[item.key] = true;
@@ -528,7 +563,7 @@ export default class ShopScene extends Phaser.Scene {
   }
 
   private buyVehicle(key: string) {
-    const v = VEHICLES[key];
+    const v = VEHICLES[key]!;
     if (this.money < v.price || this.ownedVehicles.includes(key)) return;
     this.money -= v.price;
     const newOwned = [...this.ownedVehicles, key];
@@ -554,7 +589,19 @@ export default class ShopScene extends Phaser.Scene {
     setRun(this.registry, 'money', this.money);
     setRun(this.registry, 'ownedWeapons', newOwned);
     setRun(this.registry, 'currentWeapon', key);
+    // Munizioni (pivot horror): un'arma finita appena comprata arriva CARICA.
+    if (!weaponInfiniteAmmo(key)) {
+      const ammo = { ...(getRun(this.registry, 'ammo') ?? {}) } as Partial<Record<WeaponType, number>>;
+      ammo[key] = WEAPON_AMMO[key];
+      setRun(this.registry, 'ammo', ammo);
+    }
     this.afterPurchase();
+  }
+
+  /** True se almeno un'arma finita posseduta non è al massimo (→ il rifornimento ha effetto). */
+  private restockNeeded(): boolean {
+    const ammo = (getRun(this.registry, 'ammo') ?? {});
+    return this.ownedWeapons.some(w => !weaponInfiniteAmmo(w) && (ammo[w] ?? 0) < WEAPON_AMMO[w]);
   }
 
   /** Persiste il checkpoint su disco dopo ogni cambiamento di stato nel negozio (fix review: chiudere

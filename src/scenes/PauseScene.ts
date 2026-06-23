@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import Juice from '../Juice';
 import Ui, { UI } from '../Ui';
+import MenuPad from '../MenuPad';
 import { setupCamera, DESIGN_W } from '../Config';
 import { t } from '../i18n';
 
@@ -35,11 +36,17 @@ export default class PauseScene extends Phaser.Scene {
 
     // Tre pulsanti, stesso stile del "RIPRENDI" (buildBack di SettingsScene).
     const style = { fill: 0x14141f, hover: 0x1d1d2e, border: UI.blueLine, color: UI.blue } as const;
-    Ui.button(this, cx, cy - 48, 300, 52, t('common.settings'),     { ...style, onClick: () => this.openSettings() });
-    Ui.button(this, cx, cy + 16, 300, 52, t('settings.resume'),     { ...style, onClick: () => this.resumeGame() });
-    Ui.button(this, cx, cy + 80, 300, 52, t('settings.exitToMenu'), { ...style, color: UI.redSoft, onClick: () => this.exitToMenu() });
+    const settings = Ui.button(this, cx, cy - 48, 300, 52, t('common.settings'),     { ...style, onClick: () => this.openSettings() });
+    const resume   = Ui.button(this, cx, cy + 16, 300, 52, t('settings.resume'),     { ...style, onClick: () => this.resumeGame() });
+    const exit     = Ui.button(this, cx, cy + 80, 300, 52, t('settings.exitToMenu'), { ...style, color: UI.redSoft, onClick: () => this.exitToMenu() });
 
     this.input.keyboard?.on('keydown-ESC', () => this.resumeGame());
+
+    // Navigazione col gamepad (B/Start = riprendi).
+    new MenuPad(this)
+      .setBack(() => this.resumeGame())
+      .setStart(() => this.resumeGame())
+      .add(settings.bg).add(resume.bg).add(exit.bg);
   }
 
   /** Apre le Impostazioni complete (la GameScene resta in pausa sotto). */
