@@ -37,6 +37,7 @@ const MISSION_DIST = 18000;
 const GIANT_SPAWN_INTERVAL = 22000;
 const BOSS_TRIGGER = 0.82; // % missione a cui appare il boss
 const DEATH_MONEY_PENALTY = 0.25; // pedaggio di recupero alla morte (campagna a checkpoint, modello B)
+const ENGINE_SCROLL_MIN = 0.45;   // M1 motore onesto: a motore distrutto avanzi al 45% (no morte)
 const COMBO_WINDOW = 2500;  // ms: finestra per mantenere la catena di uccisioni
 const DASH_COOLDOWN = 5000; // ms: ricarica dello scatto anti-aggancio
 const DASH_GRACE = 350;     // ms: dopo lo scatto nessun nuovo zombi si aggrappa
@@ -969,7 +970,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   }
 
   private updateDistance(dt: number) {
-    this.distance += SCROLL_SPEED * dt;
+    this.distance += this.getEffectiveScroll() * dt; // M1: il motore regola il ritmo di avanzamento
     this.updateEvents(); // Track B2: eventi in-run a soglie di distanza
     if (!this.boss.spawned && this.distance >= MISSION_DIST * BOSS_TRIGGER) {
       this.boss.spawn();
@@ -2120,7 +2121,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (this.debugGod || this.boss.defeated || this.missionDone || !this.alive) return; // invulnerabile a fine run / celebrazione vittoria
     const comp = this.components[key];
     comp.health = Math.max(0, comp.health - amount);
-    if (key === 'engine' && comp.health <= 0) this.endGame(t('game.over.engine'));
+    // M1: il motore a 0 NON è più morte — degrada solo il ritmo di avanzamento (getEffectiveScroll).
   }
 
   dealDamage(amount: number) {
@@ -2190,6 +2191,13 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private getEffectiveFuelDrain(): number {
     return BASE_FUEL_DRAIN * (1 + (1 - this.components.tank.health / 100) * 2);
+  }
+
+  /** M1 motore onesto: il motore regola il RITMO DI AVANZAMENTO (accumulo di distance/km). Sano →
+   *  strada coperta in fretta (missione breve); rovinato → arranchi (più lunga, più carburante/onde).
+   *  A 0 = velocità minima vitale, NON game over. Solo-progresso: il mondo VISIVO resta invariato. */
+  private getEffectiveScroll(): number {
+    return SCROLL_SPEED * (ENGINE_SCROLL_MIN + (1 - ENGINE_SCROLL_MIN) * (this.components.engine.health / 100));
   }
 
   // ─── Mission complete ────────────────────────────────────────────────────────

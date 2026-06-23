@@ -137,9 +137,7 @@ const pt: Record<string, string> = {
 
   'game.giantWarn': '⚠ GIGANTE!',
   'game.overdriveOn': '⚡ SOBRECARGA!',
-  'game.over.fuel': 'Sem combustível!',
-  'game.over.engine': 'Motor destruído!',
-  'game.over.vehicle': 'Veículo destruído!',
+  'game.over.fuel': 'Sem combustível!',  'game.over.vehicle': 'Veículo destruído!',
   'game.victoryCycle': '🏆 VITÓRIA · Ciclo {n}',
   'game.missionComplete': 'MISSÃO CONCLUÍDA!',
   'game.allRegions': 'Você concluiu as 7 regiões! Continue no endless+',

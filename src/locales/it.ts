@@ -154,9 +154,7 @@ const it: Record<string, string> = {
   // ── Gioco: esiti e avvisi ────────────────────────────────────────────────────────
   'game.giantWarn': '⚠ GIGANTE!',
   'game.overdriveOn': '⚡ SOVRACCARICO!',
-  'game.over.fuel': 'Carburante esaurito!',
-  'game.over.engine': 'Motore distrutto!',
-  'game.over.vehicle': 'Veicolo distrutto!',
+  'game.over.fuel': 'Carburante esaurito!',  'game.over.vehicle': 'Veicolo distrutto!',
   'game.victoryCycle': '🏆 VITTORIA · Ciclo {n}',
   'game.missionComplete': 'MISSIONE COMPLETATA!',
   'game.allRegions': 'Hai completato le 7 regioni! Continua in endless+',
