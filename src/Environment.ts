@@ -166,14 +166,20 @@ export default class Environment {
     const farKey = `env_far_${this.idx}`, nearKey = `env_near_${this.idx}`;
     const FH = this.g.roadTop, NH = this.g.H - this.g.roadBottom;
     // Bordi = TERRENO PIATTO visto a piombo (stesso disegno sopra e sotto la strada → simmetrico/contiguo).
-    if (!this.has(farKey))  { const g = this.gfx(); this.drawGroundBand(g, FH); this.drawFarObjects(g, FH); g.generateTexture(farKey, PW, FH);  g.destroy(); }
-    if (!this.has(nearKey)) { const g = this.gfx(); this.drawGroundBand(g, NH); this.drawNearObjects(g, NH); g.generateTexture(nearKey, PW, NH); g.destroy(); }
+    if (!this.has(farKey))  { const g = this.gfx(); this.drawGroundBand(g, FH, false); this.drawFarObjects(g, FH); g.generateTexture(farKey, PW, FH);  g.destroy(); } // far: strada in basso
+    if (!this.has(nearKey)) { const g = this.gfx(); this.drawGroundBand(g, NH, true);  this.drawNearObjects(g, NH); g.generateTexture(nearKey, PW, NH); g.destroy(); } // near: strada in alto
   }
 
   // ─── Oggetti narrativi a terra (top-down): l'esodo fallito, la violenza, la natura ──────────
+  /** Rim-light alto-sinistra (DoD art bible §6): bordo alto+sinistro schiarito → l'oggetto stacca come
+   *  volume invece di macchia piatta. */
+  private rimTL(g: TexGraphics, x: number, y: number, w: number, h: number, color: number, amt = 0.3) {
+    g.fillStyle(Environment.mix(color, 0xffffff, amt), 0.6); g.fillRect(x, y, w, 1.5); g.fillRect(x, y, 1.5, h);
+  }
+
   /** Relitto d'auto visto a piombo (l'eroe narrativo). alongRoad=lungo la strada; variant 0 sbiadita ·
-   *  1 arrugginita · 2 bruciata · 3 ribaltata. Include ombra a contatto → si "siede" sul terreno. */
-  private carWreck(g: TexGraphics, cx: number, cy: number, alongRoad: boolean, variant: number, paint: number, scale = 1) {
+   *  1 arrugginita · 2 bruciata · 3 ribaltata; embers=brace emissive (eroe ad alto contrasto). */
+  private carWreck(g: TexGraphics, cx: number, cy: number, alongRoad: boolean, variant: number, paint: number, scale = 1, embers = false) {
     // seed per-auto (da posizione) → ogni relitto è danneggiato in modo diverso
     const rr = (k: number) => { const s = Math.sin((cx * 0.7 + cy * 1.3 + k * 2.1) * 12.9898) * 4375.547; return s - Math.floor(s); };
     const L = Math.round(82 * scale), W = Math.round(36 * scale); // ~scala del veicolo del giocatore (100×44)
@@ -200,6 +206,7 @@ export default class Environment {
     const dent = Environment.mix(body, burned ? 0x0a0806 : 0x000000, 0.5);
 
     g.fillStyle(body); g.fillRoundedRect(x, y, len, wid, 4); // scocca
+    this.rimTL(g, x, y, len, wid, body, burned ? 0.1 : 0.32); // rim-light alto-sinistra (volume)
     const crush = rr(1) > 0.5 ? 0 : 0.84;                    // estremità accartocciata (muso o coda)
     g.fillStyle(dent); rect(crush, 0.06, 0.16, 0.88);
     const [t1x, t1y] = at(crush ? 1 : 0, 0), [t2x, t2y] = at(crush ? 0.84 : 0.16, 0.5), [t3x, t3y] = at(crush ? 1 : 0, 1);
@@ -243,6 +250,7 @@ export default class Environment {
 
     g.fillStyle(0x8a9aa2, 0.5); for (let k = 0; k < 8; k++) { const ang = rr(k + 120) * 6.28, d = len * 0.5 + rr(k + 130) * 8; g.fillRect(cx + Math.cos(ang) * d, cy + Math.sin(ang) * d * 0.55, 1.5, 1.5); } // schegge di vetro
     if (rr(6) > 0.5) { g.fillStyle(dent); const [dx, dy] = at(crush ? 1.04 : -0.1, 0.5); g.fillRect(dx, dy - 2, len * 0.1, 4); } // paraurti staccato
+    if (embers) { g.fillStyle(this.emissive, 0.12); g.fillEllipse(cx, cy, len * 0.85, wid * 0.85); g.fillStyle(this.emissive, 0.9); for (let k = 0; k < 6; k++) { const [ex, ey] = at(0.18 + rr(k + 200) * 0.64, 0.18 + rr(k + 210) * 0.64); g.fillCircle(ex, ey, 1.3); } } // brace emissive (eroe)
   }
 
   private barrel(g: TexGraphics, x: number, y: number, color: number) {
@@ -250,16 +258,18 @@ export default class Environment {
     g.fillStyle(color); g.fillCircle(x, y, 6);
     g.lineStyle(1, Environment.mix(color, 0x000000, 0.4), 0.85); g.strokeCircle(x, y, 6);
     g.fillStyle(Environment.mix(color, 0xffffff, 0.25), 0.6); g.fillEllipse(x - 1.5, y - 1.5, 4, 4);
+    g.lineStyle(1.5, Environment.mix(color, 0xffffff, 0.34), 0.7); g.beginPath(); g.arc(x, y, 6, Math.PI * 0.85, Math.PI * 1.55); g.strokePath(); // rim alto-sinistra
   }
 
   private sandbags(g: TexGraphics, x: number, y: number, n: number) {
-    for (let i = 0; i < n; i++) { g.fillStyle(0x000000, 0.25); g.fillEllipse(x + i * 11 + 1, y + 6, 14, 8); g.fillStyle(i % 2 ? 0x6a6244 : 0x7a7050); g.fillRoundedRect(x + i * 11, y, 13, 9, 3); }
+    for (let i = 0; i < n; i++) { const c = i % 2 ? 0x6a6244 : 0x7a7050; g.fillStyle(0x000000, 0.25); g.fillEllipse(x + i * 11 + 1, y + 6, 14, 8); g.fillStyle(c); g.fillRoundedRect(x + i * 11, y, 13, 9, 3); this.rimTL(g, x + i * 11, y, 13, 9, c, 0.22); }
   }
 
   private crate(g: TexGraphics, x: number, y: number, color: number) {
     g.fillStyle(0x000000, 0.25); g.fillRect(x + 1, y + 2, 16, 13);
     g.fillStyle(color); g.fillRect(x, y, 16, 13);
     g.lineStyle(1, Environment.mix(color, 0x000000, 0.45), 0.85); g.strokeRect(x, y, 16, 13); g.lineBetween(x, y, x + 16, y + 13); g.lineBetween(x + 16, y, x, y + 13);
+    this.rimTL(g, x, y, 16, 13, color, 0.3);
   }
 
   /** Resti ai bordi (sobrio: silhouette scura). */
@@ -278,6 +288,7 @@ export default class Environment {
   private barrier(g: TexGraphics, x: number, y: number, w: number, glow: number) {
     g.fillStyle(0x000000, 0.25); g.fillRect(x + 1, y + 2, w, 7);
     g.fillStyle(0x6a6a64); g.fillRect(x, y, w, 7); g.fillStyle(0x4a4a44); g.fillRect(x, y + 5, w, 2);
+    this.rimTL(g, x, y, w, 7, 0x6a6a64, 0.24);
     if (glow >= 0) { g.fillStyle(glow, 0.85); for (let i = 2; i < w; i += 12) g.fillRect(x + i, y + 1, 6, 2); }
   }
 
@@ -285,44 +296,50 @@ export default class Environment {
   private drawNearObjects(g: TexGraphics, H: number) {
     const rnd = (n: number) => { const s = Math.sin(n * 27.31 + this.idx * 41.7 + 9.1) * 24634.6345; return s - Math.floor(s); };
     const em = this.emissive;
-    const car = (n: number, along: boolean, variant: number, paint: number, scale = 1) =>
-      this.wrapX(rnd(n) * PW, xx => this.carWreck(g, xx, 22 + rnd(n + 100) * (H - 44), along, variant, paint, scale));
+    const oy = (n: number) => Math.round(H * 0.2 + rnd(n) * H * 0.7); // confina alla fascia leggibile (fuori dall'AO)
+    const car = (n: number, along: boolean, variant: number, paint: number, scale = 1, embers = false) =>
+      this.wrapX(rnd(n) * PW, xx => this.carWreck(g, xx, oy(n + 100), along, variant, paint, scale, embers));
     switch (this.idx) {
-      case 0: // Città Distrutta — auto accatastate, barricate, resti
-        car(1, true, 0, 0x5a3a3a); car(2, false, 2, 0x444444); car(3, true, 1, 0x3a4a5a); car(4, false, 0, 0x6a5a3a);
-        for (let n = 0; n < 3; n++) this.wrapX(rnd(n + 20) * PW, xx => this.barrier(g, xx, rnd(n + 25) * (H - 10) + 2, 34, -1));
-        for (let n = 0; n < 4; n++) this.wrapX(rnd(n + 30) * PW, xx => this.remains(g, xx, rnd(n + 35) * (H - 6) + 3));
+      case 0: // Città Distrutta — ciglio INTASATO di relitti, barricate, resti, bagagli
+        for (let i = 0; i < 7; i++) car(i + 1, i % 2 === 0, i % 4, [0x5a3a3a, 0x3a4a5a, 0x4a4438, 0x5a4a2a][i % 4]);
+        car(80, true, 2, 0x444444, 1, true); // EROE: relitto bruciato con brace emissive
+        for (let n = 0; n < 5; n++) this.wrapX(rnd(n + 20) * PW, xx => this.barrier(g, xx, oy(n + 25), 34, -1));
+        for (let n = 0; n < 6; n++) this.wrapX(rnd(n + 30) * PW, xx => this.remains(g, xx, oy(n + 35)));
+        for (let n = 0; n < 4; n++) this.wrapX(rnd(n + 45) * PW, xx => this.luggage(g, xx, oy(n + 48)));
         break;
-      case 1: // Autostrada — INGORGO FOSSILE (coda di auto) + camion rovesciato + valigie + coni
+      case 1: // Autostrada — INGORGO FOSSILE (riferimento densità) + camion tappo + valigie + coni
         for (let n = 0; n < 6; n++) car(n + 1, true, n % 4, [0x6a3a3a, 0x3a5a6a, 0x6a6a5a, 0x4a4a4a, 0x7a5a3a][n % 5]);
-        car(40, false, 3, 0x3a3a3a, 1.5); // "tappo": camion rovesciato di traverso (grande)
-        for (let n = 0; n < 5; n++) this.wrapX(rnd(n + 50) * PW, xx => this.luggage(g, xx, rnd(n + 55) * (H - 8) + 2));
-        g.fillStyle(0xc05a1a, 0.9); for (let n = 0; n < 6; n++) this.wrapX(rnd(n + 70) * PW, xx => { const y = rnd(n + 75) * H; g.fillTriangle(xx, y - 4, xx - 3, y + 3, xx + 3, y + 3); }); // coni
+        car(40, false, 3, 0x3a3a3a, 1.5); car(85, true, 2, 0x5a3a2a, 1, true); // tappo + eroe bruciato
+        for (let n = 0; n < 6; n++) this.wrapX(rnd(n + 50) * PW, xx => this.luggage(g, xx, oy(n + 55)));
+        g.fillStyle(0xc05a1a, 0.9); for (let n = 0; n < 7; n++) this.wrapX(rnd(n + 70) * PW, xx => { const y = oy(n + 75); g.fillTriangle(xx, y - 4, xx - 3, y + 3, xx + 3, y + 3); }); // coni
         break;
-      case 2: // Deserto — carcasse sabbiate, gomme, ossa
-        car(1, true, 1, 0x7a6a4a); car(2, false, 1, 0x6a5a3a); car(3, true, 2, 0x333333);
-        g.fillStyle(0x161616, 0.85); for (let n = 0; n < 6; n++) this.wrapX(rnd(n + 20) * PW, xx => { const y = rnd(n + 25) * H; g.fillStyle(0x161616, 0.85); g.fillCircle(xx, y, 4); g.fillStyle(this.env.groundColor); g.fillCircle(xx, y, 2); }); // gomme
-        g.fillStyle(0xcac0a8, 0.8); for (let n = 0; n < 8; n++) this.wrapX(rnd(n + 40) * PW, xx => { const y = rnd(n + 45) * H; g.fillRect(xx, y, 6, 2); g.fillCircle(xx, y + 1, 2); }); // ossa
+      case 2: // Deserto — carcasse sabbiate (più dense), gomme, ossa
+        for (let i = 0; i < 5; i++) car(i + 1, i % 2 === 0, i % 2 === 0 ? 1 : 2, [0x7a6a4a, 0x6a5a3a, 0x5a4a36][i % 3]);
+        g.fillStyle(0x161616, 0.85); for (let n = 0; n < 10; n++) this.wrapX(rnd(n + 20) * PW, xx => { const y = oy(n + 25); g.fillStyle(0x161616, 0.85); g.fillCircle(xx, y, 4); g.fillStyle(this.env.groundColor); g.fillCircle(xx, y, 2); }); // gomme
+        g.fillStyle(0xcac0a8, 0.85); for (let n = 0; n < 12; n++) this.wrapX(rnd(n + 40) * PW, xx => { const y = oy(n + 45); g.fillRect(xx, y, 6, 2); g.fillCircle(xx, y + 1, 2); }); // ossa
         break;
-      case 3: // Foresta — auto inghiottita dal verde + cartelli muschiati
-        car(1, true, 1, 0x3a4a3a); car(2, false, 0, 0x4a4a3a);
-        g.fillStyle(0x2a5a22, 0.55); for (let n = 0; n < 30; n++) this.wrapX(rnd(n + 20) * PW, xx => g.fillEllipse(xx, rnd(n + 25) * H, 7, 5)); // verde che ricopre
-        for (let n = 0; n < 2; n++) this.wrapX(rnd(n + 60) * PW, xx => { const y = rnd(n + 65) * (H - 12) + 2; g.fillStyle(0x4a4438); g.fillRect(xx, y, 12, 10); g.fillStyle(0x3a6a2a, 0.7); g.fillEllipse(xx + 6, y + 5, 12, 8); }); // cartelli muschiati
+      case 3: // Foresta — relitti inghiottiti dal verde (più) + cartelli muschiati
+        for (let i = 0; i < 4; i++) car(i + 1, i % 2 === 0, i % 2 === 0 ? 1 : 0, [0x3a4a3a, 0x4a4a3a][i % 2]);
+        g.fillStyle(0x2a5a22, 0.55); for (let n = 0; n < 44; n++) this.wrapX(rnd(n + 20) * PW, xx => g.fillEllipse(xx, oy(n + 25), 7, 5)); // verde che ricopre
+        for (let n = 0; n < 3; n++) this.wrapX(rnd(n + 60) * PW, xx => { const y = oy(n + 65); g.fillStyle(0x4a4438); g.fillRect(xx, y, 12, 10); this.rimTL(g, xx, y, 12, 10, 0x4a4438, 0.25); g.fillStyle(0x3a6a2a, 0.7); g.fillEllipse(xx + 6, y + 5, 12, 8); }); // cartelli muschiati
         break;
-      case 4: // Zona Industriale — bidoni tossici, container, tubi
-        g.lineStyle(3, 0x3a3a40, 0.8); for (let n = 0; n < 4; n++) { const y = rnd(n + 40) * H; g.lineBetween(0, y, PW, y); } // tubi
-        for (let n = 0; n < 3; n++) this.wrapX(rnd(n + 20) * PW, xx => { const y = rnd(n + 25) * (H - 18) + 1; g.fillStyle(0x000000, 0.25); g.fillRect(xx + 1, y + 2, 40, 16); g.fillStyle(n % 2 ? 0x6a3a2a : 0x2a4a5a); g.fillRect(xx, y, 40, 16); g.lineStyle(1, 0x141414, 0.7); g.strokeRect(xx, y, 40, 16); for (let r = 1; r < 5; r++) g.lineBetween(xx + r * 8, y, xx + r * 8, y + 16); }); // container
-        for (let n = 0; n < 7; n++) this.wrapX(rnd(n + 1) * PW, xx => this.barrel(g, xx, 8 + rnd(n + 10) * (H - 16), n % 3 === 0 ? 0x5a8a1a : 0x6a4a1a)); // bidoni tossico/petrolio
+      case 4: // Zona Industriale — container, bidoni tossici (eroe emissivo), tubi
+        g.lineStyle(3, 0x3a3a40, 0.8); for (let n = 0; n < 4; n++) { const y = oy(n + 40); g.lineBetween(0, y, PW, y); } // tubi
+        for (let n = 0; n < 4; n++) this.wrapX(rnd(n + 20) * PW, xx => { const y = oy(n + 25), c = n % 2 ? 0x6a3a2a : 0x2a4a5a; g.fillStyle(0x000000, 0.25); g.fillRect(xx + 1, y + 2, 40, 16); g.fillStyle(c); g.fillRect(xx, y, 40, 16); g.lineStyle(1, 0x141414, 0.7); g.strokeRect(xx, y, 40, 16); for (let r = 1; r < 5; r++) g.lineBetween(xx + r * 8, y, xx + r * 8, y + 16); this.rimTL(g, xx, y, 40, 16, c, 0.28); }); // container
+        for (let n = 0; n < 10; n++) this.wrapX(rnd(n + 1) * PW, xx => this.barrel(g, xx, oy(n + 10), n % 3 === 0 ? 0x5a8a1a : 0x6a4a1a)); // bidoni
+        this.wrapX(rnd(60) * PW, xx => { const y = oy(65); g.fillStyle(em, 0.16); g.fillCircle(xx, y, 13); this.barrel(g, xx, y, em); }); // EROE: bidone tossico che perde
         break;
-      case 5: // Base Militare — blindati distrutti, sacchi, casse munizioni, filo spinato
-        car(1, true, 2, 0x3a4a2a); car(2, false, 0, 0x4a5a3a);
-        for (let n = 0; n < 3; n++) this.wrapX(rnd(n + 20) * PW, xx => this.sandbags(g, xx, rnd(n + 25) * (H - 10) + 2, 4));
-        for (let n = 0; n < 4; n++) this.wrapX(rnd(n + 40) * PW, xx => this.crate(g, xx, rnd(n + 45) * (H - 14) + 2, 0x5a5226));
-        for (let n = 0; n < 3; n++) { const y = rnd(n + 60) * H; g.lineStyle(1, 0x6a6a6a, 0.7); g.lineBetween(0, y, PW, y); g.fillStyle(0x8a8a8a, 0.8); for (let x = 0; x < PW; x += 16) g.fillRect(x, y - 2, 2, 4); } // filo spinato
+      case 5: // Base Militare — blindati distrutti (più), sacchi, casse, filo spinato
+        for (let i = 0; i < 4; i++) car(i + 1, i % 2 === 0, i % 2 === 0 ? 2 : 0, [0x3a4a2a, 0x4a5a3a][i % 2]);
+        car(80, false, 2, 0x2a3a1a, 1, true); // EROE: blindato in fiamme
+        for (let n = 0; n < 5; n++) this.wrapX(rnd(n + 20) * PW, xx => this.sandbags(g, xx, oy(n + 25), 4));
+        for (let n = 0; n < 6; n++) this.wrapX(rnd(n + 40) * PW, xx => this.crate(g, xx, oy(n + 45), 0x5a5226));
+        for (let n = 0; n < 3; n++) { const y = oy(n + 60); g.lineStyle(1, 0x6a6a6a, 0.7); g.lineBetween(0, y, PW, y); g.fillStyle(0x8a8a8a, 0.8); for (let x = 0; x < PW; x += 16) g.fillRect(x, y - 2, 2, 4); } // filo spinato
         break;
-      default: // Città Finale — auto al neon riflesse, barricate luminose, transenne
-        car(1, true, 0, 0x222a3a); car(2, false, 0, 0x2a2236); car(3, true, 1, 0x3a2a3a); car(4, false, 0, 0x1a2230);
-        for (let n = 0; n < 4; n++) this.wrapX(rnd(n + 30) * PW, xx => this.barrier(g, xx, rnd(n + 35) * (H - 10) + 2, 30, em)); // barricate luminose
+      default: // Città Finale — relitti (toni neon) + barricate luminose
+        for (let i = 0; i < 7; i++) car(i + 1, i % 2 === 0, i % 3, [0x222a3a, 0x2a2236, 0x3a2a3a, 0x1a2230][i % 4]);
+        car(90, false, 2, 0x2a2030, 1, true); // EROE: relitto con brace al neon
+        for (let n = 0; n < 6; n++) this.wrapX(rnd(n + 30) * PW, xx => this.barrier(g, xx, oy(n + 35), 30, em)); // barricate luminose
         break;
     }
   }
@@ -396,7 +413,7 @@ export default class Environment {
   /** Bordo strada = TERRENO PIATTO visto a piombo (niente skyline in piedi): coerente con la vista
    *  top-down e CONTIGUO alla strada. Resa AAA: macro-variazione tonale + grana fine + dettaglio denso
    *  e coerente per ambiente + AO ai bordi. Tutto deterministico (rnd da seno) → tileable senza giunta. */
-  private drawGroundBand(g: TexGraphics, H: number) {
+  private drawGroundBand(g: TexGraphics, H: number, roadAtTop: boolean) {
     const base = this.env.groundColor;
     // PRNG deterministico (no Math.random → bake riproducibile e tileable con wrapX)
     const rnd = (n: number) => { const s = Math.sin(n * 12.9898 + this.idx * 78.233) * 43758.5453; return s - Math.floor(s); };
@@ -417,10 +434,11 @@ export default class Environment {
     }
     // 3. dettaglio coerente, denso, per ambiente
     this.drawGroundDetail(g, H, rnd, lite, dark);
-    // 4. AO ai bordi: il terreno si scurisce dove incontra la strada (contiguità) + vignetta naturale
-    const edge = dark(0.55), eh = Math.round(H * 0.32);
-    g.fillGradientStyle(edge, edge, edge, edge, 0.45, 0.45, 0, 0); g.fillRect(0, 0, PW, eh);
-    g.fillGradientStyle(edge, edge, edge, edge, 0, 0, 0.45, 0.45); g.fillRect(0, H - eh, PW, eh);
+    // 4. AO SOLO sul lato che TOCCA la strada (contiguità), basso e leggero → il dettaglio (relitti/
+    //    clutter) resta leggibile invece di affogare in penombra. far: bordo basso · near: bordo alto.
+    const edge = dark(0.5), eh = Math.round(H * 0.16);
+    if (roadAtTop) { g.fillGradientStyle(edge, edge, edge, edge, 0.38, 0.38, 0, 0); g.fillRect(0, 0, PW, eh); }
+    else           { g.fillGradientStyle(edge, edge, edge, edge, 0, 0, 0.38, 0.38); g.fillRect(0, H - eh, PW, eh); }
   }
 
   /** Strato di elementi top-down densi e coerenti per i 7 ambienti (chiamato da drawGroundBand). */
@@ -480,7 +498,7 @@ export default class Environment {
         break;
       }
       default: { // Città Finale — pavimento bagnato, pozze al neon riflettenti, tombini, griglie, vapore
-        g.fillStyle(dark(0.35)); g.fillRect(0, 0, PW, H);
+        g.fillStyle(dark(0.15)); g.fillRect(0, 0, PW, H); // velo "bagnato" leggero (era 0.35 → spegneva tutto)
         for (let n = 0; n < 9; n++) { const y = rnd(n + 5) * H, rw = 24 + rnd(n + 9) * 30; this.wrapX(rnd(n) * PW, xx => { g.fillStyle(0x000000, 0.4); g.fillEllipse(xx, y, rw * 2, rw); g.fillStyle(em, 0.18); g.fillEllipse(xx, y, rw * 1.6, rw * 0.7); g.fillStyle(lite(0.3), 0.25); g.fillRect(xx - rw * 0.6, y, rw * 1.2, 2); }); } // pozze al neon + riflesso
         for (let n = 0; n < 3; n++) this.wrapX(rnd(n + 20) * PW, xx => { const y = rnd(n + 25) * H; g.fillStyle(dark(0.4)); g.fillCircle(xx, y, 9); g.lineStyle(1, dark(0.6), 0.8); g.strokeCircle(xx, y, 9); for (let r = 0; r < 4; r++) g.lineBetween(xx - 7, y - 6 + r * 4, xx + 7, y - 6 + r * 4); }); // tombini
         g.lineStyle(1, dark(0.5), 0.6); for (let n = 0; n < 4; n++) { const x = rnd(n + 40) * PW, y = rnd(n + 45) * H; for (let l = 0; l < 6; l++) g.lineBetween(x, y + l * 3, x + 22, y + l * 3); } // griglie
