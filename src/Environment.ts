@@ -173,31 +173,35 @@ export default class Environment {
   // ─── Oggetti narrativi a terra (top-down): l'esodo fallito, la violenza, la natura ──────────
   /** Relitto d'auto visto a piombo (l'eroe narrativo). alongRoad=lungo la strada; variant 0 sbiadita ·
    *  1 arrugginita · 2 bruciata · 3 ribaltata. Include ombra a contatto → si "siede" sul terreno. */
-  private carWreck(g: TexGraphics, cx: number, cy: number, alongRoad: boolean, variant: number, paint: number) {
-    const L = 26, W = 13, len = alongRoad ? L : W, wid = alongRoad ? W : L;
+  private carWreck(g: TexGraphics, cx: number, cy: number, alongRoad: boolean, variant: number, paint: number, scale = 1) {
+    const L = Math.round(82 * scale), W = Math.round(36 * scale); // ~scala del veicolo del giocatore (100×44)
+    const len = alongRoad ? L : W, wid = alongRoad ? W : L;
     const x = cx - len / 2, y = cy - wid / 2;
-    g.fillStyle(0x000000, 0.30); g.fillEllipse(cx + 2, cy + 3, len + 7, wid + 5);
+    g.fillStyle(0x000000, 0.30); g.fillEllipse(cx + 3, cy + 4, len + 11, wid + 9);
     if (variant === 3) { // ribaltata: pancia in su + ruote in alto
-      g.fillStyle(0x14110e); g.fillRoundedRect(x, y, len, wid, 3);
-      g.fillStyle(0x2a2620); g.fillRect(x + len * 0.22, y + 1, 2, wid - 2); g.fillRect(x + len * 0.68, y + 1, 2, wid - 2);
-      g.fillStyle(0x080808); [0.22, 0.68].forEach(fx => { g.fillCircle(x + len * fx + 1, y + 2, 2.4); g.fillCircle(x + len * fx + 1, y + wid - 2, 2.4); });
+      g.fillStyle(0x14110e); g.fillRoundedRect(x, y, len, wid, 4);
+      g.fillStyle(0x2a2620); g.fillRect(x + len * 0.22, y + 2, 3, wid - 4); g.fillRect(x + len * 0.68, y + 2, 3, wid - 4);
+      g.fillStyle(0x080808); const wr = Math.max(3, wid * 0.16);
+      [0.22, 0.68].forEach(fx => { g.fillCircle(x + len * fx + 1, y + wr + 1, wr); g.fillCircle(x + len * fx + 1, y + wid - wr - 1, wr); });
       return;
     }
     const burned = variant === 2, rust = variant === 1;
     const body = burned ? 0x1a1614 : rust ? 0x6a4424 : paint;
     const roof = burned ? 0x0e0b0a : Environment.mix(body, 0xffffff, 0.12);
     const glass = burned ? 0x000000 : 0x1a2832;
-    g.fillStyle(body); g.fillRoundedRect(x, y, len, wid, 3);
-    g.fillStyle(Environment.mix(body, 0x000000, 0.3), 0.55); g.fillRect(x + 1, y + wid * 0.55, len - 2, wid * 0.45); // lato in ombra
-    g.fillStyle(roof);
-    if (alongRoad) g.fillRect(x + len * 0.30, y + 2, len * 0.40, wid - 4); else g.fillRect(x + 2, y + wid * 0.30, len - 4, wid * 0.40);
-    g.fillStyle(glass);
-    if (alongRoad) { g.fillRect(x + len * 0.24, y + 2, len * 0.05, wid - 4); g.fillRect(x + len * 0.71, y + 2, len * 0.05, wid - 4); }
-    else { g.fillRect(x + 2, y + wid * 0.24, len - 4, wid * 0.05); g.fillRect(x + 2, y + wid * 0.71, len - 4, wid * 0.05); }
-    g.fillStyle(0x0a0a0a);
-    const wc: Array<[number, number]> = alongRoad ? [[0.16, 0], [0.84, 0], [0.16, 1], [0.84, 1]] : [[0, 0.16], [1, 0.16], [0, 0.84], [1, 0.84]];
-    wc.forEach(([fx, fy]) => g.fillRect(x + len * fx - 1, y + wid * fy - 1, alongRoad ? 4 : 3, alongRoad ? 3 : 4));
-    if (burned) { g.fillStyle(0x000000, 0.26); g.fillEllipse(cx, cy, len + 12, wid + 9); }
+    g.fillStyle(body); g.fillRoundedRect(x, y, len, wid, 4);
+    g.fillStyle(Environment.mix(body, 0x000000, 0.3), 0.5); g.fillRect(x + 2, y + wid * 0.56, len - 4, wid * 0.44); // lato in ombra
+    g.fillStyle(roof); // cabina/tetto
+    if (alongRoad) g.fillRoundedRect(x + len * 0.30, y + 4, len * 0.40, wid - 8, 3); else g.fillRoundedRect(x + 4, y + wid * 0.30, len - 8, wid * 0.40, 3);
+    g.fillStyle(glass); // lunotti
+    if (alongRoad) { g.fillRect(x + len * 0.25, y + 5, len * 0.035, wid - 10); g.fillRect(x + len * 0.70, y + 5, len * 0.035, wid - 10); }
+    else { g.fillRect(x + 5, y + wid * 0.25, len - 10, wid * 0.035); g.fillRect(x + 5, y + wid * 0.70, len - 10, wid * 0.035); }
+    g.fillStyle(0x0a0a0a); // ruote proporzionali (più lunghe lungo l'asse del veicolo)
+    const a = Math.max(4, Math.round(len * 0.11)), b = Math.max(3, Math.round(wid * 0.18));
+    const wW = alongRoad ? a : b, wH = alongRoad ? b : a;
+    ([[0.15, 0], [0.85, 0], [0.15, 1], [0.85, 1]] as Array<[number, number]>).forEach(([fx, fy]) =>
+      g.fillRect(x + len * fx - wW / 2, fy ? y + wid - wH : y, wW, wH));
+    if (burned) { g.fillStyle(0x000000, 0.22); g.fillEllipse(cx, cy, len + 18, wid + 13); }
   }
 
   private barrel(g: TexGraphics, x: number, y: number, color: number) {
@@ -240,8 +244,8 @@ export default class Environment {
   private drawNearObjects(g: TexGraphics, H: number) {
     const rnd = (n: number) => { const s = Math.sin(n * 27.31 + this.idx * 41.7 + 9.1) * 24634.6345; return s - Math.floor(s); };
     const em = this.emissive;
-    const car = (n: number, along: boolean, variant: number, paint: number) =>
-      this.wrapX(rnd(n) * PW, xx => this.carWreck(g, xx, 14 + rnd(n + 100) * (H - 28), along, variant, paint));
+    const car = (n: number, along: boolean, variant: number, paint: number, scale = 1) =>
+      this.wrapX(rnd(n) * PW, xx => this.carWreck(g, xx, 22 + rnd(n + 100) * (H - 44), along, variant, paint, scale));
     switch (this.idx) {
       case 0: // Città Distrutta — auto accatastate, barricate, resti
         car(1, true, 0, 0x5a3a3a); car(2, false, 2, 0x444444); car(3, true, 1, 0x3a4a5a); car(4, false, 0, 0x6a5a3a);
@@ -250,7 +254,7 @@ export default class Environment {
         break;
       case 1: // Autostrada — INGORGO FOSSILE (coda di auto) + camion rovesciato + valigie + coni
         for (let n = 0; n < 6; n++) car(n + 1, true, n % 4, [0x6a3a3a, 0x3a5a6a, 0x6a6a5a, 0x4a4a4a, 0x7a5a3a][n % 5]);
-        car(40, false, 3, 0x3a3a3a); // "tappo": mezzo rovesciato di traverso
+        car(40, false, 3, 0x3a3a3a, 1.5); // "tappo": camion rovesciato di traverso (grande)
         for (let n = 0; n < 5; n++) this.wrapX(rnd(n + 50) * PW, xx => this.luggage(g, xx, rnd(n + 55) * (H - 8) + 2));
         g.fillStyle(0xc05a1a, 0.9); for (let n = 0; n < 6; n++) this.wrapX(rnd(n + 70) * PW, xx => { const y = rnd(n + 75) * H; g.fillTriangle(xx, y - 4, xx - 3, y + 3, xx + 3, y + 3); }); // coni
         break;
