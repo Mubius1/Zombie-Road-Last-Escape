@@ -35,6 +35,9 @@ type TexGraphics = Phaser.GameObjects.Graphics & { generateTexture(k: string, w:
 const PW = 480;
 const DECAL_CAP = 24;       // decal vivi max a schermo
 const BLOOD_THROTTLE = 110; // ms minimi tra due pozze di sangue
+// Skyline distante del layer FAR: i volumi verticali sono "messi in piedi" (M2) con lean + tetto.
+const FAR_SHEAR = 0.18; // inclinazione condivisa dei volumi distanti
+const FAR_TOP = 0.20;   // profondità del top-face (accenno di tetto)
 
 export default class Environment {
   private scene: Phaser.Scene;
@@ -163,7 +166,7 @@ export default class Environment {
     const farKey = `env_far_${this.idx}`, nearKey = `env_near_${this.idx}`;
     const FH = this.g.roadTop, NH = this.g.H - this.g.roadBottom;
     // Bordi = TERRENO PIATTO visto a piombo (stesso disegno sopra e sotto la strada → simmetrico/contiguo).
-    if (!this.has(farKey))  { const g = this.gfx(); this.drawGroundBand(g, FH); g.generateTexture(farKey, PW, FH);  g.destroy(); }
+    if (!this.has(farKey))  { const g = this.gfx(); this.drawGroundBand(g, FH); this.drawFarObjects(g, FH); g.generateTexture(farKey, PW, FH);  g.destroy(); }
     if (!this.has(nearKey)) { const g = this.gfx(); this.drawGroundBand(g, NH); this.drawNearObjects(g, NH); g.generateTexture(nearKey, PW, NH); g.destroy(); }
   }
 
@@ -277,6 +280,69 @@ export default class Environment {
         for (let n = 0; n < 4; n++) this.wrapX(rnd(n + 30) * PW, xx => this.barrier(g, xx, rnd(n + 35) * (H - 10) + 2, 30, em)); // barricate luminose
         break;
     }
+  }
+
+  /** Volume distante "in piedi" (M2): ombra a contatto + corpo con lean condiviso + faccia dx in ombra
+   *  + top-face chiaro. Ritorna lo shear e la quota del tetto per i dettagli (finestre). */
+  private drawFarBox(g: TexGraphics, x: number, baseY: number, w: number, h: number, color: number, FH: number) {
+    const shx = (xx: number, yy: number) => xx + FAR_SHEAR * (FH - yy);
+    const topY = baseY - h;
+    g.fillStyle(0x000000, 0.3); g.fillEllipse(x + w / 2 + w * 0.35, baseY, w * 1.1, Math.max(3, h * 0.13));
+    g.fillStyle(color); g.fillPoints([{ x: shx(x, baseY), y: baseY }, { x: shx(x + w, baseY), y: baseY }, { x: shx(x + w, topY), y: topY }, { x: shx(x, topY), y: topY }], true);
+    g.fillStyle(Environment.mix(color, 0x000000, 0.28), 0.5); g.fillPoints([{ x: shx(x + w * 0.78, baseY), y: baseY }, { x: shx(x + w, baseY), y: baseY }, { x: shx(x + w, topY), y: topY }, { x: shx(x + w * 0.78, topY), y: topY }], true);
+    const td = h * FAR_TOP; g.fillStyle(Environment.mix(color, 0xffffff, 0.14));
+    g.fillPoints([{ x: shx(x, topY), y: topY }, { x: shx(x + w, topY), y: topY }, { x: shx(x + w + td * 0.5, topY - td), y: topY - td }, { x: shx(x + td * 0.5, topY - td), y: topY - td }], true);
+    return { shx, topY };
+  }
+
+  /** Skyline DISTANTE del layer FAR (oggetti verticali, ancorati col metodo M2). Sta nella metà alta
+   *  della fascia (lontano); sotto continua il terreno fino alla strada. Velato dalla foschia in cima. */
+  private drawFarObjects(g: TexGraphics, FH: number) {
+    const rnd = (n: number) => { const s = Math.sin(n * 19.7 + this.idx * 53.3 + 3.7) * 12987.21; return s - Math.floor(s); };
+    const hy = Math.round(FH * 0.6); // linea d'orizzonte su cui appoggiano i volumi distanti
+    const em = this.emissive;
+    const tall = (n: number, w: number, hMin: number, hVar: number, color: number) =>
+      this.wrapX(rnd(n) * PW, xx => this.drawFarBox(g, xx, hy, w, hMin + rnd(n + 5) * hVar, color, FH));
+    switch (this.idx) {
+      case 0: // Città Distrutta — palazzi sventrati + gru + fumo
+        for (let n = 0; n < 6; n++) this.wrapX(rnd(n + 1) * PW, xx => { const w = 28 + rnd(n) * 24, h = 22 + rnd(n + 5) * (hy - 16); const r = this.drawFarBox(g, xx, hy, w, h, 0x24242c, FH);
+          g.fillStyle(0x0a0a12); for (let wy = hy - h + 6; wy < hy - 4; wy += 9) for (let wx = xx + 4; wx < xx + w - 4; wx += 8) if (rnd((wx + wy * 3) | 0) > 0.4) g.fillRect(r.shx(wx, wy), wy, 4, 5);
+          g.fillStyle(0x000000, 0.55); g.fillRect(r.shx(xx + w * 0.3, hy - h * 0.65), hy - h * 0.65, w * 0.35, h * 0.22); }); // squarcio
+        this.wrapX(rnd(20) * PW, xx => { const r = this.drawFarBox(g, xx, hy, 5, hy - 6, 0x3a3026, FH); g.fillStyle(0x3a3026); g.fillRect(r.shx(xx - 16, r.topY), r.topY, 38, 4); }); // gru
+        g.fillStyle(0x6a6a6a, 0.1); for (let n = 0; n < 5; n++) this.wrapX(rnd(n + 30) * PW, xx => g.fillEllipse(xx, rnd(n + 35) * hy * 0.5, 50, 28)); // fumo
+        break;
+      case 1: // Autostrada — pali alti + cartelloni + guardrail
+        for (let n = 0; n < 4; n++) tall(n, 3, 28, hy - 18, 0x2a2820);
+        for (let n = 0; n < 3; n++) this.wrapX(rnd(n + 10) * PW, xx => { const bh = 16 + rnd(n + 12) * 12; this.drawFarBox(g, xx, hy - 22, 34, bh, 0x3a3a44, FH); g.fillStyle(rnd(n) > 0.5 ? 0x6a5a3a : 0x4a4a5a, 0.75); g.fillRect(xx + 3, hy - 22 - bh + 3, 28, bh - 6); g.fillStyle(0x2a2820); g.fillRect(xx + 15, hy - 22, 4, 22); }); // cartellone su palo
+        g.fillStyle(0x3a3830); g.fillRect(0, hy - 4, PW, 4); for (let x = 0; x < PW; x += 40) g.fillRect(x, hy - 10, 3, 8); // guardrail
+        break;
+      case 2: // Deserto — stazione di servizio + relitti distanti
+        this.wrapX(rnd(0) * PW, xx => { this.drawFarBox(g, xx, hy, 58, 24, 0x4a4236, FH); this.drawFarBox(g, xx + 22, hy - 28, 8, 28, 0x3a3a40, FH); g.fillStyle(0xc05a2a, 0.85); g.fillRect(xx + 16, hy - 56, 20, 9); });
+        for (let n = 0; n < 3; n++) this.wrapX(rnd(n + 10) * PW, xx => this.drawFarBox(g, xx, hy, 18, 9 + rnd(n) * 7, 0x5a4a36, FH));
+        break;
+      case 3: // Foresta — alberi fitti + tralicci
+        for (let n = 0; n < 14; n++) this.wrapX(rnd(n + 1) * PW, xx => { const h = 28 + rnd(n) * (hy - 14); g.fillStyle(0x000000, 0.22); g.fillEllipse(xx + 3, hy, 20, 7); for (let dy = 0; dy < h; dy++) { const w = Math.round((dy / h) * 11); g.fillStyle(Environment.mix(0x0e2e0c, 0x000000, (1 - dy / h) * 0.25)); g.fillRect(xx - w + FAR_SHEAR * dy, hy - h + dy, w * 2, 2); } }); // pini fitti
+        for (let n = 0; n < 2; n++) this.wrapX(rnd(n + 20) * PW, xx => this.drawFarBox(g, xx, hy, 4, hy - 8, 0x2a2a2e, FH)); // tralicci
+        break;
+      case 4: // Zona Industriale — fabbrica + ciminiere fumanti + serbatoi
+        this.wrapX(rnd(0) * PW, xx => this.drawFarBox(g, xx, hy, 88, 20, 0x26241e, FH));
+        for (let n = 0; n < 4; n++) this.wrapX(rnd(n + 5) * PW, xx => { const h = 34 + rnd(n) * (hy - 20); this.drawFarBox(g, xx, hy, 12, h, 0x322c26, FH); g.fillStyle(0x6a6a6a, 0.12); g.fillEllipse(xx + 4 + FAR_SHEAR * h, hy - h - 8, 22, 14); }); // ciminiere + fumo
+        for (let n = 0; n < 2; n++) this.wrapX(rnd(n + 20) * PW, xx => { this.drawFarBox(g, xx, hy, 28, 20, 0x3a4248, FH); g.fillStyle(0x2a3236); g.fillEllipse(xx + 14 + FAR_SHEAR * 20, hy - 20, 28, 7); }); // serbatoi
+        break;
+      case 5: // Base Militare — torrette + antenne + recinzione
+        for (let n = 0; n < 3; n++) this.wrapX(rnd(n) * PW, xx => { const h = 38 + rnd(n) * (hy - 22); const r = this.drawFarBox(g, xx, hy, 9, h, 0x2a341e, FH); g.fillStyle(0x1e2614); g.fillRect(r.shx(xx - 4, r.topY), r.topY - 4, 18, 7); });
+        for (let n = 0; n < 2; n++) tall(n + 10, 2, hy - 10, 6, 0x4a4a4a);
+        g.fillStyle(0x2a3820); g.fillRect(0, hy - 5, PW, 3); for (let x = 0; x < PW; x += 14) g.fillRect(x, hy - 12, 2, 9);
+        break;
+      default: // Città Finale — grattacieli al neon + ponte
+        for (let n = 0; n < 6; n++) this.wrapX(rnd(n + 1) * PW, xx => { const w = 24 + rnd(n) * 22, h = 34 + rnd(n + 5) * (hy - 18); const r = this.drawFarBox(g, xx, hy, w, h, 0x14101e, FH);
+          g.fillStyle(Environment.mix(0x14101e, em, 0.55)); for (let wy = hy - h + 5; wy < hy - 4; wy += 8) for (let wx = xx + 4; wx < xx + w - 4; wx += 7) if (rnd((wx * 2 + wy) | 0) > 0.45) g.fillRect(r.shx(wx, wy), wy, 3, 4);
+          g.fillStyle(em, 0.55); g.fillRect(r.shx(xx + 3, r.topY), r.topY, w - 6, 2); }); // grattacieli + neon + tetto
+        this.wrapX(rnd(20) * PW, xx => { g.fillStyle(0x1a1626); g.fillRect(xx, hy - 28, 120, 6); g.fillStyle(em, 0.3); g.fillRect(xx, hy - 28, 120, 1); }); // ponte
+        break;
+    }
+    const haze = this.hazeColor; // foschia all'orizzonte (alto = distante): sfuma i volumi più lontani
+    g.fillGradientStyle(haze, haze, haze, haze, 0.4, 0.4, 0, 0); g.fillRect(0, 0, PW, hy);
   }
 
   /** Feature ripetuta a x e x±PW: ciò che attraversa il bordo riappare sull'altro lato → tileable. */
@@ -457,8 +523,8 @@ export default class Environment {
   update(dt: number, vehicleX: number, vehicleY: number) {
     const sx = this.g.scrollSpeed * dt;
     this.asphalt.tilePositionX += sx;
-    // Bordi top-down contigui: il terreno fuori strada scorre CON la strada (1.0×) → niente "slittamento".
-    this.far.tilePositionX  += sx;
+    // NEAR (foreground, contiguo) scorre con la strada; FAR (skyline distante) a parallasse più lenta.
+    this.far.tilePositionX  += sx * 0.5;
     this.near.tilePositionX += sx;
     asphaltParams.scroll = this.asphalt.tilePositionX; // alimenta lo shader di superficie
 
