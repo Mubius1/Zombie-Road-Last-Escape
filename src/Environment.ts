@@ -167,55 +167,103 @@ export default class Environment {
     if (!this.has(nearKey)) { const g = this.gfx(); this.drawGroundBand(g, NH); g.generateTexture(nearKey, PW, NH); g.destroy(); }
   }
 
+  /** Feature ripetuta a x e x±PW: ciò che attraversa il bordo riappare sull'altro lato → tileable. */
+  private wrapX(x: number, draw: (xx: number) => void) { draw(x); draw(x - PW); draw(x + PW); }
+
   /** Bordo strada = TERRENO PIATTO visto a piombo (niente skyline in piedi): coerente con la vista
-   *  top-down e CONTIGUO alla strada. Pattern a passo che divide PW=480 → tileable senza giunta. */
+   *  top-down e CONTIGUO alla strada. Resa AAA: macro-variazione tonale + grana fine + dettaglio denso
+   *  e coerente per ambiente + AO ai bordi. Tutto deterministico (rnd da seno) → tileable senza giunta. */
   private drawGroundBand(g: TexGraphics, H: number) {
     const base = this.env.groundColor;
+    // PRNG deterministico (no Math.random → bake riproducibile e tileable con wrapX)
+    const rnd = (n: number) => { const s = Math.sin(n * 12.9898 + this.idx * 78.233) * 43758.5453; return s - Math.floor(s); };
+    const lite = (t: number) => Environment.mix(base, 0xffffff, t);
+    const dark = (t: number) => Environment.mix(base, 0x000000, t);
+
     g.fillStyle(base); g.fillRect(0, 0, PW, H);
-    const light = Environment.mix(base, 0xffffff, 0.09);
-    const dark  = Environment.mix(base, 0x000000, 0.34);
-    // grana tonale (chiazze chiaro/scuro, y deterministica) — antidoto al colore piatto
-    for (let x = 0, n = 0; x < PW; x += 8, n++) {
-      g.fillStyle((n % 2) ? light : dark, 0.30);
-      g.fillEllipse(x + 2, (n * 53) % (H - 4) + 2, 5, 3);
+    // 1. macro-variazione tonale (blotch grandi e morbide) — rompe il colore piatto, dà "materia"
+    for (let n = 0; n < 26; n++) {
+      const y = rnd(n + 50) * H, r = 22 + rnd(n + 99) * 46;
+      g.fillStyle(rnd(n + 7) < 0.5 ? lite(0.07) : dark(0.18), 0.45);
+      this.wrapX(rnd(n) * PW, xx => g.fillEllipse(xx, y, r * 2, r * 1.25));
     }
+    // 2. grana fine (speckle ad alta frequenza) — superficie non liscia
+    for (let n = 0; n < 240; n++) {
+      g.fillStyle(rnd(n + 600) < 0.5 ? lite(0.14) : dark(0.32), 0.4);
+      g.fillRect(rnd(n + 200) * PW, rnd(n + 400) * H, 2, 2);
+    }
+    // 3. dettaglio coerente, denso, per ambiente
+    this.drawGroundDetail(g, H, rnd, lite, dark);
+    // 4. AO ai bordi: il terreno si scurisce dove incontra la strada (contiguità) + vignetta naturale
+    const edge = dark(0.55), eh = Math.round(H * 0.32);
+    g.fillGradientStyle(edge, edge, edge, edge, 0.45, 0.45, 0, 0); g.fillRect(0, 0, PW, eh);
+    g.fillGradientStyle(edge, edge, edge, edge, 0, 0, 0.45, 0.45); g.fillRect(0, H - eh, PW, eh);
+  }
+
+  /** Strato di elementi top-down densi e coerenti per i 7 ambienti (chiamato da drawGroundBand). */
+  private drawGroundDetail(g: TexGraphics, H: number, rnd: (n: number) => number, lite: (t: number) => number, dark: (t: number) => number) {
+    const base = this.env.groundColor, em = this.emissive;
     switch (this.idx) {
-      case 0: // Città Distrutta — concreto crepato + macerie
-        g.lineStyle(1, this.crackColor, 0.55);
-        for (let x = 0, n = 0; x < PW; x += 60, n++) { const y = (n * 41) % (H - 14) + 4; g.lineBetween(x, y, x + 26, y + 10); g.lineBetween(x + 26, y + 10, x + 44, y + 2); }
-        g.fillStyle(Environment.mix(base, 0x000000, 0.5), 0.85);
-        for (let x = 0, n = 0; x < PW; x += 48, n++) g.fillRect(x + 6, (n * 67) % (H - 8) + 2, 9 + (n % 3) * 3, 5);
+      case 0: { // Città Distrutta — lastre crepate, macerie, tondini, chiazze d'olio, erbacce
+        for (let n = 0; n < 7; n++) { const y = rnd(n) * H, w = 40 + rnd(n + 3) * 70, h = 18 + rnd(n + 9) * 22; // lastre di cemento
+          this.wrapX(rnd(n + 1) * PW, xx => { g.fillStyle(dark(0.12), 0.5); g.fillRect(xx, y, w, h); g.lineStyle(2, dark(0.45), 0.7); g.strokeRect(xx, y, w, h); }); }
+        g.lineStyle(1, this.crackColor, 0.7); // reticolo di crepe
+        for (let n = 0; n < 16; n++) { let x = rnd(n + 20) * PW, y = rnd(n + 40) * H; for (let s = 0; s < 4; s++) { const nx = x + (rnd(n * 4 + s) - 0.5) * 38, ny = y + (rnd(n * 4 + s + 99) - 0.5) * 30; g.lineBetween(x, y, nx, ny); x = nx; y = ny; } }
+        for (let n = 0; n < 40; n++) { g.fillStyle(rnd(n + 70) < 0.5 ? dark(0.5) : lite(0.05), 0.85); const s = 2 + rnd(n + 80) * 5; this.wrapX(rnd(n + 60) * PW, xx => g.fillRect(xx, rnd(n + 90) * H, s + 3, s)); } // macerie
+        g.lineStyle(1, 0x6a6a6a, 0.5); for (let n = 0; n < 10; n++) { const y = rnd(n + 110) * H; this.wrapX(rnd(n + 120) * PW, xx => g.lineBetween(xx, y, xx + 14, y + (rnd(n + 130) - 0.5) * 6)); } // tondini
+        g.fillStyle(0x0a0a0a, 0.4); for (let n = 0; n < 6; n++) this.wrapX(rnd(n + 140) * PW, xx => g.fillEllipse(xx, rnd(n + 150) * H, 26, 14)); // olio
+        g.fillStyle(0x2a4a1e, 0.55); for (let n = 0; n < 22; n++) this.wrapX(rnd(n + 160) * PW, xx => g.fillEllipse(xx, rnd(n + 170) * H, 4, 3)); // erbacce nelle crepe
         break;
-      case 1: // Autostrada — tracce pneumatici + ghiaia + erba secca
-        g.fillStyle(Environment.mix(base, 0x000000, 0.4), 0.5);
-        g.fillRect(0, Math.round(H * 0.34), PW, 4); g.fillRect(0, Math.round(H * 0.62), PW, 4);
-        g.fillStyle(0x5a5a2a, 0.5);
-        for (let x = 0, n = 0; x < PW; x += 40, n++) g.fillRect(x + (n % 3) * 6, (n * 71) % (H - 5) + 2, 3, 4);
+      }
+      case 1: { // Autostrada — ghiaia, tracce pneumatici, olio, ciuffi d'erba secca, rifiuti
+        g.fillStyle(dark(0.42), 0.55); g.fillRect(0, H * 0.32, PW, 5); g.fillRect(0, H * 0.6, PW, 5); // tracce gemellate
+        g.fillStyle(dark(0.28), 0.4); g.fillRect(0, H * 0.32 + 6, PW, 3); g.fillRect(0, H * 0.6 + 6, PW, 3);
+        for (let n = 0; n < 120; n++) { g.fillStyle(rnd(n) < 0.5 ? lite(0.12) : dark(0.4), 0.6); const s = 1 + rnd(n + 5) * 2; g.fillRect(rnd(n + 10) * PW, rnd(n + 20) * H, s, s); } // ghiaia
+        for (let n = 0; n < 26; n++) { const cx = rnd(n + 40) * PW, cy = rnd(n + 50) * H; g.fillStyle(0x6a6a2e, 0.6); this.wrapX(cx, xx => { for (let b = 0; b < 5; b++) g.fillRect(xx + b - 2, cy - rnd(n * 5 + b) * 5, 1, 3 + rnd(n + b) * 3); }); } // ciuffi erba secca
+        g.fillStyle(0x0a0a0a, 0.45); for (let n = 0; n < 5; n++) this.wrapX(rnd(n + 70) * PW, xx => g.fillEllipse(xx, rnd(n + 80) * H, 22, 12)); // olio
+        for (let n = 0; n < 10; n++) { g.fillStyle(rnd(n + 90) < 0.5 ? 0x8a8a7a : 0x5a4a3a, 0.7); this.wrapX(rnd(n + 100) * PW, xx => g.fillRect(xx, rnd(n + 110) * H, 3 + rnd(n) * 3, 2)); } // rifiuti
         break;
-      case 2: // Deserto — sabbia a increspature (bande orizzontali)
-        for (let y = 0; y < H; y += 4) { const n = y / 4; g.fillStyle((n % 2) ? light : dark, 0.28); g.fillRect(0, y, PW, 2); }
-        g.fillStyle(Environment.mix(base, 0x000000, 0.45), 0.7);
-        for (let x = 0, n = 0; x < PW; x += 60, n++) g.fillEllipse(x + 20, (n * 71) % (H - 6) + 3, 11, 6);
+      }
+      case 2: { // Deserto — increspature, rocce con volume, terra screpolata, sterpaglia, ossa
+        for (let y = 0; y < H; y += 3) { const w = Math.sin(y / H * Math.PI * 7) * 0.5 + 0.5; g.fillStyle(w > 0.5 ? lite(0.06) : dark(0.12), 0.3); g.fillRect(0, y, PW, 2); } // increspature da vento
+        g.lineStyle(1, dark(0.3), 0.4); for (let n = 0; n < 8; n++) { const x = rnd(n) * PW, y = rnd(n + 9) * H; g.lineBetween(x, y, x + 30, y + 6); g.lineBetween(x + 14, y, x + 8, y + 16); } // terra screpolata
+        for (let n = 0; n < 24; n++) { const y = rnd(n + 20) * H, r = 4 + rnd(n + 30) * 9; this.wrapX(rnd(n + 10) * PW, xx => { g.fillStyle(dark(0.35), 0.6); g.fillEllipse(xx + 2, y + 2, r * 2.2, r * 1.3); g.fillStyle(lite(0.1)); g.fillEllipse(xx, y, r * 2, r * 1.2); g.fillStyle(dark(0.1), 0.5); g.fillEllipse(xx + r * 0.4, y + r * 0.3, r, r * 0.6); }); } // rocce (luce/ombra)
+        g.fillStyle(0x4a5a2a, 0.5); for (let n = 0; n < 14; n++) { const cx = rnd(n + 50) * PW, cy = rnd(n + 60) * H; this.wrapX(cx, xx => { for (let b = 0; b < 6; b++) { const a = b / 6 * Math.PI * 2; g.fillRect(xx + Math.cos(a) * 4, cy + Math.sin(a) * 3, 1, 2); } }); } // sterpaglia
+        g.fillStyle(lite(0.2), 0.6); for (let n = 0; n < 8; n++) this.wrapX(rnd(n + 70) * PW, xx => g.fillRect(xx, rnd(n + 80) * H, 5 + rnd(n) * 4, 2)); // ossa/detriti sbiancati
         break;
-      case 3: // Foresta — sottobosco (chiazze verdi) + tronchi caduti
-        for (let x = 0, n = 0; x < PW; x += 12, n++) { g.fillStyle(Environment.mix(0x183a14, 0x000000, (n % 3) * 0.16), 0.55); g.fillEllipse(x + 4, (n * 53) % H, 8, 6); }
-        g.fillStyle(0x2a1c10, 0.85);
-        for (let x = 0, n = 0; x < PW; x += 96, n++) g.fillRect(x + 6, (n * 89) % (H - 6) + 2, 46, 6);
+      }
+      case 3: { // Foresta — sottobosco a strati, tronchi con corteccia, foglie, muschio, sassi
+        for (let n = 0; n < 70; n++) { const t = rnd(n + 5); g.fillStyle(Environment.mix(0x14380f, t < 0.5 ? 0x000000 : 0x3a6a22, Math.abs(t - 0.5)), 0.6); const r = 4 + rnd(n + 9) * 6; this.wrapX(rnd(n) * PW, xx => g.fillEllipse(xx, rnd(n + 20) * H, r * 2, r * 1.6)); } // sottobosco a strati
+        for (let n = 0; n < 4; n++) { const y = rnd(n + 40) * (H - 8), w = 40 + rnd(n + 45) * 50; this.wrapX(rnd(n + 41) * PW, xx => { g.fillStyle(0x3a2814, 0.9); g.fillRoundedRect(xx, y, w, 8, 3); g.lineStyle(1, 0x241006, 0.7); for (let l = 0; l < 4; l++) g.lineBetween(xx + 4, y + 1 + l * 2, xx + w - 4, y + 1 + l * 2); g.fillStyle(0x1a0e06); g.fillCircle(xx, y + 4, 4); g.fillCircle(xx + w, y + 4, 4); }); } // tronchi (corteccia + estremità)
+        for (let n = 0; n < 50; n++) { g.fillStyle(rnd(n + 80) < 0.5 ? 0x5a4a22 : 0x2a4a18, 0.5); g.fillRect(rnd(n + 60) * PW, rnd(n + 70) * H, 2, 2); } // foglie/lettiera
+        g.fillStyle(0x3a6a2a, 0.4); for (let n = 0; n < 10; n++) this.wrapX(rnd(n + 90) * PW, xx => g.fillEllipse(xx, rnd(n + 100) * H, 16, 9)); // muschio
+        g.fillStyle(0x4a4a44, 0.7); for (let n = 0; n < 12; n++) this.wrapX(rnd(n + 110) * PW, xx => g.fillEllipse(xx, rnd(n + 120) * H, 6, 4)); // sassi
         break;
-      case 4: // Zona Industriale — cemento (giunti) + piastre + olio
-        g.fillStyle(Environment.mix(base, 0x000000, 0.3), 0.6); for (let x = 0; x < PW; x += 60) g.fillRect(x, 0, 2, H);
-        g.fillStyle(Environment.mix(base, 0xffffff, 0.06), 0.6); for (let x = 0, n = 0; x < PW; x += 80, n++) g.fillRect(x + 8, (n * 41) % (H - 18) + 2, 42, 16);
-        g.fillStyle(0x0a0a0a, 0.5); for (let x = 0, n = 0; x < PW; x += 96, n++) g.fillEllipse(x + 30, (n * 67) % (H - 6) + 3, 24, 12);
+      }
+      case 4: { // Zona Industriale — giunti, piastre con rivetti, ruggine, olio iridescente, linee
+        g.lineStyle(2, dark(0.35), 0.6); for (let x = 0; x <= PW; x += 60) g.lineBetween(x, 0, x, H); for (let y = 0; y < H; y += 40) g.lineBetween(0, y, PW, y); // giunti
+        for (let n = 0; n < 6; n++) { const y = rnd(n + 5) * (H - 20); this.wrapX(rnd(n) * PW, xx => { g.fillStyle(lite(0.07), 0.7); g.fillRect(xx, y, 44, 18); g.lineStyle(1, dark(0.4), 0.8); g.strokeRect(xx, y, 44, 18); g.fillStyle(dark(0.2)); for (let r = 0; r < 4; r++) g.fillCircle(xx + 5 + r * 11, y + 4, 1.4); for (let r = 0; r < 4; r++) g.fillCircle(xx + 5 + r * 11, y + 14, 1.4); }); } // piastre + rivetti
+        g.fillStyle(0x6a3a1a, 0.4); for (let n = 0; n < 14; n++) this.wrapX(rnd(n + 20) * PW, xx => g.fillEllipse(xx, rnd(n + 30) * H, 10, 7)); // ruggine
+        for (let n = 0; n < 4; n++) this.wrapX(rnd(n + 40) * PW, xx => { const y = rnd(n + 45) * H; g.fillStyle(0x080808, 0.6); g.fillEllipse(xx, y, 26, 14); g.fillStyle(em, 0.08); g.fillEllipse(xx - 3, y - 2, 16, 8); }); // olio iridescente
+        g.fillStyle(0xb0a020, 0.45); for (let x = 0; x < PW; x += 24) g.fillRect(x, H * 0.5, 14, 3); // linea di pericolo tratteggiata
         break;
-      case 5: // Base Militare — terra battuta + traccia + sacchi
-        g.fillStyle(Environment.mix(base, 0x000000, 0.4), 0.5); g.fillRect(0, Math.round(H * 0.4), PW, 5);
-        g.fillStyle(Environment.mix(base, 0x000000, 0.24), 0.65);
-        for (let x = 0, n = 0; x < PW; x += 40, n++) g.fillRoundedRect(x + 4, (n * 53) % (H - 9) + 2, 16, 8, 3);
+      }
+      case 5: { // Base Militare — terra battuta, tracce, sacchi a file, casse, stencil, mimetica
+        g.fillStyle(dark(0.42), 0.5); g.fillRect(0, H * 0.36, PW, 5); g.fillRect(0, H * 0.36 + 7, PW, 3);
+        for (let n = 0; n < 30; n++) { const t = rnd(n); g.fillStyle(Environment.mix(base, t < 0.5 ? 0x2a3a1a : 0x4a3a22, 0.4), 0.4); this.wrapX(rnd(n + 5) * PW, xx => g.fillEllipse(xx, rnd(n + 15) * H, 18, 11)); } // mimetica a chiazze
+        for (let n = 0; n < 4; n++) { const y = rnd(n + 30) * (H - 12); this.wrapX(rnd(n + 31) * PW, xx => { for (let s = 0; s < 5; s++) { g.fillStyle(Environment.mix(0x6a6240, 0x000000, (s % 2) * 0.15), 0.85); g.fillRoundedRect(xx + s * 18, y, 17, 10, 3); } }); } // file di sacchi
+        for (let n = 0; n < 5; n++) { const y = rnd(n + 50) * (H - 16); this.wrapX(rnd(n + 51) * PW, xx => { g.fillStyle(0x4a3a1e, 0.9); g.fillRect(xx, y, 18, 14); g.lineStyle(1, 0x2a1e0e, 0.8); g.strokeRect(xx, y, 18, 14); g.lineBetween(xx, y, xx + 18, y + 14); g.lineBetween(xx + 18, y, xx, y + 14); }); } // casse
+        g.fillStyle(lite(0.18), 0.35); for (let n = 0; n < 3; n++) this.wrapX(rnd(n + 70) * PW, xx => g.fillRect(xx, rnd(n + 75) * H, 22, 8)); // stencil sbiaditi
         break;
-      default: // Città Finale — pavimento bagnato + pozze al neon
-        g.fillStyle(Environment.mix(base, 0x000000, 0.4)); g.fillRect(0, 0, PW, H);
-        g.fillStyle(this.emissive, 0.15); for (let x = 0, n = 0; x < PW; x += 60, n++) g.fillEllipse(x + 24, (n * 53) % (H - 8) + 4, 30 + (n % 3) * 8, 10);
-        g.fillStyle(Environment.mix(this.emissive, 0x000000, 0.3), 0.18); for (let x = 0; x < PW; x += 96) g.fillRect(x + 10, Math.round(H * 0.5), 60, 2);
+      }
+      default: { // Città Finale — pavimento bagnato, pozze al neon riflettenti, tombini, griglie, vapore
+        g.fillStyle(dark(0.35)); g.fillRect(0, 0, PW, H);
+        for (let n = 0; n < 9; n++) { const y = rnd(n + 5) * H, rw = 24 + rnd(n + 9) * 30; this.wrapX(rnd(n) * PW, xx => { g.fillStyle(0x000000, 0.4); g.fillEllipse(xx, y, rw * 2, rw); g.fillStyle(em, 0.18); g.fillEllipse(xx, y, rw * 1.6, rw * 0.7); g.fillStyle(lite(0.3), 0.25); g.fillRect(xx - rw * 0.6, y, rw * 1.2, 2); }); } // pozze al neon + riflesso
+        for (let n = 0; n < 3; n++) this.wrapX(rnd(n + 20) * PW, xx => { const y = rnd(n + 25) * H; g.fillStyle(dark(0.4)); g.fillCircle(xx, y, 9); g.lineStyle(1, dark(0.6), 0.8); g.strokeCircle(xx, y, 9); for (let r = 0; r < 4; r++) g.lineBetween(xx - 7, y - 6 + r * 4, xx + 7, y - 6 + r * 4); }); // tombini
+        g.lineStyle(1, dark(0.5), 0.6); for (let n = 0; n < 4; n++) { const x = rnd(n + 40) * PW, y = rnd(n + 45) * H; for (let l = 0; l < 6; l++) g.lineBetween(x, y + l * 3, x + 22, y + l * 3); } // griglie
+        g.fillStyle(em, 0.05); for (let n = 0; n < 5; n++) this.wrapX(rnd(n + 60) * PW, xx => g.fillEllipse(xx, rnd(n + 70) * H, 40, 20)); // aloni di luce/vapore
+        break;
+      }
     }
   }
 
