@@ -108,7 +108,7 @@ Dal più lontano/lento al più vicino/veloce. Questo è il cuore della profondit
 
 > **Principio:** più uno strato è **vicino** (in basso, verso il giocatore) più scorre **veloce**; più è **lontano** (in alto, verso l'orizzonte) più scorre **lento**. È così che 2D piatto comunica profondità 3D senza prospettiva vera.
 >
-> **3 velocità distinte** oggi: `far` **0.22×** · `near` **0.55×** · carreggiata/corsie **1.0×** (soddisfa il "≥3 strati a velocità diverse" della DoD).
+> **Velocità (v2):** `far` skyline distante **0.5×** · `near` terreno foreground **1.0×** (contiguo, stessa profondità della carreggiata) · carreggiata/corsie **1.0×**. La profondità viene dal `far` più lento + scala/foschia/AO, non da un `near` rallentato (che si "staccava"). *(I valori 0.22/0.55 qui sotto sono pre-v2.)*
 
 ---
 
@@ -143,6 +143,15 @@ La carreggiata è una **texture orizzontale tileabile** (es. `road_asphalt`, ~`2
 ---
 
 ## 5. Profondità & parallasse (L0–L5)
+
+> **⚠️ AGGIORNAMENTO v2 — bordi TOP-DOWN narrativi (verità attuale del codice).** La direzione è cambiata
+> dopo playtest: lo "skyline in piedi all'orizzonte" creava un **distacco** dalla strada vista a piombo. Ora:
+> - **`near` (sotto la strada, foreground)** = **terreno top-down narrativo**, scorre **CON la strada (1.0×)** → contiguo (stessa profondità del ciglio, non un layer più lontano). È il layer-eroe: l'**esodo fallito** — relitti d'auto **danneggiati** (ruggine/vetri sfondati/lamiere accartocciate/bruciati/ribaltati, a scala del veicolo ~82×36), ingorghi fossili, barricate, bidoni tossici, sacchi, casse, valigie, resti, container, filo spinato — denso e per-ambiente (`drawNearObjects`).
+> - **`far` (sopra la strada)** = **skyline DISTANTE** di volumi verticali ancorati (palazzi sventrati, gru, ciminiere, torrette, grattacieli al neon) col metodo *shear + top-face + ombra a contatto* (`drawFarBox`, `FAR_SHEAR=0.18`), nella metà alta, velati dalla **foschia**; scorre a **0.5×** (parallasse distante). `drawFarObjects`.
+> - **Niente cielo** (vista a piombo): base **terreno** dietro i layer.
+> - **Materia & luce:** ogni fascia (`drawGroundBand`) = macro-variazione tonale + grana fine + AO **solo** sul bordo che tocca la strada (`H*0.16`, non più 2 bordi al 32%) + **rim-light alto-sinistra** (`rimTL`) sui volumi + **1 eroe emissivo** per ambiente (brace `env.emissive`). Tutto deterministico + `wrapX` → tileable a `PW=480`.
+>
+> Le righe e la tabella sotto descrivono il **design precedente** (skyline alzato, `far` 0.22× / `near` 0.55×): **superato dalla v2** sopra.
 
 > **✅ Risolto** in `src/Environment.ts`: i decoratori sono ora **2 layer `TileSprite`** (`far` skyline + `near` terreno) che scorrono a frazioni di `SCROLL_SPEED` muovendo `tilePositionX`. Il vecchio `drawDecorators()` (statico) **non è più chiamato**. Le silhouette sono ridisegnate **tileabili** (pattern a periodo che divide la larghezza-base `PW=480`) in `drawFar`/`drawNear` per tutti i 7 ambienti.
 
@@ -305,7 +314,7 @@ interface EnvConfig {
 
 ## 11. Checklist di qualità (Definition of Done — ambiente)
 
-- [x] **Profondità:** 3 velocità di parallasse diverse (`far` 0.22 · `near` 0.55 · carreggiata 1.0).
+- [x] **Profondità:** parallasse (v2) `far` 0.5 (skyline distante) · `near` 1.0 (foreground contiguo) · carreggiata 1.0; profondità da scala/foschia/AO sul `far`.
 - [x] **Asfalto non piatto:** grana + crepe ramificate + rappezzi + macchie d'olio (elementi entro i margini → giunta minimizzata).
 - [x] **Ciglio rifinito:** linea viva + rumble + ghiaia cotti nell'asfalto (3ª fascia = spallette, statiche).
 - [x] **Corsie ambientate:** strisce in `lineColor`, consumate, ~1 dash su 6 mancante.
