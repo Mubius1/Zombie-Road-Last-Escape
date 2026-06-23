@@ -162,114 +162,60 @@ export default class Environment {
   private buildParallaxTextures() {
     const farKey = `env_far_${this.idx}`, nearKey = `env_near_${this.idx}`;
     const FH = this.g.roadTop, NH = this.g.H - this.g.roadBottom;
-    if (!this.has(farKey))  { const g = this.gfx(); this.drawFar(g, FH);  g.generateTexture(farKey, PW, FH);  g.destroy(); }
-    if (!this.has(nearKey)) { const g = this.gfx(); this.drawNear(g, NH); g.generateTexture(nearKey, PW, NH); g.destroy(); }
+    // Bordi = TERRENO PIATTO visto a piombo (stesso disegno sopra e sotto la strada → simmetrico/contiguo).
+    if (!this.has(farKey))  { const g = this.gfx(); this.drawGroundBand(g, FH); g.generateTexture(farKey, PW, FH);  g.destroy(); }
+    if (!this.has(nearKey)) { const g = this.gfx(); this.drawGroundBand(g, NH); g.generateTexture(nearKey, PW, NH); g.destroy(); }
   }
 
-  /** Skyline lontana (ancorata in basso = orizzonte). Pattern periodici → tileable. */
-  private drawFar(g: TexGraphics, FH: number) {
-    const B = FH; // baseline (orizzonte)
-    const lit = (i: number, j: number) => ((i * 7 + j * 13 + this.idx) % 3) === 0; // finestre deterministiche
-    switch (this.idx) {
-      case 0: { // Città Distrutta — palazzi
-        for (let i = 0; i < 6; i++) {
-          const bx = i * 80 + 6, bw = 56, bh = 48 + Math.round(Math.sin(i / 6 * Math.PI * 2) * 16) + (i % 2) * 14;
-          g.fillStyle(0x202028); g.fillRect(bx, B - bh, bw, bh);
-          for (let wy = B - bh + 6, j = 0; wy < B - 6; wy += 12, j++)
-            for (let wx = bx + 5, k = 0; wx < bx + bw - 5; wx += 12, k++) {
-              g.fillStyle(lit(j, k) ? 0x2a2a16 : 0x0c0c1c); g.fillRect(wx, wy, 5, 7);
-            }
-        }
-        break;
-      }
-      case 1: { // Autostrada — guardrail + alberi morti
-        g.fillStyle(0x2a2418);
-        for (let i = 0; i < 3; i++) {
-          const tx = i * 160 + 50, th = 60 + (i % 2) * 16;
-          g.fillRect(tx, B - th, 5, th);
-          g.fillRect(tx - 14, B - th + 8, 12, 4); g.fillRect(tx + 5, B - th + 16, 13, 4);
-        }
-        g.fillStyle(0x3a3830); g.fillRect(0, B - 14, PW, 4);
-        for (let x = 0; x < PW; x += 40) g.fillRect(x, B - 20, 4, 12);
-        break;
-      }
-      case 2: { // Deserto — dune + cactus
-        g.fillStyle(0x3a2c14);
-        for (let x = 0; x <= PW; x += 2) {
-          const crest = 30 + Math.round(Math.sin(x / PW * Math.PI * 2 * 4) * 16 + Math.sin(x / PW * Math.PI * 2 * 8) * 7);
-          g.fillRect(x, B - crest, 2, crest + 2);
-        }
-        g.fillStyle(0x2a441a);
-        for (let i = 0; i < 3; i++) {
-          const x = i * 160 + 70;
-          g.fillRect(x + 4, B - 50, 10, 50);
-          g.fillRect(x - 8, B - 38, 12, 8); g.fillRect(x - 8, B - 50, 8, 14);
-          g.fillRect(x + 14, B - 33, 12, 8); g.fillRect(x + 20, B - 45, 8, 14);
-        }
-        break;
-      }
-      case 3: { // Foresta — pini a triangolo (periodo 40)
-        g.fillStyle(0x0a1e08);
-        for (let i = 0; i < 12; i++) {
-          const cx = i * 40 + 20, th = 56 + (i % 3) * 8;
-          for (let dy = 0; dy < th; dy++) { const hw = Math.round((dy / th) * 17); g.fillRect(cx - hw, B - th + dy, hw * 2, 3); }
-          g.fillRect(cx - 4, B - 8, 8, 10);
-        }
-        break;
-      }
-      case 4: { // Zona Industriale — fabbrica + ciminiere
-        g.fillStyle(0x1e1c18); g.fillRect(0, B - 34, PW, 34);
-        g.fillStyle(0x2a2420);
-        for (let i = 0; i < 4; i++) {
-          const sx = i * 120 + 40, sh = 64 + (i % 3) * 18;
-          g.fillRect(sx, B - sh, 20, sh); g.fillRect(sx - 4, B - sh, 28, 8);
-          g.fillStyle(0x181614); g.fillCircle(sx + 10, B - sh - 8, 9); g.fillStyle(0x2a2420);
-        }
-        break;
-      }
-      case 5: { // Base Militare — recinzione + torrette
-        g.fillStyle(0x1e2a14);
-        for (let i = 0; i < 2; i++) {
-          const tx = i * 240 + 90;
-          g.fillRect(tx + 4, B - 74, 7, 74); g.fillRect(tx - 18, B - 80, 46, 18); g.fillRect(tx - 20, B - 86, 50, 8);
-          g.fillStyle(0x446644); g.fillRect(tx - 6, B - 74, 5, 10); g.fillStyle(0x1e2a14);
-        }
-        g.fillStyle(0x2a3820); g.fillRect(0, B - 18, PW, 4);
-        for (let x = 0; x < PW; x += 16) g.fillRect(x, B - 26, 3, 12);
-        break;
-      }
-      default: { // 6 Città Finale — grattacieli al neon
-        for (let i = 0; i < 6; i++) {
-          const bx = i * 80 + 4, bw = 60, bh = 64 + Math.round(Math.sin(i / 6 * Math.PI * 2) * 22);
-          g.fillStyle(0x1a0c22); g.fillRect(bx, B - bh, bw, bh);
-          for (let wy = B - bh + 6, j = 0; wy < B - 6; wy += 11, j++)
-            for (let wx = bx + 5, k = 0; wx < bx + bw - 5; wx += 10, k++) {
-              g.fillStyle(lit(j, k) ? 0x4a1a6a : 0x0e060e); g.fillRect(wx, wy, 4, 6);
-            }
-        }
-      }
+  /** Bordo strada = TERRENO PIATTO visto a piombo (niente skyline in piedi): coerente con la vista
+   *  top-down e CONTIGUO alla strada. Pattern a passo che divide PW=480 → tileable senza giunta. */
+  private drawGroundBand(g: TexGraphics, H: number) {
+    const base = this.env.groundColor;
+    g.fillStyle(base); g.fillRect(0, 0, PW, H);
+    const light = Environment.mix(base, 0xffffff, 0.09);
+    const dark  = Environment.mix(base, 0x000000, 0.34);
+    // grana tonale (chiazze chiaro/scuro, y deterministica) — antidoto al colore piatto
+    for (let x = 0, n = 0; x < PW; x += 8, n++) {
+      g.fillStyle((n % 2) ? light : dark, 0.30);
+      g.fillEllipse(x + 2, (n * 53) % (H - 4) + 2, 5, 3);
     }
-  }
-
-  /** Dettaglio vicino (ancorato in alto = appena sotto la strada). */
-  private drawNear(g: TexGraphics, _NH: number) {
     switch (this.idx) {
-      case 0: g.fillStyle(0x252520); for (let x = 0; x < PW; x += 96) g.fillRect(x + 10, 4, 38, 14); break;
-      case 1:
-        g.fillStyle(0x3a3830); g.fillRect(0, 2, PW, 4); g.fillRect(0, 14, PW, 3);
-        for (let x = 0; x < PW; x += 40) g.fillRect(x, 0, 4, 18);
+      case 0: // Città Distrutta — concreto crepato + macerie
+        g.lineStyle(1, this.crackColor, 0.55);
+        for (let x = 0, n = 0; x < PW; x += 60, n++) { const y = (n * 41) % (H - 14) + 4; g.lineBetween(x, y, x + 26, y + 10); g.lineBetween(x + 26, y + 10, x + 44, y + 2); }
+        g.fillStyle(Environment.mix(base, 0x000000, 0.5), 0.85);
+        for (let x = 0, n = 0; x < PW; x += 48, n++) g.fillRect(x + 6, (n * 67) % (H - 8) + 2, 9 + (n % 3) * 3, 5);
         break;
-      case 2: g.fillStyle(0x3a2c12); for (let x = 0; x <= PW; x += 2) { const h = Math.round(Math.sin(x / PW * Math.PI * 2 * 4) * 12 + 8); g.fillRect(x, 0, 2, h); } break;
-      case 3: g.fillStyle(0x0c1a08); for (let x = 0; x < PW; x += 48) g.fillRect(x, 0, 32, 8 + (x % 4) * 3); break;
-      case 4:
-        g.fillStyle(0x302820); g.fillRect(0, 4, PW, 10); g.fillRect(0, 20, PW, 6);
-        for (let x = 0; x < PW; x += 80) g.fillRect(x, 0, 14, 28);
+      case 1: // Autostrada — tracce pneumatici + ghiaia + erba secca
+        g.fillStyle(Environment.mix(base, 0x000000, 0.4), 0.5);
+        g.fillRect(0, Math.round(H * 0.34), PW, 4); g.fillRect(0, Math.round(H * 0.62), PW, 4);
+        g.fillStyle(0x5a5a2a, 0.5);
+        for (let x = 0, n = 0; x < PW; x += 40, n++) g.fillRect(x + (n % 3) * 6, (n * 71) % (H - 5) + 2, 3, 4);
         break;
-      case 5: g.fillStyle(0x2a2a1a); for (let x = 0; x < PW; x += 48) { g.fillRect(x, 2, 42, 14); g.fillRect(x + 5, 0, 32, 10); } break;
-      default:
-        g.fillStyle(0x160820); g.fillRect(0, 0, PW, _NH);
-        g.fillStyle(0x220c30); for (let x = 0; x < PW; x += 120) g.fillRect(x, 0, 50, 40);
-        g.fillStyle(this.emissive, 0.10); for (let x = 30; x < PW; x += 120) g.fillEllipse(x, 18, 60, 14);
+      case 2: // Deserto — sabbia a increspature (bande orizzontali)
+        for (let y = 0; y < H; y += 4) { const n = y / 4; g.fillStyle((n % 2) ? light : dark, 0.28); g.fillRect(0, y, PW, 2); }
+        g.fillStyle(Environment.mix(base, 0x000000, 0.45), 0.7);
+        for (let x = 0, n = 0; x < PW; x += 60, n++) g.fillEllipse(x + 20, (n * 71) % (H - 6) + 3, 11, 6);
+        break;
+      case 3: // Foresta — sottobosco (chiazze verdi) + tronchi caduti
+        for (let x = 0, n = 0; x < PW; x += 12, n++) { g.fillStyle(Environment.mix(0x183a14, 0x000000, (n % 3) * 0.16), 0.55); g.fillEllipse(x + 4, (n * 53) % H, 8, 6); }
+        g.fillStyle(0x2a1c10, 0.85);
+        for (let x = 0, n = 0; x < PW; x += 96, n++) g.fillRect(x + 6, (n * 89) % (H - 6) + 2, 46, 6);
+        break;
+      case 4: // Zona Industriale — cemento (giunti) + piastre + olio
+        g.fillStyle(Environment.mix(base, 0x000000, 0.3), 0.6); for (let x = 0; x < PW; x += 60) g.fillRect(x, 0, 2, H);
+        g.fillStyle(Environment.mix(base, 0xffffff, 0.06), 0.6); for (let x = 0, n = 0; x < PW; x += 80, n++) g.fillRect(x + 8, (n * 41) % (H - 18) + 2, 42, 16);
+        g.fillStyle(0x0a0a0a, 0.5); for (let x = 0, n = 0; x < PW; x += 96, n++) g.fillEllipse(x + 30, (n * 67) % (H - 6) + 3, 24, 12);
+        break;
+      case 5: // Base Militare — terra battuta + traccia + sacchi
+        g.fillStyle(Environment.mix(base, 0x000000, 0.4), 0.5); g.fillRect(0, Math.round(H * 0.4), PW, 5);
+        g.fillStyle(Environment.mix(base, 0x000000, 0.24), 0.65);
+        for (let x = 0, n = 0; x < PW; x += 40, n++) g.fillRoundedRect(x + 4, (n * 53) % (H - 9) + 2, 16, 8, 3);
+        break;
+      default: // Città Finale — pavimento bagnato + pozze al neon
+        g.fillStyle(Environment.mix(base, 0x000000, 0.4)); g.fillRect(0, 0, PW, H);
+        g.fillStyle(this.emissive, 0.15); for (let x = 0, n = 0; x < PW; x += 60, n++) g.fillEllipse(x + 24, (n * 53) % (H - 8) + 4, 30 + (n % 3) * 8, 10);
+        g.fillStyle(Environment.mix(this.emissive, 0x000000, 0.3), 0.18); for (let x = 0; x < PW; x += 96) g.fillRect(x + 10, Math.round(H * 0.5), 60, 2);
     }
   }
 
@@ -320,14 +266,11 @@ export default class Environment {
   private buildObjects() {
     const { W, H, roadTop, roadBottom, roadCenter } = this.g;
 
-    // §6 gradiente cielo + foschia all'orizzonte (statico, sotto i decoratori)
-    const sky = this.scene.add.graphics().setDepth(0.1);
-    const top = Environment.mix(this.env.skyColor, 0x000000, 0.30);
-    const hor = Environment.mix(this.env.skyColor, this.hazeColor, 0.7);
-    sky.fillGradientStyle(top, top, hor, hor, 1, 1, 1, 1); sky.fillRect(0, 0, W, roadTop);
-    sky.fillStyle(this.hazeColor, 0.22); sky.fillRect(0, roadTop - 16, W, 16);
+    // Vista a piombo: niente cielo. Base TERRENO dietro i layer far/near (che la coprono col dettaglio).
+    const ground = this.scene.add.graphics().setDepth(0.1);
+    ground.fillStyle(Environment.mix(this.env.groundColor, 0x000000, 0.12)); ground.fillRect(0, 0, W, H);
 
-    // §5 parallasse: skyline lontana (lenta) + terreno vicino (veloce)
+    // Terreno fuori strada, top-down, sopra (far) e sotto (near) la carreggiata — contiguo, scorre con essa
     this.far  = this.scene.add.tileSprite(W / 2, roadTop / 2, W, roadTop, `env_far_${this.idx}`).setDepth(0.2);
     this.near = this.scene.add.tileSprite(W / 2, (roadBottom + H) / 2, W, H - roadBottom, `env_near_${this.idx}`).setDepth(0.3);
 
@@ -354,8 +297,9 @@ export default class Environment {
   update(dt: number, vehicleX: number, vehicleY: number) {
     const sx = this.g.scrollSpeed * dt;
     this.asphalt.tilePositionX += sx;
-    this.far.tilePositionX  += sx * 0.22;
-    this.near.tilePositionX += sx * 0.55;
+    // Bordi top-down contigui: il terreno fuori strada scorre CON la strada (1.0×) → niente "slittamento".
+    this.far.tilePositionX  += sx;
+    this.near.tilePositionX += sx;
     asphaltParams.scroll = this.asphalt.tilePositionX; // alimenta lo shader di superficie
 
     for (let i = this.decals.length - 1; i >= 0; i--) {
