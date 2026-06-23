@@ -175,6 +175,11 @@ const de: Record<string, string> = {
   'event.convoy': 'KONVOI — beschütze ihn!',
   'event.convoyOk': 'KONVOI GERETTET!  +{m}★',
   'event.convoyLost': 'KONVOI VERLOREN',
+  'event.rescue': 'GESTRANDET: {name} — eskortieren!',
+  'event.rescueOk': '{name} AN BORD!',
+  'event.rescueFull': 'KEIN PLATZ/NAHRUNG  +{m}★',
+  'event.rescueLost': 'ÜBERLEBENDER VERLOREN',
+  'event.rescueSupply': 'VORRÄTE  +{m}★',
 
   'boss.warn': '⚠  {name}  ⚠',
   'boss.fury': '⚠ FURIE',

@@ -175,6 +175,11 @@ const es: Record<string, string> = {
   'event.convoy': 'CONVOY — ¡protégelo!',
   'event.convoyOk': '¡CONVOY A SALVO!  +{m}★',
   'event.convoyLost': 'CONVOY PERDIDO',
+  'event.rescue': 'ATRAPADO: {name} — ¡escóltalo!',
+  'event.rescueOk': '¡{name} A BORDO!',
+  'event.rescueFull': 'SIN SITIO/COMIDA  +{m}★',
+  'event.rescueLost': 'SUPERVIVIENTE PERDIDO',
+  'event.rescueSupply': 'PROVISIONES  +{m}★',
 
   'boss.warn': '⚠  {name}  ⚠',
   'boss.fury': '⚠ FURIA',

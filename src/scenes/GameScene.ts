@@ -11,7 +11,7 @@ import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { resetRunState, getRun, setRun, snapshotRun, restoreRun } from '../RunState';
 import SaveData from '../SaveData';
 import { routeNode } from '../Routes';
-import { buildEntityTextures } from '../EntityTextures';
+import { buildEntityTextures, buildSurvivorTextures } from '../EntityTextures';
 import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import HudController from '../HudController';
 import BossController, { BossHost } from '../BossController';
@@ -79,6 +79,11 @@ const INJURY_CHANCE = 0.25;         // prob. di ferire un sopravvissuto su colpo
 const INJURY_HP_THRESHOLD = 0.35;   // sotto questa frazione di salute ogni colpo può ferire
 const INJURY_HEAVY_DMG = 8;         // danno (post-armatura) che conta come "colpo pesante"
 const STARVE_MISSIONS_TO_LEAVE = 2; // missioni consecutive da affamato prima di andarsene
+// M4 salvataggio sulla strada: un sopravvissuto bloccato; scortalo (stagli vicino) per recuperarlo.
+const RESCUE_RADIUS = 72;          // distanza entro cui la scorta progredisce
+const ESCORT_MS = 4000;            // tempo cumulativo di vicinanza per completare la scorta
+const RESCUE_DEADLINE_MS = 16000;  // finestra prima che il bloccato rinunci e se ne vada
+const RESCUE_FALLBACK_COINS = 60;  // ripiego monete se manca slot/cibo (o roster pieno)
 const CONVOY_DURATION = 11000;       // ms da scortare il van
 const CONVOY_HP = 100;               // salute del van alleato
 const CONVOY_ZOMBIE_DMG = 9;         // danno al van per ogni zombi che lo raggiunge
@@ -191,6 +196,13 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private convoyHpBar: Phaser.GameObjects.Rectangle | null = null;  // riempimento barra HP del van
   private convoyHpBarBg: Phaser.GameObjects.Rectangle | null = null; // sfondo barra HP del van
   private convoyUntil = 0;                                // fine della scorta (successo se il van è ancora vivo)
+  // M4 salvataggio sulla strada
+  private rescueSurvivor: Phaser.GameObjects.Sprite | null = null;
+  private rescueKey = '';
+  private rescueProgress = 0;                             // ms cumulativi di vicinanza al bloccato
+  private rescueUntil = 0;                                // scadenza (oltre → il bloccato se ne va)
+  private rescueRing: Phaser.GameObjects.Rectangle | null = null;     // riempimento barra scorta
+  private rescueRingBg: Phaser.GameObjects.Rectangle | null = null;   // sfondo barra scorta
   private lastHazardY = ROAD_CENTER;                      // corsia dell'ultimo hazard (bias taniche)
 
   private attachedZombies: AttachedZombie[] = [];
@@ -383,6 +395,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.convoyVan?.destroy(); this.convoyVan = null;
     this.convoyHpBar?.destroy(); this.convoyHpBar = null; this.convoyHpBarBg?.destroy(); this.convoyHpBarBg = null;
     this.convoyHp = 0; this.convoyUntil = 0;
+    this.rescueSurvivor?.destroy(); this.rescueSurvivor = null;
+    this.rescueRing?.destroy(); this.rescueRing = null; this.rescueRingBg?.destroy(); this.rescueRingBg = null;
+    this.rescueProgress = 0; this.rescueUntil = 0; this.rescueKey = '';
     this.aimAngle = 0; this.aimX = this.designW; this.aimY = ROAD_CENTER; this.recoil = 0;
     this.turretDx = TURRET_DX[this.vehicleKey] ?? 8;
     this.boss = new BossController(this); // stato boss fresco + gruppi fisici (usati da buildColliders)
@@ -1371,27 +1386,30 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     }
     if (this.eventOverlay && this.time.now >= this.eventEndsAt) this.endTimedEvent();
     this.updateConvoy();
+    this.updateRescue();
   }
 
   private triggerRandomEvent() {
-    const pool = ['night', 'roadblock', 'storm', 'convoy'].filter(e => e !== this.lastEvent);
+    const pool = ['night', 'roadblock', 'storm', 'convoy', 'rescue'].filter(e => e !== this.lastEvent);
     const ev = pool[Math.floor(Math.random() * pool.length)];
     this.lastEvent = ev;
     if (ev === 'night') this.eventNightHorde();
     else if (ev === 'roadblock') this.eventRoadblock();
     else if (ev === 'storm') this.eventStorm();
-    else this.eventConvoy();
+    else if (ev === 'convoy') this.eventConvoy();
+    else this.eventRescue();
   }
 
   /** Debug (tasto E): cicla deterministicamente i 4 eventi B2 → utile per testarli (anche il convoglio). */
   private debugCycleEvent() {
     if (!this.alive || this.boss.active || this.missionDone) return;
-    const evs = ['night', 'roadblock', 'storm', 'convoy'] as const;
+    const evs = ['night', 'roadblock', 'storm', 'convoy', 'rescue'] as const;
     const e = evs[this.debugEventIdx++ % evs.length];
     if (e === 'night') this.eventNightHorde();
     else if (e === 'roadblock') this.eventRoadblock();
     else if (e === 'storm') this.eventStorm();
-    else this.eventConvoy();
+    else if (e === 'convoy') this.eventConvoy();
+    else this.eventRescue();
   }
 
   /** ORDA NOTTURNA: le luci calano e arriva una raffica di nemici. */
@@ -1532,6 +1550,80 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (ov) this.tweens.add({ targets: ov, alpha: 0, duration: 700, onComplete: () => ov.destroy() });
   }
 
+  /** SALVATAGGIO (M4): un sopravvissuto bloccato sul ciglio; stagli vicino per ESCORT_MS (cumulativi)
+   *  per recuperarlo — se hai slot e cibo, altrimenti monete di ripiego. La sosta ti espone a un cluster. */
+  private eventRescue() {
+    const candidates = SURVIVORS.filter(s => !this.activeSurvivors.includes(s.key));
+    if (candidates.length === 0) { // roster pieno: trovi solo provviste
+      setRun(this.registry, 'money', (getRun(this.registry, 'money') ?? 0) + RESCUE_FALLBACK_COINS);
+      this.announceEvent('event.rescueSupply', '#ffcc66', { m: RESCUE_FALLBACK_COINS });
+      this.sfx?.playFuelPickup();
+      return;
+    }
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    this.rescueKey = pick.key;
+    if (!this.textures.exists(`survivor_${pick.key}`)) buildSurvivorTextures(this); // assicura la texture
+    this.announceEvent('event.rescue', '#ffdd55', { name: `${pick.properName} ${pick.surname}` });
+    this.sfx?.playBossWarn();
+    const ry = Phaser.Math.Between(ROAD_TOP + 30, ROAD_BOTTOM - 30), rx = this.designW * 0.66;
+    const r = this.add.sprite(this.designW + 60, ry, `survivor_${pick.key}`).setScale(1.15 / OVERSAMPLE).setDepth(10);
+    this.tweens.add({ targets: r, x: rx, duration: 700, ease: 'Sine.out' });
+    this.rescueSurvivor = r;
+    this.rescueProgress = 0;
+    this.rescueUntil = this.time.now + RESCUE_DEADLINE_MS;
+    this.rescueRingBg = this.add.rectangle(rx, ry - 28, 42, 5, 0x222a33).setDepth(24);
+    this.rescueRing   = this.add.rectangle(rx - 21, ry - 28, 42, 5, 0xffdd55).setOrigin(0, 0.5).setDepth(25).setScale(0, 1);
+    // Rischio: un piccolo cluster appare con lui (la deviazione espone).
+    const n = Phaser.Math.Between(2, 4);
+    for (let i = 0; i < n; i++) this.time.delayedCall(i * 220, () => { if (this.alive && !this.missionDone && !this.boss.active) this.spawnZombie(); });
+  }
+
+  /** Aggiorna il salvataggio attivo: progredisce mentre il veicolo è vicino; completa o scade. */
+  private updateRescue() {
+    const r = this.rescueSurvivor;
+    if (!r?.active) return;
+    const near = Phaser.Math.Distance.Between(this.vehicle.x, this.vehicle.y, r.x, r.y) < RESCUE_RADIUS;
+    if (near) { this.rescueProgress += this.game.loop.delta; r.setTint(0x99ff99); } else r.clearTint();
+    if (this.rescueRingBg) { this.rescueRingBg.x = r.x; this.rescueRingBg.y = r.y - 28; }
+    if (this.rescueRing)   { this.rescueRing.x = r.x - 21; this.rescueRing.y = r.y - 28; this.rescueRing.scaleX = Math.min(1, this.rescueProgress / ESCORT_MS); }
+    if (this.rescueProgress >= ESCORT_MS) this.rescueSucceeded();
+    else if (this.time.now >= this.rescueUntil) this.rescueExpired();
+  }
+
+  private rescueSucceeded() {
+    const r = this.rescueSurvivor, key = this.rescueKey;
+    const s = SURVIVORS.find(sv => sv.key === key);
+    this.endRescue();
+    const cap = VEHICLES[this.vehicleKey]?.survivorSlots ?? 4;
+    const food = getRun(this.registry, 'food') ?? FOOD.start;
+    if (this.activeSurvivors.length < cap && food >= FOOD.perSurvivor) { // slot libero E cibo per sostenerlo
+      this.activeSurvivors = [...this.activeSurvivors, key];
+      setRun(this.registry, 'survivors', this.activeSurvivors);
+      this.announceEvent('event.rescueOk', '#66ff99', { name: s ? `${s.properName} ${s.surname}` : key });
+      this.sfx?.playMissionComplete();
+    } else {
+      setRun(this.registry, 'money', (getRun(this.registry, 'money') ?? 0) + RESCUE_FALLBACK_COINS);
+      this.announceEvent('event.rescueFull', '#ffcc66', { m: RESCUE_FALLBACK_COINS });
+      this.sfx?.playFuelPickup();
+    }
+    if (r?.active) this.tweens.add({ targets: r, y: r.y - 30, alpha: 0, duration: 600, onComplete: () => r.destroy() });
+  }
+
+  private rescueExpired() {
+    const r = this.rescueSurvivor;
+    this.endRescue();
+    this.announceEvent('event.rescueLost', '#ff7755');
+    if (r?.active) this.tweens.add({ targets: r, x: -80, duration: 900, ease: 'Sine.in', onComplete: () => r.destroy() });
+  }
+
+  /** Smonta UI/stato della scorta; lo sprite lo distrugge il tween di uscita del chiamante. */
+  private endRescue() {
+    this.rescueRing?.destroy(); this.rescueRing = null;
+    this.rescueRingBg?.destroy(); this.rescueRingBg = null;
+    this.rescueSurvivor = null;
+    this.rescueProgress = 0; this.rescueUntil = 0; this.rescueKey = '';
+  }
+
   /** Pulizia eventi (fine missione / game over): rimuove il velo e azzera il debuff tempesta. */
   private cleanupEvents() {
     this.eventOverlay?.destroy();
@@ -1541,6 +1633,10 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.convoyHpBarBg?.destroy(); this.convoyHpBarBg = null;
     this.convoyVan?.destroy(); this.convoyVan = null;
     this.convoyUntil = 0;
+    this.rescueSurvivor?.destroy(); this.rescueSurvivor = null;
+    this.rescueRing?.destroy(); this.rescueRing = null;
+    this.rescueRingBg?.destroy(); this.rescueRingBg = null;
+    this.rescueProgress = 0; this.rescueUntil = 0;
   }
 
   private spawnFuelCan() {
