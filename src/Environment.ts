@@ -174,34 +174,75 @@ export default class Environment {
   /** Relitto d'auto visto a piombo (l'eroe narrativo). alongRoad=lungo la strada; variant 0 sbiadita ·
    *  1 arrugginita · 2 bruciata · 3 ribaltata. Include ombra a contatto → si "siede" sul terreno. */
   private carWreck(g: TexGraphics, cx: number, cy: number, alongRoad: boolean, variant: number, paint: number, scale = 1) {
+    // seed per-auto (da posizione) → ogni relitto è danneggiato in modo diverso
+    const rr = (k: number) => { const s = Math.sin((cx * 0.7 + cy * 1.3 + k * 2.1) * 12.9898) * 4375.547; return s - Math.floor(s); };
     const L = Math.round(82 * scale), W = Math.round(36 * scale); // ~scala del veicolo del giocatore (100×44)
     const len = alongRoad ? L : W, wid = alongRoad ? W : L;
     const x = cx - len / 2, y = cy - wid / 2;
-    g.fillStyle(0x000000, 0.30); g.fillEllipse(cx + 3, cy + 4, len + 11, wid + 9);
-    if (variant === 3) { // ribaltata: pancia in su + ruote in alto
-      g.fillStyle(0x14110e); g.fillRoundedRect(x, y, len, wid, 4);
-      g.fillStyle(0x2a2620); g.fillRect(x + len * 0.22, y + 2, 3, wid - 4); g.fillRect(x + len * 0.68, y + 2, 3, wid - 4);
-      g.fillStyle(0x080808); const wr = Math.max(3, wid * 0.16);
-      [0.22, 0.68].forEach(fx => { g.fillCircle(x + len * fx + 1, y + wr + 1, wr); g.fillCircle(x + len * fx + 1, y + wid - wr - 1, wr); });
+    const rect = (fx: number, fy: number, fw: number, fh: number) => g.fillRect(x + len * fx, y + wid * fy, len * fw, wid * fh);
+    const at = (fx: number, fy: number) => [x + len * fx, y + wid * fy] as [number, number];
+    const burned = variant === 2, rust = variant === 1, over = variant === 3;
+    const interior = 0x0a0a0c;
+
+    g.fillStyle(0x000000, 0.34); g.fillEllipse(cx + 3, cy + 5, len + 16, wid + 12); // ombra + olio/scorch
+
+    if (over) { // RIBALTATA: pancia in su, accartocciata, ruote mancanti
+      g.fillStyle(0x161310); g.fillRoundedRect(x, y, len, wid, 4);
+      g.fillStyle(0x0c0a08); for (let k = 0; k < 5; k++) g.fillEllipse(x + len * (0.15 + rr(k) * 0.7), y + wid * (0.2 + rr(k + 9) * 0.6), len * 0.13, wid * 0.15); // accartocciamenti
+      g.fillStyle(0x2a2620); rect(0.2, 0.05, 0.03, 0.9); rect(0.66, 0.05, 0.03, 0.9); // assali nudi
+      g.fillStyle(0x070707); const wr = Math.max(3, wid * 0.15);
+      [0.2, 0.66].forEach(fx => { if (rr(fx * 10) > 0.35) g.fillCircle(x + len * fx, y + wr + 1, wr); if (rr(fx * 10 + 1) > 0.35) g.fillCircle(x + len * fx, y + wid - wr - 1, wr); });
       return;
     }
-    const burned = variant === 2, rust = variant === 1;
-    const body = burned ? 0x1a1614 : rust ? 0x6a4424 : paint;
-    const roof = burned ? 0x0e0b0a : Environment.mix(body, 0xffffff, 0.12);
-    const glass = burned ? 0x000000 : 0x1a2832;
-    g.fillStyle(body); g.fillRoundedRect(x, y, len, wid, 4);
-    g.fillStyle(Environment.mix(body, 0x000000, 0.3), 0.5); g.fillRect(x + 2, y + wid * 0.56, len - 4, wid * 0.44); // lato in ombra
-    g.fillStyle(roof); // cabina/tetto
-    if (alongRoad) g.fillRoundedRect(x + len * 0.30, y + 4, len * 0.40, wid - 8, 3); else g.fillRoundedRect(x + 4, y + wid * 0.30, len - 8, wid * 0.40, 3);
-    g.fillStyle(glass); // lunotti
-    if (alongRoad) { g.fillRect(x + len * 0.25, y + 5, len * 0.035, wid - 10); g.fillRect(x + len * 0.70, y + 5, len * 0.035, wid - 10); }
-    else { g.fillRect(x + 5, y + wid * 0.25, len - 10, wid * 0.035); g.fillRect(x + 5, y + wid * 0.70, len - 10, wid * 0.035); }
-    g.fillStyle(0x0a0a0a); // ruote proporzionali (più lunghe lungo l'asse del veicolo)
-    const a = Math.max(4, Math.round(len * 0.11)), b = Math.max(3, Math.round(wid * 0.18));
-    const wW = alongRoad ? a : b, wH = alongRoad ? b : a;
-    ([[0.15, 0], [0.85, 0], [0.15, 1], [0.85, 1]] as Array<[number, number]>).forEach(([fx, fy]) =>
-      g.fillRect(x + len * fx - wW / 2, fy ? y + wid - wH : y, wW, wH));
-    if (burned) { g.fillStyle(0x000000, 0.22); g.fillEllipse(cx, cy, len + 18, wid + 13); }
+
+    const body = burned ? 0x221c16 : rust ? 0x5a3a20 : Environment.mix(paint, 0x000000, 0.18); // grime/desaturazione
+    const roof = burned ? 0x100c0a : Environment.mix(body, 0xffffff, 0.09);
+    const dent = Environment.mix(body, burned ? 0x0a0806 : 0x000000, 0.5);
+
+    g.fillStyle(body); g.fillRoundedRect(x, y, len, wid, 4); // scocca
+    const crush = rr(1) > 0.5 ? 0 : 0.84;                    // estremità accartocciata (muso o coda)
+    g.fillStyle(dent); rect(crush, 0.06, 0.16, 0.88);
+    const [t1x, t1y] = at(crush ? 1 : 0, 0), [t2x, t2y] = at(crush ? 0.84 : 0.16, 0.5), [t3x, t3y] = at(crush ? 1 : 0, 1);
+    g.fillTriangle(t1x, t1y, t2x, t2y, t3x, t3y);            // angolo piegato
+
+    for (let k = 0; k < 11; k++) { // chiazze di ruggine/fuliggine/vernice scrostata → "vissuto"
+      g.fillStyle(burned ? 0x0a0806 : rust ? 0x7a4a1a : Environment.mix(body, rr(k) > 0.5 ? 0x6a4420 : 0x000000, 0.55), 0.55);
+      g.fillEllipse(x + len * (0.05 + rr(k) * 0.9), y + wid * (0.12 + rr(k + 20) * 0.76), 3 + rr(k + 30) * 5, 2 + rr(k + 40) * 4);
+    }
+
+    g.fillStyle(roof); rect(0.30, 0.16, 0.40, 0.68); // tetto/cabina
+    g.fillStyle(dent, 0.55); for (let k = 0; k < 3; k++) g.fillEllipse(x + len * (0.34 + rr(k + 5) * 0.32), y + wid * (0.32 + rr(k + 6) * 0.36), 4, 3); // ammaccature
+
+    // VETRI SFONDATI: buchi scuri (vetro mancante) + crepe — non vetro pulito
+    const smash = (fx: number, fw: number) => { g.fillStyle(interior); rect(fx, 0.18, fw, 0.64); g.lineStyle(1, burned ? 0x100c0a : 0x6a7a8a, 0.45); const [gx, gy] = at(fx + fw / 2, 0.5); for (let c = 0; c < 3; c++) g.lineBetween(gx, gy, gx + (rr(c + fx * 9) - 0.5) * len * 0.1, gy + (rr(c + fx * 9 + 1) - 0.5) * wid * 0.5); };
+    smash(0.24, 0.055); smash(0.70, 0.055);
+    g.fillStyle(interior); if (rr(2) > 0.4) rect(0.40, 0.05, 0.18, 0.07); if (rr(3) > 0.4) rect(0.40, 0.88, 0.18, 0.07); // finestrini laterali rotti
+
+    if (rr(4) > 0.5 && !burned) { // PORTIERA aperta/penzolante (alcune)
+      const top = rr(5) > 0.5; g.fillStyle(Environment.mix(body, 0x000000, 0.2));
+      g.fillRect(x + len * 0.42, top ? y - wid * 0.22 : y + wid, len * 0.22, wid * 0.22);
+      g.fillStyle(interior); rect(0.42, top ? 0.0 : 0.80, 0.22, 0.20);
+    }
+
+    g.fillStyle(0x000000, 0.7); for (let k = 0; k < 7; k++) if (rr(k + 50) > 0.55) { const [bx, by] = at(0.12 + rr(k + 51) * 0.76, 0.15 + rr(k + 52) * 0.7); g.fillCircle(bx, by, 1.3); } // fori di proiettile
+
+    // RUOTE: alcune sgonfie / mancanti (mozzo nudo)
+    const a = Math.max(4, Math.round(len * 0.11)), b = Math.max(3, Math.round(wid * 0.20));
+    ([[0.15, 0], [0.85, 0], [0.15, 1], [0.85, 1]] as Array<[number, number]>).forEach(([fx, fy], i) => {
+      const [wx, wy] = at(fx, fy);
+      if (rr(i + 60) > 0.78) { g.fillStyle(0x2a2a2a); g.fillCircle(wx, wy, 2.2); return; } // ruota mancante
+      const flat = rr(i + 70) > 0.6; g.fillStyle(0x0a0a0a);
+      g.fillRect(wx - a / 2, wy - (fy ? (flat ? b * 0.5 : b) : 0), a, flat ? Math.max(2, b * 0.5) : b);
+    });
+
+    if (burned) { // fuliggine pesante + scorch a terra + cenere
+      g.fillStyle(0x000000, 0.45); g.fillRoundedRect(x, y, len, wid, 4);
+      g.fillStyle(0x000000, 0.22); g.fillEllipse(cx, cy, len + 26, wid + 20);
+      g.fillStyle(0x3a3632, 0.5); for (let k = 0; k < 6; k++) g.fillRect(cx + (rr(k + 100) - 0.5) * len * 1.1, cy + (rr(k + 110) - 0.5) * wid * 1.1, 2, 2);
+    }
+
+    g.fillStyle(0x8a9aa2, 0.5); for (let k = 0; k < 8; k++) { const ang = rr(k + 120) * 6.28, d = len * 0.5 + rr(k + 130) * 8; g.fillRect(cx + Math.cos(ang) * d, cy + Math.sin(ang) * d * 0.55, 1.5, 1.5); } // schegge di vetro
+    if (rr(6) > 0.5) { g.fillStyle(dent); const [dx, dy] = at(crush ? 1.04 : -0.1, 0.5); g.fillRect(dx, dy - 2, len * 0.1, 4); } // paraurti staccato
   }
 
   private barrel(g: TexGraphics, x: number, y: number, color: number) {
