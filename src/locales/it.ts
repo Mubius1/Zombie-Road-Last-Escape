@@ -141,6 +141,7 @@ const it: Record<string, string> = {
   'comp.tank': 'SERBAT.',
   'comp.turret': 'TORR.',
   'comp.armor': 'CORAZZA',
+  'hud.armorStat': '🛡 −{p}%',
 
   // ── Regioni / ambienti ───────────────────────────────────────────────────────────
   'region.city': 'Città Distrutta',

@@ -14,7 +14,7 @@ export const ROAD_TOP = 155, ROAD_BOTTOM = 445, ROAD_CENTER = 300;
 
 // ── Tipi di dominio condivisi (usati da GameScene, BossController, HudController). ──
 export type ZombieType = 'common' | 'runner' | 'armored' | 'jumper' | 'giant' | 'toxic' | 'charger' | 'spitter';
-export type ComponentKey = 'engine' | 'wheels' | 'tank' | 'turret' | 'armor';
+export type ComponentKey = 'engine' | 'wheels' | 'tank' | 'turret'; // M2: 'armor' rimosso → corazza passiva
 
 // ── Boss di fine regione ──
 export type BossType = 'mega_mutant' | 'giant_worm' | 'armored_colossus' | 'radioactive_beast';

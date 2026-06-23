@@ -439,7 +439,7 @@ export default class ShopScene extends Phaser.Scene {
     setRun(this.registry, 'money', this.money);
 
     if (item.key === 'repair') {
-      setRun(this.registry, 'components', { engine: 100, wheels: 100, tank: 100, turret: 100, armor: 100 });
+      setRun(this.registry, 'components', { engine: 100, wheels: 100, tank: 100, turret: 100 }); // M2: 4 componenti
     } else {
       // Potenziamento applicato al SOLO veicolo corrente (catalogo per-veicolo).
       (this.upgrades as Record<string,boolean>)[item.key] = true;

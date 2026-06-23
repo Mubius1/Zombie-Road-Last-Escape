@@ -26,6 +26,8 @@ export interface HudBuildOpts {
   activeSurvivors: string[];
   /** M2: sopravvissuti affamati (segnalati con "!" e tinta ambra nell'HUD). */
   hungry: string[];
+  /** M2 corazza passiva: riduzione danno % (badge statico, non più una barra componente). */
+  armorReductionPct: number;
   ownedWeapons: WeaponType[];
   currentWeapon: WeaponType;
   debugGod: boolean;
@@ -161,7 +163,7 @@ export default class HudController {
       this.own(Ui.text(s, dW-10,8,txt,{fontSize:'11px',color: o.hungry.length > 0 ? UI.amberSoft : '#cccc44'}).setOrigin(1,0).setDepth(D+1));
     }
 
-    const compKeys: ComponentKey[] = ['engine','wheels','tank','turret','armor'];
+    const compKeys: ComponentKey[] = ['engine','wheels','tank','turret']; // M2: 5→4 barre (no 'armor')
     compKeys.forEach((key,i) => {
       const comp = o.components[key];
       const sx = 10 + i * 158;
@@ -170,6 +172,10 @@ export default class HudController {
       const fill = this.own(s.add.rectangle(sx,72,COMP_BAR_W,7,comp.baseColor).setOrigin(0,0.5).setDepth(D+2));
       comp.fill = fill;
     });
+    // M2: armatura PASSIVA → badge statico (non degrada) nello slot liberato dalla 5ª barra.
+    const ax = 10 + 4 * 158;
+    this.own(Ui.text(s, ax,49,t('comp.armor'),{fontSize:'10px',color:UI.muted}).setDepth(D+1));
+    this.own(Ui.text(s, ax,64,t('hud.armorStat',{ p:o.armorReductionPct }),{fontSize:'13px',color:UI.blueInfo,fontStyle:'bold'}).setDepth(D+1));
 
     // Barra Sovraccarico (Overdrive, A3): gauge nella banda alta a sinistra, sotto il pannello HUD.
     const OD_X = 10, OD_Y = 98, OD_W = 120;

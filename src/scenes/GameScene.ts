@@ -38,6 +38,7 @@ const GIANT_SPAWN_INTERVAL = 22000;
 const BOSS_TRIGGER = 0.82; // % missione a cui appare il boss
 const DEATH_MONEY_PENALTY = 0.25; // pedaggio di recupero alla morte (campagna a checkpoint, modello B)
 const ENGINE_SCROLL_MIN = 0.45;   // M1 motore onesto: a motore distrutto avanzi al 45% (no morte)
+const ARMOR_MULT_FLOOR = 0.40;    // M2 corazza passiva: moltiplicatore danno minimo (riduzione max 60%)
 const COMBO_WINDOW = 2500;  // ms: finestra per mantenere la catena di uccisioni
 const DASH_COOLDOWN = 5000; // ms: ricarica dello scatto anti-aggancio
 const DASH_GRACE = 350;     // ms: dopo lo scatto nessun nuovo zombi si aggrappa
@@ -169,7 +170,7 @@ const SPAWN_POOL: ZombieType[] = [
 ];
 
 const ATTACH_SLOTS: Array<{ dx: number; dy: number; comp: ComponentKey }> = [
-  { dx:  42, dy:   0, comp: 'armor'  },
+  { dx:  42, dy:   0, comp: 'engine' }, // M2: ex-slot 'armor' (rimosso) → grab frontale danneggia il motore
   { dx:   5, dy: -16, comp: 'wheels' },
   { dx:   5, dy:  16, comp: 'wheels' },
   { dx: -40, dy:   0, comp: 'engine' },
@@ -403,7 +404,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.turretDx = TURRET_DX[this.vehicleKey] ?? 8;
     this.boss = new BossController(this); // stato boss fresco + gruppi fisici (usati da buildColliders)
 
-    const def = { engine: 100, wheels: 100, tank: 100, turret: 100, armor: 100 };
+    const def = { engine: 100, wheels: 100, tank: 100, turret: 100 };
     const c = savedComp ?? def;
     this.components = {
       // label = chiave i18n (risolta dall'HUD): così un re-build dopo il cambio lingua la ri-traduce.
@@ -411,7 +412,6 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       wheels: { health: c.wheels, label: 'comp.wheels', baseColor: 0x44aa88 },
       tank:   { health: c.tank,   label: 'comp.tank',   baseColor: 0xff8800 },
       turret: { health: c.turret, label: 'comp.turret', baseColor: 0x8899ff },
-      armor:  { health: c.armor,  label: 'comp.armor',  baseColor: 0x6688bb },
     };
 
     this.buildTextures();
@@ -669,6 +669,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       components: this.components,
       activeSurvivors: this.activeSurvivors,
       hungry: this.hungry,
+      armorReductionPct: Math.round((1 - Math.max(ARMOR_MULT_FLOOR, 1 - this.vehicleArmorBonus / 100)) * 100),
       ownedWeapons: this.ownedWeapons,
       currentWeapon: this.currentWeapon,
       debugGod: this.debugGod,
@@ -1276,7 +1277,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (!p.active) return;
     p.destroy();
     this.dealDamage(this.scaledDamage('spitter'));
-    this.damageComponent('armor', 6);
+    this.damageComponent('tank', 6); // M3: sputo tossico → corrode il serbatoio
     this.sfx?.playImpact();
     this.vehicle.setTint(0x66ff66);
     this.time.delayedCall(120, () => { if (this.vehicle?.active && this.alive) this.vehicle.clearTint(); });
@@ -1692,8 +1693,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       this.sfx?.playExplosion();
       this.environment?.addDecal('scorch', hx, hy);
     } else { // wreck
-      this.dealDamage(20);
-      this.damageComponent('armor', 15);
+      this.dealDamage(20); // M3: relitto frontale → danno-scafo (Salute), niente componente
       this.cameras.main.shake(240, 0.016);
       this.hitStop(40);
       this.sfx?.playImpact();
@@ -1903,8 +1903,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     switch (type) {
       case 'runner':
         zombie.destroy();
-        this.damageComponent('armor', 10);
-        this.dealDamage(this.scaledDamage('runner'));
+        this.dealDamage(this.scaledDamage('runner')); // M3: contatto → Salute (scafo)
         this.cameras.main.shake(80, 0.005);
         this.sfx?.playImpact();
         this.environment?.addDecal('skid', zombie.x, zombie.y);
@@ -1913,7 +1912,6 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
       case 'armored':
         zombie.destroy();
-        this.damageComponent('armor', 18);
         this.damageComponent('engine', 8);
         this.dealDamage(this.scaledDamage('armored'));
         this.cameras.main.shake(200, 0.014);
@@ -1926,7 +1924,6 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       case 'charger':
         // Bruto incornante (A2): se non l'hai schivato, l'impatto è pesante.
         zombie.destroy();
-        this.damageComponent('armor', 22);
         this.damageComponent('engine', 10);
         this.dealDamage(this.scaledDamage('charger'));
         this.cameras.main.shake(280, 0.02);
@@ -1940,7 +1937,6 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         const gx = zombie.x, gy = zombie.y;
         this.addKillScore(ZOMBIE_STATS.giant.score); // speronarlo lo uccide → premia come ucciderlo a colpi (X5)
         zombie.destroy();
-        this.damageComponent('armor', 30);
         this.damageComponent('engine', 20);
         this.damageComponent('wheels', 20);
         this.dealDamage(this.scaledDamage('giant'));
@@ -1969,7 +1965,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         zombie.destroy();
         this.spawnToxicCloud(zombie.x, zombie.y);
         this.dealDamage(this.scaledDamage('toxic'));
-        this.damageComponent('armor', 8);
+        this.damageComponent('tank', 8); // M3: tossico → serbatoio
         this.sfx?.playImpact();
         this.environment?.addDecal('blood', zombie.x, zombie.y);
         break;
@@ -1978,7 +1974,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         zombie.destroy();
         this.spawnToxicCloud(zombie.x, zombie.y);
         this.dealDamage(this.scaledDamage('spitter'));
-        this.damageComponent('armor', 8);
+        this.damageComponent('tank', 8); // M3: tossico → serbatoio
         this.sfx?.playImpact();
         this.environment?.addDecal('blood', zombie.x, zombie.y);
         break;
@@ -1988,8 +1984,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
           this.attachZombie(zombie, false);
         } else {
           zombie.destroy();
-          this.dealDamage(this.scaledDamage('common'));
-          this.damageComponent('armor', 5);
+          this.dealDamage(this.scaledDamage('common')); // M3: contatto → Salute (scafo)
           this.cameras.main.shake(60, 0.004);
           this.sfx?.playImpact();
           this.environment?.addDecal('blood', zombie.x, zombie.y);
@@ -2126,10 +2121,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   dealDamage(amount: number) {
     if (this.debugGod || this.boss.defeated || this.missionDone || !this.alive) return; // invulnerabile a fine run / celebrazione vittoria (X4)
-    const armorPct = this.components.armor.health / 100;
-    const bonus = this.vehicleArmorBonus / 100;
-    const base  = armorPct<=0 ? 2.5 : armorPct<0.3 ? 1.8 : armorPct<0.6 ? 1.3 : 1.0;
-    const mult  = Math.max(0.5, base - bonus);
+    // M2: corazza PASSIVA — niente più barra che degrada; il danno è ridotto dalla SOLA armatura
+    // (armatura base del veicolo + upgrade 'Corazza rinforzata'), con pavimento ARMOR_MULT_FLOOR.
+    const mult  = Math.max(ARMOR_MULT_FLOOR, 1 - this.vehicleArmorBonus / 100);
     const dealt = Math.round(amount * mult);
     this.health = Math.max(0, this.health - dealt);
     this.hud.flashHealthBar();
@@ -2226,7 +2220,6 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       wheels: this.components.wheels.health,
       tank:   this.components.tank.health,
       turret: this.components.turret.health,
-      armor:  this.components.armor.health,
     });
     setRun(this.registry, 'routeModifier', 'none'); // Track B1: il modificatore vale una sola missione → consumato
     // CHECKPOINT: lo stato è avanzato (ricompense + missione successiva) → persisti subito, così

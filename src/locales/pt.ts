@@ -126,6 +126,7 @@ const pt: Record<string, string> = {
   'comp.tank': 'TANQUE',
   'comp.turret': 'TORRE',
   'comp.armor': 'BLINDAGEM',
+  'hud.armorStat': '🛡 −{p}%',
 
   'region.city': 'Cidade em Ruínas',
   'region.highway': 'Autoestrada Abandonada',

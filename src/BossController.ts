@@ -249,8 +249,7 @@ export default class BossController {
     const lastHit = (boss.getData('lastVehicleHit') as number) ?? 0;
     if (host.time.now - lastHit < 800) return;
     boss.setData('lastVehicleHit', host.time.now);
-    host.dealDamage(20);
-    host.damageComponent('armor', 25);
+    host.dealDamage(20); // M2/M3: la stangata del boss è danno-scafo (Salute); 'armor' componente rimosso
     host.cameras.main.shake(200, 0.016);
     host.sfx?.playExplosion();
   }

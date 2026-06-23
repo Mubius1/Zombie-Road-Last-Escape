@@ -126,6 +126,7 @@ const de: Record<string, string> = {
   'comp.tank': 'TANK',
   'comp.turret': 'TURM',
   'comp.armor': 'PANZER',
+  'hud.armorStat': '🛡 −{p}%',
 
   'region.city': 'Zerstörte Stadt',
   'region.highway': 'Verlassene Autobahn',
