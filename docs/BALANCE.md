@@ -34,6 +34,8 @@ Fonte: costanti in testa a `GameScene.ts`. La colonna **Valore** è validata (un
 | `OVERDRIVE_SHOCK_DMG` | 6 | danno dell'onda d'urto frontale all'attivazione |
 | `OVERDRIVE_CHARGE_BASE` | 2 | carica della barra per ogni uccisione (base) |
 | `OVERDRIVE_CHARGE_COMBO` | 2 | carica aggiuntiva per uccisione = questo × moltiplicatore combo |
+| `ENGINE_SCROLL_MIN` | 0.45 | M1 motore onesto: ritmo di avanzamento a motore distrutto (45%); a 100% = pieno |
+| `ARMOR_MULT_FLOOR` | 0.40 | M2 corazza passiva: moltiplicatore danno minimo (riduzione max 60%) |
 
 > *Non validati (valori inline):* tanica = **+30** carburante per pickup; intervallo tanica **7500 ms** (**5000 ms** con Esploratore).
 
@@ -142,28 +144,36 @@ Fonte: `VEHICLES` (`GameData.ts`). Prezzo e colore sono già validati dall'art b
 
 ## §4 · Degrado dei componenti
 
-I 5 componenti (salute 0–100) si danneggiano per aggancio zombi (14/1,6 s) e modificano la guida. Formule esatte (`GameScene.ts`):
+I **4 componenti** (salute 0–100) si danneggiano per aggancio zombi (14/1,6 s) e per **fonte localizzata** (vedi "Mappa danno"), e **modificano la guida**. Formule esatte (`GameScene.ts`):
 
 | Componente | Formula effettiva | A 100% | A 0% |
 |---|---|---|---|
+| **Motore** → ritmo avanz. | `SCROLL_SPEED · (ENGINE_SCROLL_MIN + (1−ENGINE_SCROLL_MIN)·mot/100)` | pieno (240 u/s) | 45% (108 u/s) — **NON game over** |
 | **Ruote** → velocità vert. | `230 · speedMult · (0.15 + 0.85·ruote/100) · max(0.3, 1 − agganciati·0.12)` | piena | 15% (× malus aggancio) |
 | **Serbatoio** → consumo | `2.2 · (1 + (1 − serb/100)·2)` | 2.2/s | 6.6/s (3×) |
 | **Torretta** → cooldown | `(base/fireMult) · (1 + (1 − torr/100)·1.4)` | base | +140% · **a 0 = non spara** |
-| **Corazza** → danno subìto | vedi sotto | ×1.0 | ×2.5 |
 
-### Danno ricevuto (mitigazione corazza)
+> **Motore onesto (M1):** il motore non uccide più a 0 — regola il **ritmo di avanzamento** (accumulo di `distance` → km, soglia boss, carburante-nel-tempo). Sano = missione breve; rovinato = arranchi (più lunga, più esposizione, più carburante). `ENGINE_SCROLL_MIN = 0.45`.
+
+### Armatura passiva (M2) — niente più barra "Corazza"
+La corazza **non è più un componente che degrada**: è una **riduzione danno passiva** dall'armatura del veicolo (§3) + upgrade *Corazza rinforzata*. Mostrata come badge HUD, non come barra calante. Componenti scesi da **5 a 4**.
 ```
-armorPct = corazza.health / 100
-base = 2.5  se armorPct ≤ 0      (corazza distrutta)
-       1.8  se < 0.30
-       1.3  se < 0.60
-       1.0  altrimenti
-mult = max(0.5, base − bonusArmaturaVeicolo/100)
+mult = max(ARMOR_MULT_FLOOR, 1 − bonusArmaturaVeicolo/100)
 danno_finale = round(danno_nominale · mult)
 ```
-- `bonusArmaturaVeicolo` = armatura del veicolo (§3) + 20 se possiedi l'upgrade Corazza.
-- Floor a **×0.5**: anche con corazza piena + armatura alta non si scende sotto metà danno.
-- *Lettura di design:* la corazza distrutta **2,5×** il danno è la spirale di morte; ripararla al Negozio è spesso prioritario.
+- `bonusArmaturaVeicolo` = armatura del veicolo (§3, 0–45) + 20 se possiedi l'upgrade *Corazza rinforzata* (max 65).
+- Floor a **×0.40** (`ARMOR_MULT_FLOOR`): riduzione danno massima 60%.
+- *Lettura di design:* niente più spirale ×2.5 da corazza distrutta → il gioco è più clemente sul lato danno (tarabile alzando il danno base da contatto o il floor).
+
+### Mappa danno (M3 — danno localizzato)
+Il colpo danneggia il componente coerente con la **fonte**, così si capisce *perché* una barra cala.
+
+| Fonte di danno | Componente |
+|---|---|
+| Zombi **aggrappato** | componente dello **slot** afferrato (`ATTACH_SLOTS`) |
+| **Tossico** (sputo · zombi tossico · spitter) | **Serbatoio** |
+| Urti/relitti/contatti generici · stangata boss | **Salute** (scafo, via `dealDamage` + passiva) |
+| Colpi al cannone | **Torretta** |
 
 ---
 

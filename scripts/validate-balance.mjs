@@ -117,6 +117,8 @@ const CONSTS = [
   // Sovraccarico (Overdrive, A3)
   'OVERDRIVE_MAX', 'OVERDRIVE_DURATION', 'OVERDRIVE_FIRE_MULT', 'OVERDRIVE_SHOCK_DMG',
   'OVERDRIVE_CHARGE_BASE', 'OVERDRIVE_CHARGE_COMBO',
+  // Rework componenti: motore onesto (M1) + corazza passiva (M2)
+  'ENGINE_SCROLL_MIN', 'ARMOR_MULT_FLOOR',
 ];
 for (const name of CONSTS) {
   let codeVal;

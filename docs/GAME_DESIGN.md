@@ -155,17 +155,17 @@ Ogni colpo che **non** uccide dà un **rinculo** al nemico: una spinta lungo l'a
 
 ## §6 · Il veicolo e i suoi componenti
 
-Il veicolo è definito da `VEHICLES[key]` (salute/armatura/velocità/cadenza base) — tabella nell'[art bible oggetti](ART_BIBLE_OGGETTI.md), effetti in [BALANCE.md §3](BALANCE.md#3--veicoli). Sopra di esso vivono **5 componenti** con salute 0–100, che degradano sotto l'aggancio degli zombi e **modificano la guida**:
+Il veicolo è definito da `VEHICLES[key]` (salute/armatura/velocità/cadenza base) — tabella nell'[art bible oggetti](ART_BIBLE_OGGETTI.md), effetti in [BALANCE.md §3](BALANCE.md#3--veicoli). Sopra di esso vivono **4 componenti** con salute 0–100, che degradano (per aggancio zombi e per **fonte localizzata**) e **modificano la guida**:
 
 | Componente | Effetto del degrado |
 |---|---|
-| **MOTORE** | (slot d'aggancio; contribuisce all'identità del mezzo) |
+| **MOTORE** | regola il **ritmo di avanzamento**: sano = missione breve, rovinato = arranchi (45% a 0). **A 0 NON è più game over** |
 | **RUOTE** | velocità verticale crolla con la salute (da 100% a 15%) |
 | **SERBATOIO** | consumo carburante fino a **3×** a serbatoio rovinato |
 | **TORRETTA** | cadenza di fuoco peggiora; a **0 non spari più** |
-| **CORAZZA** | il danno ricevuto si moltiplica (fino a ×2,5 a corazza distrutta) |
 
-> Tutte le formule esatte in [BALANCE.md §4](BALANCE.md#4--degrado-dei-componenti). I componenti si **portano dietro** tra una missione e l'altra (salvati nel registry): la riparazione al Negozio è una scelta economica reale.
+> **Armatura passiva:** la **corazza** non è più un componente che degrada (componenti 5→4) — è una **riduzione danno passiva** (armatura del veicolo + upgrade *Corazza rinforzata*), mostrata come badge HUD. **Morte solo su Salute = 0 o Carburante = 0.** Il colpo danneggia il componente coerente con la **fonte** (tossico → serbatoio; contatti/relitti → scafo/Salute; cannone → torretta; aggancio → slot). Mappa e formule in [BALANCE.md §4](BALANCE.md#4--degrado-dei-componenti).
+> I componenti si **portano dietro** tra una missione e l'altra (salvati nel registry): la riparazione al Negozio è una scelta economica reale.
 
 ---
 
