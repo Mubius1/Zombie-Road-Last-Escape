@@ -977,6 +977,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       this.hazards.clear(true, true);
       this.spitProjectiles.clear(true, true);
       this.oilUntil = 0;
+      this.clearRoadObjects(); // salvataggio/convoglio in corso: via dall'arena, niente completamento nel boss
     }
     if (this.boss.active) return;
     if (this.distance >= MISSION_DIST) this.triggerMissionComplete();
@@ -1624,11 +1625,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.rescueProgress = 0; this.rescueUntil = 0; this.rescueKey = '';
   }
 
-  /** Pulizia eventi (fine missione / game over): rimuove il velo e azzera il debuff tempesta. */
-  private cleanupEvents() {
-    this.eventOverlay?.destroy();
-    this.eventOverlay = null;
-    this.stormUntil = 0;
+  /** Distrugge gli oggetti-strada situazionali (convoglio + salvataggio) e azzera il loro stato. Usato
+   *  dalla pulizia di fine evento E allo spawn del boss (eventi sospesi nel duello, niente clutter). */
+  private clearRoadObjects() {
     this.convoyHpBar?.destroy(); this.convoyHpBar = null;
     this.convoyHpBarBg?.destroy(); this.convoyHpBarBg = null;
     this.convoyVan?.destroy(); this.convoyVan = null;
@@ -1637,6 +1636,14 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.rescueRing?.destroy(); this.rescueRing = null;
     this.rescueRingBg?.destroy(); this.rescueRingBg = null;
     this.rescueProgress = 0; this.rescueUntil = 0;
+  }
+
+  /** Pulizia eventi (fine missione / game over): rimuove il velo, azzera il debuff tempesta e gli oggetti-strada. */
+  private cleanupEvents() {
+    this.eventOverlay?.destroy();
+    this.eventOverlay = null;
+    this.stormUntil = 0;
+    this.clearRoadObjects();
   }
 
   private spawnFuelCan() {
@@ -2293,7 +2300,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         const survLeft = [...cp.survivors];
         this.lostSurvivor = survLeft.length > 0 ? survLeft.splice(Math.floor(Math.random() * survLeft.length), 1)[0] : '';
         const recovered = { ...cp, money: Math.max(0, cp.money - this.deathToll),
-          survivors: survLeft, injured: cp.injured.filter(k => k !== this.lostSurvivor) };
+          survivors: survLeft, injured: cp.injured.filter(k => k !== this.lostSurvivor),
+          hungry: cp.hungry.filter(k => k !== this.lostSurvivor) };
         restoreRun(this.registry, recovered);
         SaveData.saveRun(recovered); // il checkpoint riflette pedaggio + perdita (auto-limitante: monete ≥ 0)
       } else {

@@ -86,8 +86,16 @@ export default class ShopScene extends Phaser.Scene {
     this.currentWeapon  = getRun(this.registry, 'currentWeapon')  ?? 'mg';
     this.ownedWeapons   = getRun(this.registry, 'ownedWeapons')   ?? ['mg'];
 
-    const available = SURVIVORS.filter(s => !this.survivors.includes(s.key));
-    this.offeredSurvivors = Phaser.Utils.Array.Shuffle([...available]).slice(0, 3) as SurvivorData[];
+    // Offerta reclute: calcolata UNA volta per visita REALE (non sui refresh post-azione, altrimenti
+    // comprare/vendere rimescola la terna e permette il reroll gratis). Cache nel registry (non nel checkpoint).
+    if (!this.replay) {
+      const available = SURVIVORS.filter(s => !this.survivors.includes(s.key));
+      this.offeredSurvivors = Phaser.Utils.Array.Shuffle([...available]).slice(0, 3) as SurvivorData[];
+      this.registry.set('offeredSurvivors', this.offeredSurvivors.map(s => s.key));
+    } else {
+      const keys = (this.registry.get('offeredSurvivors') as string[] | undefined) ?? [];
+      this.offeredSurvivors = keys.map(k => SURVIVORS.find(s => s.key === k)).filter(Boolean) as SurvivorData[];
+    }
 
     // Audio del negozio (feedback acquisti U7 / diniego U6) — istanza statica riusata fra i restart.
     const webAudio = this.sound as Phaser.Sound.WebAudioSoundManager;
@@ -480,11 +488,21 @@ export default class ShopScene extends Phaser.Scene {
     this.afterPurchase();
   }
 
+  /** Pulisce le key di stato (injured/hungry) dei sopravvissuti che lasciano il veicolo. Senza questo,
+   *  'injured' (mai ricalcolato a runtime) resta orfano → al re-reclutamento il sopravvissuto risulta
+   *  ferito e incurabile (la cura nel negozio itera solo i sopravvissuti a bordo). */
+  private clearSurvivorState(keys: string[]) {
+    this.injured = this.injured.filter(k => !keys.includes(k));
+    setRun(this.registry, 'injured', this.injured);
+    setRun(this.registry, 'hungry', (getRun(this.registry, 'hungry') ?? []).filter(k => !keys.includes(k)));
+  }
+
   /** Fa scendere un sopravvissuto dal veicolo (libera un posto; il re-render aggiorna capienza e offerti). */
   private dismissSurvivor(key: string) {
     if (!this.survivors.includes(key)) return;
     this.survivors = this.survivors.filter(k => k !== key);
     setRun(this.registry, 'survivors', this.survivors);
+    this.clearSurvivorState([key]);
     this.persist();
     ShopScene.sfx?.playImpact();
     this.time.delayedCall(120, () => this.refresh());
@@ -494,8 +512,10 @@ export default class ShopScene extends Phaser.Scene {
   private trimSurvivors(vehicleKey: string) {
     const cap = VEHICLES[vehicleKey]?.survivorSlots ?? 4;
     if (this.survivors.length > cap) {
+      const dropped = this.survivors.slice(cap);
       this.survivors = this.survivors.slice(0, cap);
       setRun(this.registry, 'survivors', this.survivors);
+      this.clearSurvivorState(dropped);
     }
   }
 
