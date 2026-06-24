@@ -1,8 +1,6 @@
 import Phaser from 'phaser';
 import Juice from './Juice';
-import Settings from './Settings';
 import { OVERSAMPLE } from './Config';
-import { enterScreen } from './PostFx';
 
 /**
  * Chrome condiviso dell'interfaccia — fonte di verità unica per font, palette
@@ -18,13 +16,6 @@ import { enterScreen } from './PostFx';
 
 /** La voce tipografica del titolo: monospace "consolle", esplicita e con fallback. */
 export const FONT = '"Courier New", Courier, monospace';
-
-/**
- * Forza della vignetta per le schermate-menu (vedi `Juice.addOverlay`). Più bassa di
- * quella di gioco (1.0) perché nei menu i contenuti vivono ai bordi e non devono essere
- * mangiati dall'ombra. Alzala verso 1 per più "cinema", abbassala se i bordi restano scuri.
- */
-export const MENU_VIGNETTE = 0.45;
 
 /**
  * Palette funzionale canonica. Ogni famiglia ha pochi toni (base · chiaro · spento);
@@ -253,14 +244,11 @@ export default class Ui {
   }
 
   /**
-   * Ingresso schermata standard: dissolvenza + overlay filmico (se attivo nelle
-   * impostazioni). Restituisce la grana per il jitter per-frame (`Juice.jitterGrain`).
-   * Centralizza il pattern di Menu/Shop/Settings → niente cut secco (chiude il gap ShopScene).
+   * Ingresso schermata standard: solo dissolvenza morbida (niente cut secco).
+   * I MENU NON hanno effetti schermo — sempre OFF, qualunque sia l'impostazione `screenFx`
+   * (che governa solo il gioco). Il post-processing filmico vive esclusivamente in GameScene.
    */
-  static enter(scene: Phaser.Scene, fadeMs = 300): Phaser.GameObjects.TileSprite | null {
+  static enter(scene: Phaser.Scene, fadeMs = 300): void {
     Juice.fadeIn(scene, fadeMs);
-    // Vignetta morbida (MENU_VIGNETTE): nei menu i contenuti vivono ai bordi.
-    // Shader filmico se WebGL; altrimenti overlay procedurale di Juice (fallback Canvas).
-    return Settings.screenFx ? enterScreen(scene, MENU_VIGNETTE) : null;
   }
 }

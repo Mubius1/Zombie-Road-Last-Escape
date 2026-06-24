@@ -1,9 +1,8 @@
 import Phaser from 'phaser';
 import Juice from '../Juice';
 import Settings from '../Settings';
-import { enterScreen } from '../PostFx';
 import SoundManager from '../SoundManager';
-import Ui, { UI, MENU_VIGNETTE } from '../Ui';
+import Ui, { UI } from '../Ui';
 import MenuPad, { Focusable } from '../MenuPad';
 import { setupCamera, applyBrightness, DESIGN_W, RESOLUTIONS, currentResolution } from '../Config';
 import { t, LANGS } from '../i18n';
@@ -11,6 +10,24 @@ import { t, LANGS } from '../i18n';
 const H = 600;
 const VOL_STEPS = 10;
 const BRIGHT_STEPS = 9, BRIGHT_MIN = 0.6, BRIGHT_STEP = 0.1; // luminosità 60%..140% (1.0 = nativo)
+
+// Effetti schermo (post-fx): invece di 6 toggle tecnici sparsi, dei PRESET d'impatto (Off/Minimo/
+// Cinematico/Pieno) + un "Avanzato" che rivela i 6 toggle fini. `on` = quali dei 6 flag sono accesi.
+type FxKey = 'vignetteFx' | 'grainFx' | 'scanlineFx' | 'gradingFx' | 'aberrationFx' | 'bloom';
+const FX_CHIPS: Array<{ k: FxKey; label: string }> = [
+  { k: 'vignetteFx',   label: 'settings.vignette' },
+  { k: 'grainFx',      label: 'settings.grain' },
+  { k: 'scanlineFx',   label: 'settings.scanline' },
+  { k: 'gradingFx',    label: 'settings.grading' },
+  { k: 'aberrationFx', label: 'settings.aberration' },
+  { k: 'bloom',        label: 'settings.bloom' },
+];
+const FX_PRESETS: Array<{ key: string; label: string; on: FxKey[] }> = [
+  { key: 'off',       label: 'settings.fxPresetOff', on: [] },
+  { key: 'minimal',   label: 'settings.fxMinimal',   on: ['vignetteFx', 'gradingFx'] },
+  { key: 'cinematic', label: 'settings.fxCinematic', on: ['vignetteFx', 'grainFx', 'gradingFx', 'bloom'] },
+  { key: 'full',      label: 'settings.fxFull',      on: ['vignetteFx', 'grainFx', 'scanlineFx', 'gradingFx', 'aberrationFx', 'bloom'] },
+];
 
 /**
  * Schermata Impostazioni. Due modi d'uso:
@@ -28,7 +45,6 @@ export default class SettingsScene extends Phaser.Scene {
   private fromKey = 'MenuScene';
   private page: SettingsPage = 'hub';   // hub a categorie (struttura AAA)
   private nav = false;                  // true = navigazione tra categorie → niente fade
-  private grain: Phaser.GameObjects.TileSprite | null = null;
   private volCells: Phaser.GameObjects.Rectangle[] = [];
   private volLabel!: Phaser.GameObjects.Text;
   private muteBtn!: Phaser.GameObjects.Text;
@@ -46,12 +62,19 @@ export default class SettingsScene extends Phaser.Scene {
     return go;
   }
 
+  // ── Effetti schermo: preset + "Avanzato" (riferimenti per l'aggiornamento live, vedi refreshFx) ──
+  private fxAdvanced = false; // i 6 toggle fini sono espansi?
+  private fxPresetBtns: Array<{ key: string; rect: Phaser.GameObjects.Rectangle; txt: Phaser.GameObjects.Text }> = [];
+  private fxChips: Array<{ k: FxKey; rect: Phaser.GameObjects.Rectangle; txt: Phaser.GameObjects.Text }> = [];
+  private fxSummary?: Phaser.GameObjects.Text; // riepilogo del preset attivo (solo quando "Avanzato" è chiuso)
+
   constructor() { super({ key: 'SettingsScene' }); }
 
-  init(data: { from?: string; page?: SettingsPage; nav?: boolean }) {
+  init(data: { from?: string; page?: SettingsPage; nav?: boolean; fxAdvanced?: boolean }) {
     this.fromKey = data?.from ?? 'MenuScene';
     this.page = data?.page ?? 'hub';
     this.nav = !!data?.nav;
+    this.fxAdvanced = !!data?.fxAdvanced;
   }
 
   create() {
@@ -86,18 +109,13 @@ export default class SettingsScene extends Phaser.Scene {
     const pad = new MenuPad(this).setBack(() => { if (this.page === 'hub') this.goBack(); else this.goPage('hub'); });
     for (const { go, opts } of this.navItems) pad.add(go, opts);
 
-    // L'overlay filmico proprio serve solo a scena piena (dal menu); in pausa quello del
-    // gioco è già sotto. Niente fade quando si naviga tra categorie (snappy).
+    // Niente fade quando si naviga tra categorie (snappy). I MENU non hanno effetti schermo:
+    // il post-processing filmico vive solo in GameScene (vedi Ui.enter), qualunque sia `screenFx`.
     if (!this.nav) Juice.fadeIn(this);
-    if (!inGame && Settings.screenFx) this.grain = enterScreen(this, MENU_VIGNETTE);
 
     // L'anteprima audio è per-istanza: a ogni restart (toggle fx/risoluzione/lingua) va smontata,
     // altrimenti lascia un master+limiter appeso al context condiviso (AU7).
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.preview?.dispose());
-  }
-
-  override update() {
-    Juice.jitterGrain(this.grain);
   }
 
   // ─── Volume ─────────────────────────────────────────────────────────────────
@@ -203,34 +221,104 @@ export default class SettingsScene extends Phaser.Scene {
 
   // ─── Effetti schermo ─────────────────────────────────────────────────────────
 
-  /** Effetti schermo (post-fx) selezionabili singolarmente: griglia 2×3 di chip. */
-  private buildScreenFxGrid(y: number) {
+  /**
+   * Effetti schermo: **preset** (Off/Minimo/Cinematico/Pieno) al posto di 6 toggle tecnici sparsi, con un
+   * "Avanzato" che rivela i 6 toggle fini. Aggiornamento **live** (vedi `setFx`/`refreshFx`): il restart
+   * scatta solo quando si attraversa la soglia master `screenFx` (l'overlay del menu va ri-attaccato).
+   * Ritorna la `y` inferiore così la pagina Grafica può far fluire sotto ombre/asfalto.
+   */
+  private buildScreenFx(y: number): number {
     const cx = this.designW / 2;
+    this.fxPresetBtns = []; this.fxChips = []; this.fxSummary = undefined;
     Ui.text(this, cx - 230, y, t('settings.screenFx'), { fontSize: '15px', fontStyle: 'bold', color: UI.cyan });
 
-    const chips: Array<[string, () => boolean, (v: boolean) => void]> = [
-      [t('settings.vignette'),   () => Settings.vignetteFx,   v => { Settings.vignetteFx = v; }],
-      [t('settings.grain'),      () => Settings.grainFx,      v => { Settings.grainFx = v; }],
-      [t('settings.scanline'),   () => Settings.scanlineFx,   v => { Settings.scanlineFx = v; }],
-      [t('settings.grading'),    () => Settings.gradingFx,    v => { Settings.gradingFx = v; }],
-      [t('settings.aberration'), () => Settings.aberrationFx, v => { Settings.aberrationFx = v; }],
-      [t('settings.bloom'),      () => Settings.bloom,        v => { Settings.bloom = v; }],
-    ];
-    const cols = 3, cw = 146, ch = 32, gapX = 10, gapY = 8;
-    const startX = cx - (cols * cw + (cols - 1) * gapX) / 2;
-    chips.forEach(([label, get, set], i) => {
-      const x = startX + (i % cols) * (cw + gapX) + cw / 2;
-      const cy = y + 26 + Math.floor(i / cols) * (ch + gapY);
-      const on = get();
-      const chip = this.add.rectangle(x, cy, cw, ch, on ? 0x16301a : 0x26262e)
-        .setStrokeStyle(2, on ? UI.hpHigh : UI.blueLine, 0.8)
-        .setInteractive({ useHandCursor: true });
-      Ui.text(this, x, cy, label, { fontSize: '12px', fontStyle: 'bold', color: on ? UI.greenSoft : UI.faint }).setOrigin(0.5);
-      chip.on('pointerover', () => chip.setFillStyle(on ? 0x1d3d22 : 0x32323c));
-      chip.on('pointerout',  () => chip.setFillStyle(on ? 0x16301a : 0x26262e));
-      chip.on('pointerdown', () => { set(!get()); this.scene.restart({ from: this.fromKey, page: this.page, nav: true }); });
-      this.reg(chip);
+    // ── Preset (radio): una combo d'impatto, non 6 interruttori tecnici ──
+    const py = y + 28, bw = 102, gap = 8, n = FX_PRESETS.length;
+    const sx = cx - (n * bw + (n - 1) * gap) / 2;
+    FX_PRESETS.forEach((p, i) => {
+      const x = sx + i * (bw + gap) + bw / 2;
+      const rect = this.add.rectangle(x, py, bw, 30, 0x14141f).setStrokeStyle(2, UI.blueLine, 0.5).setInteractive({ useHandCursor: true });
+      const txt = Ui.text(this, x, py, t(p.label), { fontSize: '12px', fontStyle: 'bold', color: UI.blue }).setOrigin(0.5);
+      rect.on('pointerover', () => rect.setFillStyle(0x1d1d2e));
+      rect.on('pointerout',  () => this.refreshFx()); // ripristina i colori attivo/inattivo
+      rect.on('pointerdown', () => this.applyFxPreset(p));
+      this.fxPresetBtns.push({ key: p.key, rect, txt });
+      this.reg(rect);
     });
+
+    // ── "Avanzato": espande i 6 toggle fini (restart per ri-layout + ri-registrazione pad) ──
+    const expY = py + 28;
+    const exp = Ui.text(this, cx - 230, expY, (this.fxAdvanced ? '▾ ' : '▸ ') + t('settings.fxAdvanced'), { fontSize: '12px', color: UI.blueInfo })
+      .setInteractive({ useHandCursor: true });
+    exp.on('pointerover', () => exp.setColor(UI.white));
+    exp.on('pointerout',  () => exp.setColor(UI.blueInfo));
+    exp.on('pointerdown', () => this.scene.restart({ from: this.fromKey, page: 'graphics', nav: true, fxAdvanced: !this.fxAdvanced }));
+    this.reg(exp);
+
+    let bottom = expY + 18;
+
+    if (this.fxAdvanced) {
+      const cols = 3, cw = 146, ch = 30, gapX = 10, gapY = 8;
+      const startX = cx - (cols * cw + (cols - 1) * gapX) / 2;
+      const chipY0 = expY + 40; // stacco netto dal link "Avanzato" (niente più chip sopra il testo)
+      FX_CHIPS.forEach((c, i) => {
+        const x = startX + (i % cols) * (cw + gapX) + cw / 2;
+        const cyy = chipY0 + Math.floor(i / cols) * (ch + gapY);
+        const rect = this.add.rectangle(x, cyy, cw, ch, 0x26262e).setStrokeStyle(2, UI.blueLine, 0.8).setInteractive({ useHandCursor: true });
+        const txt = Ui.text(this, x, cyy, t(c.label), { fontSize: '12px', fontStyle: 'bold', color: UI.faint }).setOrigin(0.5);
+        rect.on('pointerover', () => rect.setFillStyle(Settings[c.k] ? 0x1d3d22 : 0x32323c));
+        rect.on('pointerout',  () => this.refreshFx());
+        rect.on('pointerdown', () => this.setFx(() => { Settings[c.k] = !Settings[c.k]; }));
+        this.fxChips.push({ k: c.k, rect, txt });
+        this.reg(rect);
+      });
+      bottom = chipY0 + Math.ceil(FX_CHIPS.length / cols) * (ch + gapY);
+    } else {
+      // Riepilogo del preset attivo (così sai lo stato senza espandere).
+      this.fxSummary = Ui.text(this, cx + 230, expY, '', { fontSize: '11px', color: UI.faint }).setOrigin(1, 0);
+    }
+
+    this.refreshFx();
+    return bottom;
+  }
+
+  /** Quale preset corrisponde ESATTAMENTE allo stato corrente dei 6 flag (o 'custom'). */
+  private activeFxPreset(): string {
+    for (const p of FX_PRESETS) if (FX_CHIPS.every(c => Settings[c.k] === p.on.includes(c.k))) return p.key;
+    return 'custom';
+  }
+
+  /** Applica un preset: accende/spegne i 6 flag secondo `on`, con la stessa logica soglia-aware di setFx. */
+  private applyFxPreset(p: { on: FxKey[] }) {
+    this.setFx(() => { for (const c of FX_CHIPS) Settings[c.k] = p.on.includes(c.k); });
+  }
+
+  /** Applica un cambiamento agli FX: restart SOLO se la soglia master `screenFx` cambia (l'overlay del menu
+   *  va ri-attaccato/staccato); altrimenti aggiorna i colori dal vivo, senza flash. */
+  private setFx(apply: () => void) {
+    const was = Settings.screenFx;
+    apply();
+    if (Settings.screenFx !== was) this.scene.restart({ from: this.fromKey, page: 'graphics', nav: true, fxAdvanced: this.fxAdvanced });
+    else this.refreshFx();
+  }
+
+  /** Ricolora preset (attivo verde) e chip (acceso verde) + il riepilogo, dallo stato corrente di Settings. */
+  private refreshFx() {
+    const active = this.activeFxPreset();
+    for (const b of this.fxPresetBtns) {
+      const on = b.key === active;
+      b.rect.setFillStyle(on ? 0x16301a : 0x14141f).setStrokeStyle(2, on ? UI.hpHigh : UI.blueLine, on ? 0.9 : 0.5);
+      b.txt.setColor(on ? UI.greenSoft : UI.blue);
+    }
+    for (const c of this.fxChips) {
+      const on = Settings[c.k];
+      c.rect.setFillStyle(on ? 0x16301a : 0x26262e).setStrokeStyle(2, on ? UI.hpHigh : UI.blueLine, 0.8);
+      c.txt.setColor(on ? UI.greenSoft : UI.faint);
+    }
+    if (this.fxSummary) {
+      const p = FX_PRESETS.find(pr => pr.key === active);
+      this.fxSummary.setText(p ? t(p.label) : t('settings.fxCustom'));
+    }
   }
 
   // ─── Risoluzione ──────────────────────────────────────────────────────────────
@@ -429,9 +517,9 @@ export default class SettingsScene extends Phaser.Scene {
     this.pageHeader(t('settings.catGraphics'));
     this.buildResolution(H / 2 - 170, inGame);
     this.buildFullscreen(H / 2 - 116);
-    this.buildScreenFxGrid(H / 2 - 68); // Effetti schermo: griglia 2×3 di chip (post-fx)
-    this.buildToggle(H / 2 + 46,  t('settings.shadows'), t('settings.shadowsDesc'), () => Settings.shadows,       v => { Settings.shadows = v; });
-    this.buildToggle(H / 2 + 104, t('settings.asphalt'), t('settings.asphaltDesc'), () => Settings.asphaltDetail, v => { Settings.asphaltDetail = v; });
+    const fxBottom = this.buildScreenFx(H / 2 - 76); // preset + "Avanzato"; ritorna la y inferiore (dinamica)
+    this.buildToggle(fxBottom + 36, t('settings.shadows'), t('settings.shadowsDesc'), () => Settings.shadows,       v => { Settings.shadows = v; });
+    this.buildToggle(fxBottom + 88, t('settings.asphalt'), t('settings.asphaltDesc'), () => Settings.asphaltDetail, v => { Settings.asphaltDetail = v; });
     this.pageFooter();
   }
 

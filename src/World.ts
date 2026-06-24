@@ -37,3 +37,20 @@ export const BOSS_CONFIG: Record<BossType, BossConfig> = {
 };
 
 export const BOSS_ORDER: BossType[] = ['mega_mutant', 'giant_worm', 'armored_colossus', 'radioactive_beast'];
+
+/**
+ * Conversione distanza interna → km MOSTRATI. La distanza di gioco è in "unità di scroll" (px-mondo);
+ * il contachilometri la converte in km credibili per un singolo tratto (missione ~180 km) SENZA toccare il
+ * gameplay: missione, soglia boss e consumi restano in unità, cambia solo l'ETICHETTA. (0.01 = /100 → 180 km.)
+ * L'autonomia "realistica" del pieno (centinaia di km) nasce invece dal consumo lento + carburante che
+ * PERSISTE tra le missioni (un pieno copre ~3 missioni). Vedi BALANCE §1 / §3 bis.
+ */
+export const KM_PER_UNIT = 0.01;
+export const distanceKm = (distance: number): number => Math.floor(distance * KM_PER_UNIT);
+
+/**
+ * km coperti da 1 punto di carburante a consumo ×1 (crociera) — STIMA di display per la scheda del negozio
+ * (autonomia di un pieno = serbatoio · questo / consumo-del-mezzo). Derivato: `SCROLL_SPEED·KM_PER_UNIT /
+ * BASE_FUEL_DRAIN` = 240·0.01/0.5. Se cambi uno di quei tre (in GameScene/qui), aggiorna questo numero.
+ */
+export const KM_PER_FUEL = 4.8;

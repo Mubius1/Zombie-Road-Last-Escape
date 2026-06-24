@@ -26,6 +26,10 @@ export interface RunData {
   /** Munizioni finite (pivot horror): riserva corrente per arma. La MG (∞) non è tracciata; le altre sì.
    *  Caricata a inizio missione, consumata sparando, ricaricata da casse/garage, persistita a fine missione. */
   ammo: Partial<Record<WeaponType, number>>;
+  /** Carburante (modello "viaggio"): NON si ricarica a ogni missione — PERSISTE tra le missioni (un pieno
+   *  copre ~3 missioni). Caricato a inizio missione, consumato guidando, top-up da taniche/garage, persistito
+   *  a fine missione; alla morte si ripristina quello d'inizio missione (checkpoint, modello B). 100 = pieno. */
+  fuel: number;
   /** Salute (0..100) per componente, tramandata negozio→gioco; null = veicolo fresco. */
   components: Record<ComponentKey, number> | null;
   /** Punteggio dell'ultima partita conclusa (per overlay/record). */
@@ -72,6 +76,7 @@ export function resetRunState(registry: Phaser.Data.DataManager) {
   setRun(registry, 'ownedWeapons', ['mg']);
   setRun(registry, 'currentWeapon', 'mg');
   setRun(registry, 'ammo', {}); // solo MG (∞) all'inizio → nessuna riserva da tracciare
+  setRun(registry, 'fuel', 100); // pieno alla partenza (= MAX_FUEL in GameScene; RunState non importa da lì)
   setRun(registry, 'components', null);
   setRun(registry, 'routeModifier', 'none');
   setRun(registry, 'recruitLockMission', -1);
@@ -98,6 +103,7 @@ export function snapshotRun(registry: Phaser.Data.DataManager): RunData {
     ownedWeapons:  getRun(registry, 'ownedWeapons') ?? ['mg'],
     currentWeapon: getRun(registry, 'currentWeapon') ?? 'mg',
     ammo:          getRun(registry, 'ammo') ?? {},
+    fuel:          getRun(registry, 'fuel') ?? 100,
     components:    getRun(registry, 'components') ?? null,
     lastScore:     getRun(registry, 'lastScore') ?? 0,
     routeModifier: getRun(registry, 'routeModifier') ?? 'none',
@@ -121,6 +127,7 @@ export function restoreRun(registry: Phaser.Data.DataManager, run: RunData): voi
   setRun(registry, 'ownedWeapons',  run.ownedWeapons);
   setRun(registry, 'currentWeapon', run.currentWeapon);
   setRun(registry, 'ammo',          run.ammo ?? {});
+  setRun(registry, 'fuel',          run.fuel ?? 100);
   setRun(registry, 'components',    run.components);
   setRun(registry, 'lastScore',     run.lastScore);
   setRun(registry, 'routeModifier', run.routeModifier ?? 'none');

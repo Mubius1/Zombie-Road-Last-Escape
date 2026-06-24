@@ -14,9 +14,11 @@ Questo documento è la **fonte di verità** per chiunque (umano o AI) tocchi i n
 
 > Questa sezione vale per **tutto il titolo**, non solo i nemici. Le sezioni numerate (§0–§11) sono la specifica dettagliata del roster zombi; questa è la **stella polare** che rende il prodotto "premium".
 
+> 🩸 **Vale col pivot survival horror.** Lo Standard resta la stella polare anche dopo il [pivot horror](GAME_DESIGN.md#0--visione-e-pilastri) — anzi, "coesione" e "game feel" ora includono **anche la coesione di tono**: penombra, scarsità e ritmo dread→burst sono parte del feel quanto il peso degli impatti. [GAME_DESIGN §0 pilastro 7](GAME_DESIGN.md#0--visione-e-pilastri) ("Atmosfera che pesa") rimanda qui per la leggibilità e il feedback tattile; questo documento rimanda lì per i pilastri di tensione/horror → il rimando è **bidirezionale**. L'horror **aggiunge** dread, non toglie chiarezza dove conta (vedi pilastro 6, rivisto).
+
 ### Tesi
 Un titolo sembra AAA **non** per quantità di dettaglio, ma per tre cose che possiamo ottenere anche in grafica 100% procedurale:
-**(1) coesione** — sembra disegnato da una sola mano · **(2) game feel** — ogni azione ha un peso tattile · **(3) rifinitura** — nessun bordo grezzo, nessun "prototipo".
+**(1) coesione** — sembra disegnato da una sola mano (visiva **e di tono**) · **(2) game feel** — ogni azione ha un peso tattile, e la **tensione** stessa è un feel · **(3) rifinitura** — nessun bordo grezzo, nessun "prototipo".
 
 ### I pilastri di produzione
 
@@ -33,11 +35,18 @@ Un titolo sembra AAA **non** per quantità di dettaglio, ma per tre cose che pos
 
 5. **Post-processing leggero (procedurale-friendly).** **Bloom finto** sugli emissivi (cerchio a bassa alpha dietro la sorgente), leggera aberrazione/grana CRT opzionale. Mai pesante: deve restare a 60 fps.
 
-6. **Leggibilità prima di tutto.** Gerarchia chiara: le **minacce** sono sempre leggibili sopra il rumore di fondo; l'**HUD** è pulito e non copre l'azione; il VFX non deve mai nascondere ciò che uccide il giocatore. Se "bello" e "leggibile" sono in conflitto, vince **leggibile**.
+6. **Leggibilità prima di tutto (col buio come avversario).** Gerarchia chiara: le **minacce** sono leggibili **una volta nel cono dei fari / nella corsia illuminata** — non più "sempre leggibili in assoluto". Col pivot horror il buio è un *avversario di design*: le minacce **emergono** dall'oscurità (sagome che si rivelano, suono che anticipa l'occhio), ma nel momento in cui possono colpirti **devono** essere lette senza ambiguità. La penombra crea dread *prima* del contatto; la chiarezza resta sacra *al* contatto. L'**HUD** è pulito e non copre l'azione; il VFX non deve mai nascondere ciò che uccide il giocatore. Se "bello/oscuro" e "leggibile-quando-conta" sono in conflitto, vince **leggibile**.
 
 7. **Rifinitura ("no rough edges").** Forme arrotondate (anti-alias), ombre a terra coerenti su tutto, **transizioni di scena** (fade/slide, mai cut secchi), schermate (titolo, game over, negozio) curate quanto il gioco. La differenza tra "indie prototipo" e "AAA" è qui.
 
 8. **Performance come feature.** 60 fps stabili sono parte dell'estetica. Budget rigidi su particelle e shake; VFX `fire-and-forget`; nessun emitter persistente per entità.
+
+9. **Tensione & atmosfera horror come game-feel** *(pilastro del pivot survival horror).* La paura è una **meccanica sensoriale**, non una decorazione — e va trattata con lo stesso rigore del peso degli impatti.
+   - **Silenzio come minaccia.** La quiete tesa (fase CALM del director dread→burst) **non** è assenza di feedback: drone basso d'angoscia, lamenti lontani, qualche sagoma isolata che emerge dal buio. Il vuoto deve *pesare* — è quando il giocatore sa che sta per arrivare qualcosa.
+   - **Ritmo dread→burst.** L'**ondata** (fase BURST) è un evento sensoriale a sé: **stinger** all'attacco, **drone al massimo** per tutta la durata, batch d'apertura che ti sommerge. Poi si ritira → respiro. L'alternanza è il *battito* del gioco, non un dettaglio.
+   - **Anticipazione sonora.** L'orecchio avverte prima dell'occhio: la minaccia si annuncia col suono mentre è ancora nel buio (coerente col pilastro 6 rivisto). Il telegrafo di un Caricatore/boss è udibile *prima* di essere pienamente visibile.
+   - **Scarsità come feel.** Le munizioni finite hanno una loro grammatica tattile: il colpo "pieno" suona e pesa, lo **scatto a secco** (click + ripiego sulla MG) è un micro-momento di panico leggibile (feedback secco, niente botto). Anche il **battito cardiaco** a salute bassa è feel: la vulnerabilità si *sente*.
+   - **Penombra che vive.** I fari, la foschia che mangia i bordi, le sagome che si rivelano sono parte del game-feel quanto un muzzle-flash: l'oscurità è un personaggio, non uno sfondo.
 
 ### Budget di feedback schermo (camera & tempo)
 
@@ -56,6 +65,17 @@ Calibrazione di `cameras.main.shake(durata, intensità)` per evento — la coere
 
 > **Regola:** lo shake è una **spezia**. Se è sempre acceso non si sente più nulla; riservalo agli eventi che meritano peso.
 
+**Eventi horror (pivot) — feedback non-shake.** Alcuni eventi del pivot non passano dallo shake ma dall'**audio + UI**, e meritano lo stesso rigore di sincronia (pilastro 9). Sono già nel codice (`SoundManager`):
+
+| Evento | Risposta sensoriale |
+|---|---|
+| Inizio **ondata** (dread→burst) | **stinger** d'apertura (`playWaveStinger`) + **drone d'angoscia al massimo** per tutta la durata del burst |
+| **Quiete tesa** (CALM) | drone basso costante + lamenti radi: il silenzio *pesa*, non è muto |
+| **Salute bassa** | **battito cardiaco** che accelera col calare della salute (vulnerabilità udibile) |
+| **Arma a secco** (munizioni finite) | **click secco** + ripiego automatico sulla MG (`playDryFire`) — micro-panico, niente botto pieno |
+
+> **Regola horror:** anche il *vuoto* è feedback. Una fase di quiete senza drone/lamenti è un bug di feel, non risparmio.
+
 ### Segnatura visiva di *questo* titolo
 Strada notturna desaturata · carne necrotica e metallo ossidato · **bagliori biologici malati** come unica luce viva · grana filmica leggera · impatti "succosi". Se uno screenshot non comunica *"horror su strada, sporco e tattile"*, è fuori firma.
 
@@ -64,9 +84,12 @@ Strada notturna desaturata · carne necrotica e metallo ossidato · **bagliori b
 - [ ] Palette coerente: accenti emissivi limitati ai 3 colori firma.
 - [ ] Vignettatura + grading attivi; nessuna zona "piatta" non illuminata.
 - [ ] Transizioni tra le scene (niente cut secchi).
-- [ ] HUD leggibile, non copre mai le minacce.
+- [ ] HUD leggibile; le minacce sono lette senza ambiguità **una volta nel cono dei fari / in corsia** (emergere dal buio è voluto, confusione *al contatto* no).
 - [ ] 60 fps con la massima densità di nemici prevista.
 - [ ] Nessun bordo a scaletta / ombra incoerente / schermata trascurata.
+- [ ] **(Horror)** La quiete (CALM) ha il suo *feel*: drone + lamenti radi, mai silenzio muto.
+- [ ] **(Horror)** L'inizio di ogni **ondata** spara stinger + drone al massimo (dread→burst leggibile a orecchio).
+- [ ] **(Horror)** Salute bassa = **battito cardiaco**; arma a secco = **click + ripiego** (la scarsità si sente).
 
 > **Stato implementazione:** ✅ implementati in `src/Juice.ts` (sistema condiviso) — **hit-stop** (impatti forti: razzo 30 ms, gigante 50 ms, boss 70 ms), **vignettatura + grana** filmica, **luce dinamica** (`lightFlash` con alone morbido `fx_light` su esplosioni/razzi/morte boss + **muzzle-flash** illuminante allo sparo), **bloom finto**, **flash a schermo** sulla morte del boss e **transizioni di scena** in dissolvenza (Game ↔ Shop ↔ Debug + restart morte). **Color grading per-ambiente** (viraggio MULTIPLY) in `ENVIRONMENTS[].grade/gradeAlpha`, applicato a depth 16 (sopra il gameplay, sotto vignetta/HUD). Camera-shake e SFX procedurali erano già presenti.
 > **Ordine di profondità del compositing:** gameplay ≤15 · grading 16 · luci/FX additivi 17 · vignetta + frangia cromatica 18 · scanline CRT + grana 19 · HUD 20+ · flash globale 40.

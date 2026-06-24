@@ -55,6 +55,12 @@ const it: Record<string, string> = {
   'settings.catGeneral': 'GENERALE',
   'settings.backHub': '‹  Categorie',
   'settings.bloom': 'BLOOM',
+  'settings.fxPresetOff': 'Off',
+  'settings.fxMinimal': 'Minimo',
+  'settings.fxCinematic': 'Cinematico',
+  'settings.fxFull': 'Pieno',
+  'settings.fxAdvanced': 'Avanzato',
+  'settings.fxCustom': 'Personalizzato',
   'settings.bloomDesc': 'Bagliore sugli elementi luminosi',
   'settings.shadows': 'OMBRE 2.5D',
   'settings.shadowsDesc': 'Ombre di contatto a terra',
@@ -94,6 +100,8 @@ const it: Record<string, string> = {
   // ── Voci negozio (potenziamenti) ─────────────────────────────────────────────────
   'item.repair.label': 'Ripara tutto',
   'item.repair.desc': 'Tutti i componenti tornano al 100%',
+  'item.refuel.label': 'Rifornimento',
+  'item.refuel.desc': 'Fa il pieno di carburante',
   'item.restock.label': 'Rifornimento munizioni',
   'item.restock.desc': 'Ricarica al massimo le armi finite',
   'item.armor.label': 'Corazza rinforzata',
@@ -228,6 +236,7 @@ const it: Record<string, string> = {
   'vehicle.heavy_military.desc': 'Mezzo da combattimento cingolato: una fortezza mobile, poco spazio per i passeggeri.',
   'vehicle.experimental.desc': 'Prototipo a reazione del programma nero: velocissimo e letale, ma claustrofobico.',
   'shop.vehSpecs': '{hp} CV · {w} kg · {sp} km/h',
+  'shop.vehRange': '⛽ Autonomia ~{km} km',
 
   // ── Armi (nomi + descrizioni) ────────────────────────────────────────────────────
   'weapon.mg.name': 'Mitragliatrice',

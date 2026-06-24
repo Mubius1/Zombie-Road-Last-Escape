@@ -191,6 +191,8 @@ Il **buio è un avversario**, non solo un mood ([GAME_DESIGN §0](GAME_DESIGN.md
 2. **Fari = luce primaria** — il cono additivo passa da `alpha 0.5` a **0.62**: contro la penombra è la **sola luce affidabile** su cui leggere ciò che arriva. Perfora il velo (depth 2.6 > 1.8).
 3. **Corridoio + grading cupo** — i bordi corsia (`rl`) più scuri (gradiente `0.6`/`0.65`) → la carreggiata è un corridoio illuminato, il resto sprofonda. Il grading filmico (`filmParams`, solo con `screenFx`/WebGL) vira più cupo e desaturato: **exposure 0.9 · saturation 0.84 · contrast 1.12** (notte malata, meno "arcade").
 
+> **La penombra è del MONDO DI GIOCO, non dell'interfaccia.** Il `FilmPipeline` è a livello camera → applicato a una scena ne tonerebbe anche l'UI. Per questo **i menu NON hanno effetti schermo**: il post-processing filmico è attaccato **solo da `GameScene`** (`enterScreen(this, 1)`); Menu/Negozio/Impostazioni fanno solo una dissolvenza (`Ui.enter`) e restano puliti e leggibili, **qualunque sia l'impostazione `screenFx`** (che governa solo il gioco).
+
 > **Regola horror:** abbassa l'ambiente, **non** la leggibilità del gameplay. Le minacce (entità, depth 9+) e la corsia centrale restano lette; sono lo **sfondo**, i **bordi** e le **distanze** a essere mangiati dal buio. Le cose "emergono" dal nero man mano che entrano nel cono dei fari / nella corsia illuminata.
 
 ---

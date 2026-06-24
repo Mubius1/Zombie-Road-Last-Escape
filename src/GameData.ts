@@ -3,6 +3,8 @@
 // Nota anti-deriva: le entry di VEHICLES/WEAPONS restano su RIGA SINGOLA senza graffe annidate
 // perché scripts/validate-balance.mjs ne estrae i campi numerici con una regex riga-singola.
 
+import { KM_PER_FUEL } from './World';
+
 export interface VehicleData {
   name: string; price: number; color: number;
   healthBonus: number; armorBonus: number; speedMult: number; fireMult: number;
@@ -28,6 +30,25 @@ export const VEHICLES: Record<string, VehicleData> = {
 };
 
 export const VEHICLE_KEYS = Object.keys(VEHICLES);
+
+/**
+ * Consumo carburante REALISTICO per veicolo — moltiplicatore (×) sul consumo base `BASE_FUEL_DRAIN`
+ * (vedi `GameScene.getEffectiveFuelDrain`). Derivato dai DATI REALI del mezzo: massa (`weight` →
+ * resistenza al rotolamento + inerzia da muovere) e potenza (`horsepower` → cilindrata/erogazione,
+ * quindi sete). Unica fonte di verità: cambia weight/horsepower e consumo+autonomia seguono da soli.
+ * 1.0 ≈ pickup di riferimento; <1 = parco (city-car), >1 = vorace (mezzi pesanti / iper-potenti).
+ * Tabella autonomia risultante e formula documentate in BALANCE §3 bis. */
+export function vehicleFuelEff(v: VehicleData): number {
+  return 0.62 + v.weight / 15000 + v.horsepower / 4200;
+}
+
+/**
+ * Autonomia STIMATA (km) di un pieno per la scheda del negozio — più "logistica" del semplice ×consumo:
+ * serbatoio · km-per-carburante / consumo-del-mezzo. È una stima di display (crociera, componenti integri,
+ * tanica base 100); l'autonomia reale dipende anche da gas/freno e salute Serbatoio. Vedi BALANCE §3 bis. */
+export function vehicleRangeKm(v: VehicleData, tank = 100): number {
+  return Math.round(tank * KM_PER_FUEL / vehicleFuelEff(v));
+}
 
 /** M2 cibo & mantenimento sopravvissuti (numeri in BALANCE.md §8). Condiviso GameScene↔ShopScene
  *  per evitare drift tra consumo (gioco) e proiezione "affamato" (negozio). */

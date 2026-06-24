@@ -1,7 +1,5 @@
 {
-  "skipDangerousModePermissionPrompt": true,
   "permissions": {
-    "defaultMode": "bypassPermissions",
     "allow": [
       "Write",
       "Edit",
@@ -100,10 +98,18 @@
       "PowerShell(npm run validate)",
       "Bash(git merge *)",
       "Bash(grep -vE \"^\\\\s*$\")",
-      "Bash(echo \"tsc-exit:$?\")"
+      "Bash(echo \"tsc-exit:$?\")",
+      "PowerShell(cd \"C:\\\\Users\\\\manda\\\\Documents\\\\progetto della domenica\"; npx tsc --noEmit 2>&1 | Select-Object -First 30; \"EXIT: $LASTEXITCODE\")",
+      "PowerShell(cd \"C:\\\\Users\\\\manda\\\\Documents\\\\progetto della domenica\"; npm run validate 2>&1 | Select-Object -Last 25; \"EXIT: $LASTEXITCODE\")",
+      "Bash(cd \"c:/Users/manda/Documents/progetto della domenica\" && rm -rf src/Models src/Resources src/Shaders src/utility src/assets && echo \"rimosse\" && ls src | tr '\\\\n' ' ')",
+      "Bash(cat .github/workflows/ci.yml)",
+      "Bash(ls eslint.config.*)",
+      "Bash(grep -ri \"vitest\\\\|jest\\\\|playwright\" package.json)"
     ],
+    "defaultMode": "bypassPermissions",
     "additionalDirectories": [
       "\\tmp"
     ]
-  }
+  },
+  "skipDangerousModePermissionPrompt": true
 }

@@ -2,8 +2,9 @@
   "name": "zombie-road-last-escape",
   "private": true,
   "version": "0.1.0",
-  "description": "Zombie Road: Last Escape — arcade survival top-down (Phaser 3 + TypeScript, grafica e audio 100% procedurali).",
+  "description": "Zombie Road: Last Escape — survival horror su ruote, top-down (Phaser 3 + TypeScript, grafica e audio 100% procedurali).",
   "type": "module",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "validate:art": "node scripts/validate-art-bible.mjs",
@@ -14,7 +15,11 @@
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "build": "npm run validate:art && npm run validate:balance && npm run validate:audio && npm run validate:i18n && tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:desktop": "node electron/dev.mjs",
+    "build:electron": "tsc -p tsconfig.electron.json && node electron/finalize-cjs.mjs",
+    "build:desktop": "npm run build && npm run build:electron",
+    "dist": "npm run build:desktop && electron-builder --win --config electron-builder.yml"
   },
   "dependencies": {
     "phaser": "^3.90.0"
@@ -22,6 +27,8 @@
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@types/node": "^20.11.0",
+    "electron": "^42.5.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^9.39.4",
     "typescript": "^5.6.2",
     "typescript-eslint": "^8.62.0",

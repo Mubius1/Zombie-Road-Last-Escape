@@ -1,0 +1,40 @@
+# Configurazione electron-builder per il pacchetto desktop (Windows).
+# File a parte (non in package.json) per tenere il manifest del gioco pulito.
+# Pre-requisito: `npm run build:desktop` (genera dist/ + dist-electron/) prima di `electron-builder`.
+appId: com.zombieroad.lastescape
+productName: Zombie Road: Last Escape
+copyright: Copyright © 2026
+
+# Cartella di output dell'installer/pacchetto.
+directories:
+  output: release
+  buildResources: build
+
+# Cosa finisce DENTRO l'app pacchettizzata:
+#  - dist/          → il gioco web buildato (caricato da file://, con base './').
+#  - dist-electron/ → main/preload compilati + il package.json {"type":"commonjs"}.
+#  - package.json   → necessario a Electron per trovare il campo "main".
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+
+# Entry point del processo main (coerente con package.json → "main").
+# (electron-builder lo legge da package.json "main"; ribadito qui per chiarezza.)
+
+# Target Windows minimo: installer NSIS.
+win:
+  target:
+    - nsis
+  # ICONA: placeholder/default per ora. La regola "niente PNG" del progetto riguarda la
+  # GRAFICA DI GIOCO, non il packaging. Se non si fornisce un'icona, electron-builder usa
+  # quella di default di Electron. DECISIONE DA CONFERMARE: fornire un build/icon.ico
+  # dedicato (256x256) prima della distribuzione. Per abilitarlo, decommenta:
+  # icon: build/icon.ico
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true

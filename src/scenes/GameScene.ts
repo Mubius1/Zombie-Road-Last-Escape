@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { VEHICLES, Upgrades, WeaponType, WEAPONS, WEAPON_KEYS, WEAPON_AMMO, weaponInfiniteAmmo, FOOD, SURVIVORS } from '../GameData';
+import { VEHICLES, vehicleFuelEff, Upgrades, WeaponType, WEAPONS, WEAPON_KEYS, WEAPON_AMMO, weaponInfiniteAmmo, FOOD, SURVIVORS } from '../GameData';
 import SoundManager from '../SoundManager';
 import Juice from '../Juice';
 import { enterScreen, pulse, rampSpeed, resetKinetics } from '../PostFx';
@@ -12,12 +12,13 @@ import { resetRunState, getRun, setRun, snapshotRun, restoreRun } from '../RunSt
 import SaveData from '../SaveData';
 import { routeNode } from '../Routes';
 import { buildEntityTextures, buildSurvivorTextures } from '../EntityTextures';
+import { buildIcons } from '../IconTextures';
 import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import HudController from '../HudController';
 import BossController, { BossHost } from '../BossController';
 import { t } from '../i18n';
 import {
-  ROAD_TOP, ROAD_BOTTOM, ROAD_CENTER,
+  ROAD_TOP, ROAD_BOTTOM, ROAD_CENTER, distanceKm,
 } from '../World';
 import type { ZombieType, ComponentKey } from '../World';
 
@@ -40,7 +41,7 @@ const PAD_TRIGGER_MIN = 0.1;
 const PAD_AIM_DIST = 220;    // distanza fissa del mirino lungo l'angolo di mira (stick destro = direzione)
 // Indici standard mapping (Phaser Standard Gamepad) — nomi espliciti, non numeri magici sparsi.
 const PAD = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, START: 9, DUP: 12, DDOWN: 13, DLEFT: 14, DRIGHT: 15 } as const;
-const BASE_FUEL_DRAIN = 2.2;
+const BASE_FUEL_DRAIN = 0.5;  // consumo lento: il carburante PERSISTE tra le missioni (un pieno ≈ 3 missioni). Vedi RunData.fuel + BALANCE §3 bis.
 const MAX_FUEL = 100;
 const AMMO_PICKUP = 0.5;   // frazione di capacità ricaricata da una cassa di munizioni (mezzo caricatore)
 const BULLET_SPEED = 680;
@@ -50,7 +51,13 @@ const ATTACH_DAMAGE_AMOUNT = 14;
 const RAM_DMG = 6; // potenziamento 'ariete': danno da speronamento a chi tenta l'aggancio (per-veicolo)
 const MISSION_DIST = 18000;
 const GIANT_SPAWN_INTERVAL = 22000;
-const BOSS_TRIGGER = 0.82; // % missione a cui appare il boss
+const BOSS_TRIGGER = 0.82; // % missione a cui appare il boss (quando i boss sono attivi)
+// Boss di fine regione DISATTIVATI (scelta di design). Il codice boss resta TUTTO intatto
+// (BossController, BOSS_CONFIG, spawn/onBulletHit/enterPhase2…): è spento solo lo SPAWN automatico a
+// fine percorso. La missione si completa raggiungendo MISSION_DIST (il boss bloccava il completamento
+// solo finché attivo). Il tasto debug 'B' può ancora evocarlo in sviluppo. Rimetti `true` per riattivarli.
+// Vedi docs/GAME_DESIGN.md.
+const BOSSES_ENABLED: boolean = false;
 const DEATH_MONEY_PENALTY = 0.25; // pedaggio di recupero alla morte (campagna a checkpoint, modello B)
 const ENGINE_SCROLL_MIN = 0.45;   // M1 motore onesto: a motore distrutto avanzi al 45% (no morte)
 const ARMOR_MULT_FLOOR = 0.40;    // M2 corazza passiva: moltiplicatore danno minimo (riduzione max 60%)
@@ -105,7 +112,7 @@ const CONVOY_DURATION = 11000;       // ms da scortare il van
 const CONVOY_HP = 100;               // salute del van alleato
 const CONVOY_ZOMBIE_DMG = 9;         // danno al van per ogni zombi che lo raggiunge
 const CONVOY_REWARD_MONEY = 100;     // bonus monete se il van sopravvive
-const CONVOY_REWARD_FUEL = 25;       // carburante condiviso dal convoglio salvato
+const CONVOY_REWARD_FUEL = 18;       // carburante condiviso dal convoglio salvato (scarso: modello "viaggio")
 // ── Mira col mouse (combat reboot): la torretta punta il puntatore; i colpi danno knockback. ──
 const MAX_AIM = Phaser.Math.DegToRad(82); // arco frontale di mira (±82° da destra)
 const KNOCK = 220;        // impulso di rinculo dei colpi (px/s, decade) — solo game-feel
@@ -245,6 +252,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private vehicleKey = 'civilian_car';
   private vehicleFireMult = 1.0;
   private vehicleSpeedMult = 1.0;
+  private fuelEff = 1.0;         // consumo carburante per-veicolo (× su BASE_FUEL_DRAIN) — da massa/potenza reali
   private vehicleArmorBonus = 0;
   private upgrades: Upgrades = {};       // set del VEICOLO CORRENTE (RunData.upgrades è per-veicolo)
   private vehicleDamageBonus = 0;        // +1 con 'ammo'
@@ -387,7 +395,11 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.vehicleSpeedMult= vData.speedMult * (this.upgrades.engine ? 1.15 : 1.0);
     this.vehicleArmorBonus = vData.armorBonus + (this.upgrades.armor ? 20 : 0);
     this.maxFuel         = MAX_FUEL + (this.upgrades.fuelTank ? 30 : 0);
-    this.fuel            = this.maxFuel;
+    // Carburante "viaggio": NON si ricarica a pieno — riprende il livello PERSISTITO (clamp al serbatoio del
+    // mezzo corrente). Default pieno solo se assente (vecchi salvataggi). Il registry tiene il valore d'inizio
+    // missione fino a triggerMissionComplete → alla morte si ripristina da solo (checkpoint, modello B).
+    this.fuel            = Math.min(this.maxFuel, getRun(this.registry, 'fuel') ?? this.maxFuel);
+    this.fuelEff         = vehicleFuelEff(vData); // consumo realistico: massa+potenza del mezzo (BALANCE §3 bis)
     this.vehicleDamageBonus = this.upgrades.ammo ? 1 : 0;
     this.dashCooldownMs  = DASH_COOLDOWN * (this.upgrades.nitro ? 0.7 : 1);
     this.overdriveMult   = this.upgrades.overcharge ? 1.3 : 1;
@@ -467,7 +479,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.buildHUD(missionNum);
     this.buildInput();
 
-    const fuelDelay = this.hasActiveSurvivor('explorer') ? 5000 : 7500;
+    const fuelDelay = this.hasActiveSurvivor('explorer') ? 10000 : 15000; // taniche rare (scarsità "viaggio"): il rifornimento vero è al garage
     this.time.addEvent({ delay: fuelDelay, callback: this.spawnFuelCan, callbackScope: this, loop: true });
     this.time.addEvent({ delay: Math.round(HAZARD_SPAWN_INTERVAL / route.hazardMult), callback: this.spawnHazard, callbackScope: this, loop: true }); // Track B1: frequenza × nodo
     this.time.addEvent({ delay: 13000, callback: this.spawnAmmoCrate, callbackScope: this, loop: true }); // munizioni: casse rade (scarsità)
@@ -601,6 +613,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private buildTextures() {
     buildVehicleTexture(this, this.vehicleKey);
     buildEntityTextures(this);
+    buildIcons(this); // icone HUD procedurali (salute/carburante/componenti/percorso/munizioni)
   }
 
   // ─── World & entities ────────────────────────────────────────────────────────
@@ -766,18 +779,22 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     kb.on('keydown-ESC', () => this.openPauseMenu());
     kb.on('keydown-C', () => this.throwGrenade()); // Artificiere: granata AoE (gated nel metodo)
 
-    // Tasti debug
-    kb.on('keydown-ZERO', () => this.scene.start('DebugScene'));
-    kb.on('keydown-G', () => {
-      this.debugGod = !this.debugGod;
-      if (this.debugGod) this.fuel = this.maxFuel;
-      this.hud.setDebug(this.debugGod); // evento discreto: non più aggiornato per-frame
-    });
-    kb.on('keydown-B', () => { if (this.alive && !this.boss.spawned) this.boss.spawn(); });
-    kb.on('keydown-N', () => { if (this.alive && !this.missionDone) this.triggerMissionComplete(); });
-    kb.on('keydown-H', () => { this.health = this.maxHealth; this.fuel = this.maxFuel;
-      (Object.keys(this.components) as ComponentKey[]).forEach(k => this.components[k].health = 100); });
-    kb.on('keydown-E', () => this.debugCycleEvent()); // debug: cicla gli eventi B2 (notte/blocco/tempesta/convoglio)
+    // Tasti debug — SOLO in sviluppo. `import.meta.env.DEV` è sostituito con `false` da `vite build`
+    // → questo blocco viene rimosso (dead-code elimination): nel build finale NON c'è god-mode, skip
+    // missione, galleria debug, ecc. (debito A8 risolto).
+    if (import.meta.env.DEV) {
+      kb.on('keydown-ZERO', () => this.scene.start('DebugScene'));
+      kb.on('keydown-G', () => {
+        this.debugGod = !this.debugGod;
+        if (this.debugGod) this.fuel = this.maxFuel;
+        this.hud.setDebug(this.debugGod); // evento discreto: non più aggiornato per-frame
+      });
+      kb.on('keydown-B', () => { if (this.alive && !this.boss.spawned) this.boss.spawn(); });
+      kb.on('keydown-N', () => { if (this.alive && !this.missionDone) this.triggerMissionComplete(); });
+      kb.on('keydown-H', () => { this.health = this.maxHealth; this.fuel = this.maxFuel;
+        (Object.keys(this.components) as ComponentKey[]).forEach(k => this.components[k].health = 100); });
+      kb.on('keydown-E', () => this.debugCycleEvent()); // debug: cicla gli eventi B2 (notte/blocco/tempesta/convoglio)
+    }
 
     // ── Gamepad (schema input alternativo; tastiera+mouse restano il default) ──
     const gp = this.input.gamepad;
@@ -1201,7 +1218,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private updateDistance(dt: number) {
     this.distance += this.getEffectiveScroll() * this.throttle * dt; // M1: motore + throttle del giocatore regolano l'avanzamento
     this.updateEvents(); // Track B2: eventi in-run a soglie di distanza
-    if (!this.boss.spawned && this.distance >= MISSION_DIST * BOSS_TRIGGER) {
+    if (BOSSES_ENABLED && !this.boss.spawned && this.distance >= MISSION_DIST * BOSS_TRIGGER) {
       this.boss.spawn();
       // Ambient sospeso nel duello (coerente con fuel/spawn): via hazard e proiettili residui, niente malus olio.
       this.hazards.clear(true, true);
@@ -2359,7 +2376,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private onCollectFuel(can: Phaser.Physics.Arcade.Sprite) {
     if (!can.active) return;
     can.destroy();
-    this.fuel = Math.min(this.maxFuel, this.fuel + 30);
+    this.fuel = Math.min(this.maxFuel, this.fuel + 15); // tanica = top-up modesto (scarsità "viaggio"); il pieno si fa al garage
     this.sfx?.playFuelPickup();
     this.vehicle.setTint(0x88ff88);
     this.time.delayedCall(200, () => { if (this.vehicle?.active) this.vehicle.clearTint(); });
@@ -2534,7 +2551,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private getEffectiveFuelDrain(): number {
     // Throttle (pivot): accelerare brucia di più, frenare di meno (ma il serbatoio drena comunque nel tempo →
     // fermarsi non è gratis). Fattore 0.5 (freno pieno) · 1.0 (crociera, bilanciamento invariato) · 1.3 (gas).
-    return BASE_FUEL_DRAIN * (1 + (1 - this.components.tank.health / 100) * 2) * (0.5 + 0.5 * this.throttle);
+    // `fuelEff`: consumo REALISTICO per-veicolo (massa+potenza, BALANCE §3 bis) → ogni mezzo ha la sua autonomia.
+    return BASE_FUEL_DRAIN * (1 + (1 - this.components.tank.health / 100) * 2) * (0.5 + 0.5 * this.throttle) * this.fuelEff;
   }
 
   /** M1 motore onesto: il motore regola il RITMO DI AVANZAMENTO (accumulo di distance/km). Sano →
@@ -2573,6 +2591,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     });
     setRun(this.registry, 'routeModifier', 'none'); // Track B1: il modificatore vale una sola missione → consumato
     setRun(this.registry, 'ammo', this.ammo); // munizioni: il consumo della missione si porta avanti (checkpoint)
+    setRun(this.registry, 'fuel', this.fuel); // carburante "viaggio": il livello residuo si porta avanti (checkpoint)
     // CHECKPOINT: lo stato è avanzato (ricompense + missione successiva) → persisti subito, così
     // chiudere il browser sull'overlay di fine missione o nel negozio non perde la missione (fix review).
     if (!this.debugRun) SaveData.saveRun(snapshotRun(this.registry));
@@ -2607,7 +2626,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       Ui.text(this, cx,cy-66,t('game.allRegions'),{fontSize:'12px',color:UI.greenSoft}).setOrigin(0.5).setDepth(31);
     }
     Ui.text(this, cx,cy-48,t('game.scoreLine', { n: this.score }),{fontSize:'20px',color:UI.white}).setOrigin(0.5).setDepth(31);
-    Ui.text(this, cx,cy-14,t('game.distanceLine', { n: Math.floor(this.distance/100) }),{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
+    Ui.text(this, cx,cy-14,t('game.distanceLine', { n: distanceKm(this.distance) }),{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
     Ui.text(this, cx,cy+20,t('game.coinsEarned', { n: earned }),{fontSize:'18px',color:UI.gold}).setOrigin(0.5).setDepth(31);
     Ui.text(this, cx,cy+55,t('game.coinsTotal', { n: (getRun(this.registry, 'money') ?? 0) }),{fontSize:'15px',color:UI.goldDim}).setOrigin(0.5).setDepth(31);
     this.outcomeText(cx, cy+82, 'game.toShop', { fontSize:'13px', color:UI.faint });
@@ -2691,7 +2710,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       }).setOrigin(0.5).setDepth(31);
       Ui.text(this, cx,cy-46,reason,{fontSize:'16px',color:UI.redSoft}).setOrigin(0.5).setDepth(31);
       Ui.text(this, cx,cy-8,t('game.scoreLine', { n: this.score }),{fontSize:'22px',color:UI.white}).setOrigin(0.5).setDepth(31);
-      Ui.text(this, cx,cy+24,t('game.distanceLine', { n: Math.floor(this.distance/100) }),{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
+      Ui.text(this, cx,cy+24,t('game.distanceLine', { n: distanceKm(this.distance) }),{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
       // Campagna a checkpoint: da dove si riprende + il pedaggio di recupero pagato (modello B).
       Ui.text(this, cx,cy+54,t('game.checkpointResume', { n: this.missionNumber }),{fontSize:'14px',color:UI.amberSoft}).setOrigin(0.5).setDepth(31);
       if (this.lostSurvivor) {

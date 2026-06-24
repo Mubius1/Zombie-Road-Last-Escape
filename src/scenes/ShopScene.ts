@@ -1,12 +1,11 @@
 import Phaser from 'phaser';
-import { VEHICLES, VEHICLE_KEYS, SURVIVORS, SurvivorData, Upgrades, WEAPONS, WEAPON_KEYS, WEAPON_AMMO, weaponInfiniteAmmo, WeaponType, FOOD } from '../GameData';
+import { VEHICLES, VEHICLE_KEYS, SURVIVORS, SurvivorData, Upgrades, WEAPONS, WEAPON_KEYS, WEAPON_AMMO, weaponInfiniteAmmo, WeaponType, FOOD, vehicleRangeKm } from '../GameData';
 import { buildEntityTextures, buildSurvivorTextures } from '../EntityTextures';
 import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import Juice from '../Juice';
 import Settings from '../Settings';
-import { enterScreen } from '../PostFx';
 import SoundManager from '../SoundManager';
-import Ui, { UI, MENU_VIGNETTE } from '../Ui';
+import Ui, { UI } from '../Ui';
 import MenuPad, { Focusable } from '../MenuPad';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { getRun, setRun, snapshotRun } from '../RunState';
@@ -25,6 +24,7 @@ interface ShopItem {
 // dipende dal veicolo corrente (VEHICLES[key].upgrades). Acquisti = per-veicolo (RunData.upgrades).
 const SHOP_ITEMS: ShopItem[] = [
   { key: 'repair',     label: 'item.repair.label',     cost:  80, desc: 'item.repair.desc',     oneTime: false },
+  { key: 'refuel',     label: 'item.refuel.label',     cost:  50, desc: 'item.refuel.desc',     oneTime: false }, // carburante "viaggio": fa il pieno; compare solo se il serbatoio non è già pieno
   { key: 'restock',    label: 'item.restock.label',    cost: 120, desc: 'item.restock.desc',    oneTime: false }, // munizioni: ricarica al massimo le armi finite (pivot horror)
   { key: 'armor',      label: 'item.armor.label',      cost: 150, desc: 'item.armor.desc',      oneTime: true  },
   { key: 'engine',     label: 'item.engine.label',     cost: 120, desc: 'item.engine.desc',     oneTime: true  },
@@ -53,7 +53,6 @@ export default class ShopScene extends Phaser.Scene {
   private offeredSurvivors: SurvivorData[] = [];
 
   private moneyText!: Phaser.GameObjects.Text;
-  private grain: Phaser.GameObjects.TileSprite | null = null;
   // SoundManager condiviso (statico): il negozio fa scene.restart a ogni acquisto, quindi NON va
   // creato a ogni create() (lascerebbe un master appeso a ogni restart — cfr. AU7). Riusato.
   private static sfx?: SoundManager;
@@ -114,15 +113,9 @@ export default class ShopScene extends Phaser.Scene {
     this.ensureTextures();
     this.drawUI();
 
-    // Coesione filmica: overlay sempre presente (se attivo), dissolvenza solo al
-    // primo ingresso — non ad ogni ri-disegno dopo un acquisto. Vignetta morbida
-    // (menu): i pannelli laterali e la fila veicoli vivono ai bordi.
-    if (Settings.screenFx) this.grain = enterScreen(this, MENU_VIGNETTE);
+    // Dissolvenza solo al primo ingresso — non a ogni ri-disegno dopo un acquisto. Il negozio è un
+    // MENU: nessun effetto schermo (il post-processing filmico vive solo in GameScene), qualunque sia `screenFx`.
     if (!this.replay) Juice.fadeIn(this);
-  }
-
-  override update() {
-    Juice.jitterGrain(this.grain);
   }
 
   /** Ri-disegna la scena dopo un acquisto/selezione, senza ripetere la dissolvenza. */
@@ -193,6 +186,7 @@ export default class ShopScene extends Phaser.Scene {
     const hasFinite = this.ownedWeapons.some(w => !weaponInfiniteAmmo(w));
     const items = SHOP_ITEMS.filter(it =>
       it.key === 'repair'  ? true :
+      it.key === 'refuel'  ? this.refuelNeeded() : // universale, ma solo se c'è da rifornire
       it.key === 'restock' ? hasFinite :
       catalog.includes(it.key));
 
@@ -436,12 +430,14 @@ export default class ShopScene extends Phaser.Scene {
     const v = VEHICLES[key]!;
     const cx = this.designW / 2, cy = 352;
     const keep = <T extends { destroy(): void }>(o: T): T => { this.vehicleTip.push(o); return o; };
-    keep(Ui.box(this, cx, cy, 600, 116, { fill: 0x0a0a14, fillAlpha: 0.98, radius: 10, stroke: UI.blueLine, strokeAlpha: 0.85 }).setDepth(60));
-    keep(Ui.text(this, cx, cy - 48, t(v.name), { fontSize: '15px', color: UI.blueBright, fontStyle: 'bold' }).setOrigin(0.5).setDepth(61));
-    keep(Ui.text(this, cx, cy - 28, t(v.desc), { fontSize: '11px', color: '#9a9488', fontStyle: 'italic', align: 'center', wordWrap: { width: 560 } }).setOrigin(0.5, 0).setDepth(61));
-    keep(Ui.text(this, cx, cy + 18, t('shop.vehSpecs', { hp: v.horsepower, w: v.weight, sp: v.topSpeed }), { fontSize: '13px', color: UI.gold, fontStyle: 'bold' }).setOrigin(0.5).setDepth(61));
+    keep(Ui.box(this, cx, cy, 600, 128, { fill: 0x0a0a14, fillAlpha: 0.98, radius: 10, stroke: UI.blueLine, strokeAlpha: 0.85 }).setDepth(60));
+    keep(Ui.text(this, cx, cy - 54, t(v.name), { fontSize: '15px', color: UI.blueBright, fontStyle: 'bold' }).setOrigin(0.5).setDepth(61));
+    keep(Ui.text(this, cx, cy - 34, t(v.desc), { fontSize: '11px', color: '#9a9488', fontStyle: 'italic', align: 'center', wordWrap: { width: 560 } }).setOrigin(0.5, 0).setDepth(61));
+    keep(Ui.text(this, cx, cy + 12, t('shop.vehSpecs', { hp: v.horsepower, w: v.weight, sp: v.topSpeed }), { fontSize: '13px', color: UI.gold, fontStyle: 'bold' }).setOrigin(0.5).setDepth(61));
+    // Autonomia stimata del pieno (logistica visibile): deriva da massa/potenza via vehicleRangeKm (BALANCE §3 bis).
+    keep(Ui.text(this, cx, cy + 30, t('shop.vehRange', { km: vehicleRangeKm(v) }), { fontSize: '11px', color: UI.amberSoft }).setOrigin(0.5).setDepth(61));
     const stats = `❤ +${v.healthBonus}     🛡 +${v.armorBonus}     👥 ${v.survivorSlots}     ⚡ ×${v.speedMult}     🔫 ×${v.fireMult}`;
-    keep(Ui.text(this, cx, cy + 40, stats, { fontSize: '12px', color: UI.text }).setOrigin(0.5).setDepth(61));
+    keep(Ui.text(this, cx, cy + 48, stats, { fontSize: '12px', color: UI.text }).setOrigin(0.5).setDepth(61));
   }
 
   private hideVehicleTooltip() {
@@ -465,11 +461,14 @@ export default class ShopScene extends Phaser.Scene {
     if (this.money < item.cost) return;
     // Rifornimento munizioni: niente acquisto a vuoto se non c'è nulla da ricaricare (evita spreco monete).
     if (item.key === 'restock' && !this.restockNeeded()) { this.denyPurchase(); return; }
+    if (item.key === 'refuel'  && !this.refuelNeeded())  { this.denyPurchase(); return; }
     this.money -= item.cost;
     setRun(this.registry, 'money', this.money);
 
     if (item.key === 'repair') {
       setRun(this.registry, 'components', { engine: 100, wheels: 100, tank: 100, turret: 100 }); // M2: 4 componenti
+    } else if (item.key === 'refuel') {
+      setRun(this.registry, 'fuel', this.maxFuelForVehicle()); // carburante "viaggio": fa il pieno del mezzo corrente
     } else if (item.key === 'restock') {
       // Munizioni (pivot horror): ricarica al MASSIMO ogni arma finita posseduta.
       const ammo = { ...(getRun(this.registry, 'ammo') ?? {}) } as Partial<Record<WeaponType, number>>;
@@ -602,6 +601,17 @@ export default class ShopScene extends Phaser.Scene {
   private restockNeeded(): boolean {
     const ammo = (getRun(this.registry, 'ammo') ?? {});
     return this.ownedWeapons.some(w => !weaponInfiniteAmmo(w) && (ammo[w] ?? 0) < WEAPON_AMMO[w]);
+  }
+
+  /** Serbatoio massimo del veicolo corrente (= MAX_FUEL 100 + Serbatoio extra). MAX_FUEL non è importabile
+   *  da GameScene → letterale 100, allineato a `MAX_FUEL`/`item.fuelTank` (+30). */
+  private maxFuelForVehicle(): number {
+    return 100 + (this.upgrades.fuelTank ? 30 : 0);
+  }
+
+  /** True se il serbatoio non è già pieno (→ il rifornimento al garage ha effetto). */
+  private refuelNeeded(): boolean {
+    return (getRun(this.registry, 'fuel') ?? 100) < this.maxFuelForVehicle();
   }
 
   /** Persiste il checkpoint su disco dopo ogni cambiamento di stato nel negozio (fix review: chiudere

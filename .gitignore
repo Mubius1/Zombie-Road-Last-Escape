@@ -3,6 +3,10 @@ dist/
 .vscode/
 .DS_Store
 
+# Wrapper desktop Electron (additivo): JS compilato del wrapper e output di electron-builder.
+dist-electron/
+release/
+
 # Output JS/sourcemap di tsc accanto ai sorgenti .ts (tsc è in noEmit: Vite transpila i .ts).
 # Guard anti-ricaduta: i sorgenti sono .ts, in src/ non esistono .js scritti a mano.
 src/**/*.js

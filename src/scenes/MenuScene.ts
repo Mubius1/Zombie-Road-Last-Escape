@@ -17,7 +17,6 @@ const H = 600;
  * (malato-verde · arancio-fuoco · rosso-sangue), vignetta + grana, transizioni in dissolvenza.
  */
 export default class MenuScene extends Phaser.Scene {
-  private grain: Phaser.GameObjects.TileSprite | null = null;
   /** Larghezza di design (800 in 4:3, maggiore in 16:9). */
   private designW = DESIGN_W;
 
@@ -37,11 +36,7 @@ export default class MenuScene extends Phaser.Scene {
 
     this.input.keyboard?.on('keydown-ENTER', () => this.hasProgress() ? this.continueGame() : this.newGame());
 
-    this.grain = Ui.enter(this);
-  }
-
-  override update() {
-    Juice.jitterGrain(this.grain);
+    Ui.enter(this); // sola dissolvenza; i menu NON hanno effetti schermo (vivono solo in GameScene)
   }
 
   // ─── Sfondo procedurale (cielo notturno + skyline in rovina) ──────────────────

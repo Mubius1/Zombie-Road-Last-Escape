@@ -1,6 +1,6 @@
 # 🏗️ Architettura tecnica — Zombie Road: Last Escape
 
-> **Stato:** v1.0 · vivo (living document) · giugno 2026.
+> **Stato:** v1.1 · vivo (living document) · giugno 2026 (pivot survival-horror: gamepad, throttle, munizioni, drone, Track B).
 > **Scopo:** raccogliere in un posto solo le **cose non ovvie dal codice** — il sistema di scaling in spazio di design + zoom camera, il sovracampionamento delle texture (`OS_G`/`OVERSAMPLE`), il flusso tra le scene e **come comunicano**. Salva ore a chi rientra nel codice.
 > **Non è** una fonte di verità estetica né di bilanciamento: per *come appare/suona* vedi le **art bible** ([ZOMBIES](./ART_BIBLE_ZOMBIES.md) · [AMBIENTE](./ART_BIBLE_AMBIENTE.md) · [OGGETTI](./ART_BIBLE_OGGETTI.md) · [INTERFACCE](./ART_BIBLE_INTERFACCE.md) · [AUDIO](./ART_BIBLE_AUDIO.md)); per *come si gioca* e *quali numeri* vedi [GAME_DESIGN](./GAME_DESIGN.md) e [BALANCE](./BALANCE.md). Questo documento spiega **come è cucito insieme**.
 
@@ -8,19 +8,26 @@
 
 ## 1. Stack & pipeline di build
 
-- **Engine:** Phaser 3.90 · **Linguaggio:** TypeScript (strict) · **Bundler/dev server:** Vite.
+- **Engine:** Phaser 3.90 · **Linguaggio:** TypeScript (strict; vedi *Hardening* sotto) · **Bundler/dev server:** Vite.
 - **Grafica:** 100% procedurale — geometria via Graphics API → `generateTexture`; post-processing via shader GLSL inline (`src/pipelines/`, vedi `src/PostFx.ts`). Nessun PNG, nessun asset esterno.
 - **Audio:** 100% procedurale (Web Audio API). Vedi [`ART_BIBLE_AUDIO.md`](./ART_BIBLE_AUDIO.md).
-- **UI/testi:** in italiano.
+- **UI/testi:** internazionalizzati su 6 lingue (`it · en · es · fr · de · pt`), italiano canonico. Vedi §6.3 e [`I18N.md`](I18N.md).
 
 | Comando | Cosa fa |
 |---|---|
-| `npm run dev` | Vite in sviluppo |
-| `npm run build` | **`validate:art`** → `tsc` (solo type-check) → build di produzione |
-| `npm run validate:art` | confronta le costanti del codice con i numeri nelle art bible; **fallisce se divergono** |
+| `npm run dev` | Vite in sviluppo (+ plugin di ri-validazione a caldo, vedi sotto) |
+| `npm run build` | **`validate:art` + `validate:balance` + `validate:audio` + `validate:i18n`** → `tsc` (solo type-check) → build di produzione |
+| `npm run validate` | esegue i quattro validatori in sequenza |
+| `npm run validate:art` | confronta le costanti visive del codice con i numeri nelle art bible; **fallisce se divergono** |
+| `npm run validate:balance` | allineamento codice ↔ `BALANCE.md` (prezzi/HP/danno/cooldown/ricompense) |
+| `npm run validate:audio` | allineamento codice ↔ `ART_BIBLE_AUDIO.md` (forme d'onda/frequenze/inviluppi) |
+| `npm run validate:i18n` | dizionari `src/locales/` completi e coerenti vs `it.ts` (canonico) |
+| `npm run lint` | **ESLint** type-checked (typescript-eslint): floating/misused-promises, inutilizzati, ecc. (`lint:fix` per l'autofix) |
 | `npm run preview` | anteprima della build |
 
-> **Anti-deriva (CLAUDE.md Regola n.2):** cambiare una costante visiva/di movimento nel codice **senza** aggiornare l'art bible corrispondente rompe `validate:art`, che è agganciato a `build`.
+> **Anti-deriva (CLAUDE.md Regola n.2):** cambiare una costante visiva/di movimento, un valore di bilanciamento o un parametro audio nel codice **senza** aggiornare il documento corrispondente rompe il validatore relativo. I **quattro** validatori sono agganciati a `build` (gate duro) **e** attivi in `npm run dev` tramite un **plugin Vite** (`scripts/vite-plugin-validate.mjs`) che ri-valida a ogni salvataggio e segnala la deriva con banner + overlay, **senza** fermare il server.
+
+> **Hardening del type-check ([`tsconfig.json`](../tsconfig.json)).** Oltre a `strict` sono attivi `noUnusedLocals`/`noUnusedParameters`, `noImplicitOverride`, `noFallthroughCasesInSwitch` e — i due più impattanti sul codice — `noUncheckedIndexedAccess` (gli accessi indicizzati sono `T | undefined`: asserisci `!` alla fonte **solo** dove l'indice è provabilmente valido, vedi gli `this.items[i]!` di `MenuPad`) e `moduleResolution: "Bundler"`.
 
 > **⚠️ I sorgenti sono SOLO `.ts` — nessun `.js` in `src/` (regola, non opinione).** A transpilare i `.ts` ci pensa **Vite**; `tsc` gira in **`noEmit`** ([`tsconfig.json`](../tsconfig.json)) e fa **solo type-check** durante `build`. Perché è vincolante: la risoluzione di default di Vite prova le estensioni nell'ordine `.mjs → .js → .ts`, quindi un `SoundManager.js` accanto a `SoundManager.ts` **verrebbe caricato al posto del `.ts`** (gli import sono senza estensione) → in `npm run dev` si eseguirebbe codice stantio senza alcun errore. Per questo `src/**/*.js` e `src/**/*.js.map` sono in `.gitignore` e in `src/` non deve **mai** comparire un `.js`. **Non rimuovere questi guard** (`noEmit` + righe `.gitignore`): se ne riemergono dei `.js`, cancellali. *(Storico: una run di `tsc` senza `noEmit` aveva committato un set di `.js` ombra accanto a ogni `.ts` — bonificato il 2026-06-17.)*
 
@@ -29,28 +36,31 @@
 ## 2. Mappa dei moduli
 
 ```
-main.ts ─ avvia →  game.ts ─ configura Phaser, registra le scene
+main.ts ─ avvia →  game.ts ─ configura Phaser (+ input.gamepad), registra le scene
                        │
-       ┌───────────────┼─────────────────────────────────────────┐
-   MenuScene      GameScene ⇄ ShopScene        SettingsScene   DebugScene
+   ┌───────────┬───────┼──────────┬───────────────┬───────────┬──────────┐
+ MenuScene  GameScene ⇄ ShopScene → RouteScene  SettingsScene  PauseScene  DebugScene
                        │  (la scena "ricca": mondo, entità, HUD, boss, audio)
                        ▼
-        Environment · Juice · SoundManager · Ui · Config · GameData · Settings
+   Environment · Juice · SoundManager · Shadows · Ui · MenuPad · Config · GameData · Settings
                        (servizi e dati condivisi, senza stato di scena)
 ```
 
 | Modulo | Responsabilità | Stato? |
 |---|---|---|
 | [`main.ts`](../src/main.ts) | entry point: `new Game().start()` | — |
-| [`game.ts`](../src/game.ts) | config Phaser (canvas, `FIT`, physics arcade, ordine scene) | — |
+| [`game.ts`](../src/game.ts) | config Phaser (canvas, `FIT`, physics arcade, **`input: { gamepad: true }`**, ordine scene) | — |
 | [`Config.ts`](../src/Config.ts) | **scaling**: `DESIGN_W/H`, `OVERSAMPLE`, `RESOLUTIONS`, `setupCamera`, `designWidth` | costanti |
 | [`Settings.ts`](../src/Settings.ts) | preferenze persistenti (volume, fx, risoluzione, fullscreen) ⇄ localStorage | **statico globale** |
 | [`GameData.ts`](../src/GameData.ts) | dati-sorgente: `VEHICLES`, `WEAPONS`, `SURVIVORS`, `Upgrades` | costanti |
-| [`Ui.ts`](../src/Ui.ts) | chrome condiviso: `FONT`, palette `UI`, helper `text`/`panel`/`button`/`enter` | — |
-| [`Juice.ts`](../src/Juice.ts) | game-feel: transizioni (`go`/`fadeIn`), overlay filmico, `flash`, `muzzleFlash`/`bloomBurst`/`lightFlash` (l'hit-stop però vive in `GameScene`, deve gateare il suo `update()`) | texture `fx_*` bake-once |
+| [`Ui.ts`](../src/Ui.ts) | chrome condiviso: `FONT`, palette `UI`, helper `text`/`panel`/`button`/`enter`; `RoundRect` (helper `box`/`button`) espone `getBounds()`/`emit()` per `MenuPad` | — |
+| [`MenuPad.ts`](../src/MenuPad.ts) | navigazione **menu col gamepad** riusabile (focus spaziale, "last input wins") — vedi §9 | per-istanza, no stato globale |
+| [`Juice.ts`](../src/Juice.ts) | game-feel: transizioni (`go`/`fadeIn`/`fadeAndRun`), overlay filmico, `flash`, `muzzleFlash`/`bloomBurst`/`lightFlash` (l'hit-stop però vive in `GameScene`, deve gateare il suo `update()`) | texture `fx_*` bake-once |
 | [`Environment.ts`](../src/Environment.ts) | strada, parallasse a strati, decal (sangue/scorch/skid), fari | texture `env_*` + tileSprite |
-| [`SoundManager.ts`](../src/SoundManager.ts) | audio procedurale (vedi art bible audio) | nodi motore + master |
-| **scenes/** | `MenuScene` · `GameScene` · `ShopScene` · `SettingsScene` · `DebugScene` | stato di scena |
+| [`Shadows.ts`](../src/Shadows.ts) | ombre 2.5D proiettate sotto veicolo/entità (look del branch visual-aaa) | texture ombra bake-once |
+| [`SoundManager.ts`](../src/SoundManager.ts) | audio procedurale (vedi art bible audio): motore **+ drone d'angoscia** persistente | nodi motore + drone + master |
+| [`Routes.ts`](../src/Routes.ts) | Track B: nodi rischio/ricompensa (`ROUTE_NODES`) scelti tra una missione e l'altra (vedi §12) | costanti |
+| **scenes/** | `MenuScene` · `GameScene` · `ShopScene` · `RouteScene` · `SettingsScene` · `PauseScene` · `DebugScene` | stato di scena |
 
 `GameScene.ts` resta il file più grande ma è stato **decomposto** per coesione in più moduli:
 - **Texture procedurali** → [`EntityTextures.ts`](../src/EntityTextures.ts) (nemici, boss, oggetti) e [`VehicleTextures.ts`](../src/VehicleTextures.ts) (veicolo): funzioni pure su `scene.textures`, importate da `GameScene`/`ShopScene`/`DebugScene`/`MenuScene`.
@@ -119,21 +129,23 @@ Se una texture è generata alla dimensione di design e la camera la ingrandisce 
             │  GameScene   │  │ SettingsScene  │──INDIETRO──▶ Menu
             └──┬───────┬───┘  └────────────────┘
    missione    │       │  ESC = pausa
-   completata  │       └───────▶ SettingsScene (OVERLAY: launch + pause)
+   completata  │       └───────▶ PauseScene (OVERLAY: launch + GameScene in pause)
    (SPAZIO)    ▼                    │  RIPRENDI → resume+stop · Esci → stop+Menu
-        ┌──────────────┐
-        │  ShopScene   │──"AVANTI"──▶ GameScene   (missione successiva)
+        ┌──────────────┐            └─ "Impostazioni" ▶ SettingsScene { from: 'GameScene' }
+        │  ShopScene   │──"AVANTI"──▶ RouteScene ──scelta percorso──▶ GameScene  (missione succ.)
         └──────────────┘
-   game over → (M) Menu · boss → ShopScene/Menu · tasto 0 → DebugScene
+   game over → pedaggio + restart missione · boss → ShopScene/Menu · tasto 0 → DebugScene
 ```
 
 ### Transizioni — sempre via `Juice`, mai cut secchi
 
 - **Cambio scena:** `Juice.go(scene, 'Key')` → fade-to-black 320 ms → `scene.start('Key')`. Ingresso: `Juice.fadeIn(scene)` (o `Ui.enter`).
-- **Esempi reali:** Menu→Game / Menu→Settings ([`MenuScene`](../src/scenes/MenuScene.ts)); Shop→Game ([`ShopScene`](../src/scenes/ShopScene.ts)); Game→Shop / Game→Menu ([`GameScene`](../src/scenes/GameScene.ts), su `keydown` post-esito); restart missione = `Juice.fadeAndRun(this, () => this.scene.restart())`.
+- **Esempi reali:** Menu→Game / Menu→Settings ([`MenuScene`](../src/scenes/MenuScene.ts)); Shop→Route→Game ([`ShopScene`](../src/scenes/ShopScene.ts) → [`RouteScene`](../src/scenes/RouteScene.ts)); Game→Shop / Game→Menu ([`GameScene`](../src/scenes/GameScene.ts), su `keydown` post-esito); restart missione = `Juice.fadeAndRun(this, () => this.scene.restart())`.
+- **Pausa = `PauseScene` come overlay (non più `SettingsScene`).** ESC in partita chiama `GameScene.openPauseMenu()` → `scene.pause()` (e ferma motore + drone audio) + `scene.launch('PauseScene')`. `PauseScene` è un overlay sopra la `GameScene` congelata con tre pulsanti: **RIPRENDI** = `scene.resume('GameScene')` + `scene.stop()`; **Esci al menu** = `scene.stop('GameScene')` + `Juice.go(this,'MenuScene')`; **Impostazioni** = `scene.launch('SettingsScene', { from: 'GameScene' })` + `scene.stop()` (il ritorno dalle Impostazioni riprende il gioco). Al `RESUME` `GameScene` riallinea volume e riavvia motore + drone.
 - **`SettingsScene` ha due modi** (riceve `{ from }` in `init`):
   - **da Menu** → scena a sé; "INDIETRO" fa `Juice.go(this, 'MenuScene')`.
-  - **da partita (ESC)** → **overlay di pausa**: `GameScene` fa `scene.pause()` + `scene.launch('SettingsScene', { from: 'GameScene' })` (e ferma il motore audio). "RIPRENDI" = `scene.resume('GameScene')` + `scene.stop()`; "Esci al menu" = `scene.stop('GameScene')` + `Juice.go(this,'MenuScene')`. Al `RESUME` `GameScene` riallinea volume e riavvia il motore.
+  - **da pausa (`from: 'GameScene'`, lanciata da `PauseScene`)** → **overlay** sopra la `GameScene` ancora in pausa; "RIPRENDI" = `scene.resume('GameScene')` + `scene.stop()`. È questo il `from` che il cambio-lingua a caldo usa per ricostruire l'HUD congelato (§6.3).
+- **`RouteScene`** (Track B) si interpone tra negozio e missione (`ShopScene` → `RouteScene` → `GameScene`): mostra i nodi rischio/ricompensa di [`Routes.ts`](../src/Routes.ts), salva la scelta in `routeModifier` (registry) e avvia la missione. Dettaglio in §12.
 - **`DebugScene`** (galleria modelli) si raggiunge col tasto **0** da `GameScene` ed è uno strumento di sviluppo: setta direttamente la `registry` (soldi, sblocca tutto, scegli veicolo/arma) e torna al gioco/negozio.
 
 ---
@@ -148,20 +160,32 @@ La `DataManager` globale di Phaser (`this.registry`, condivisa tra tutte le scen
 
 > **Accesso tipizzato (A3).** Il registry di Phaser è `any`. Le chiavi/tipi qui sotto sono il contratto `RunData` in [`RunState.ts`](../src/RunState.ts); leggi/scrivi sempre con `getRun(registry, 'chiave')` / `setRun(registry, 'chiave', valore)` (non `registry.get/set` grezzi) → refusi di chiave e valori del tipo sbagliato diventano errori di compilazione.
 
+Le 18 chiavi del contratto `RunData` ([`RunState.ts`](../src/RunState.ts)):
+
 | Chiave | Tipo | Significato | Scritta da |
 |---|---|---|---|
-| `money` | number | valuta corrente | Game (a fine missione), Shop (acquisti), Debug |
 | `missionNumber` | number | indice missione corrente | Game (`+1` a fine missione), Debug |
+| `money` | number | valuta corrente | Game (a fine missione), Shop (acquisti), Debug |
+| `survivors` | string[] | sopravvissuti reclutati | Shop, Debug |
+| `upgrades` | `Record<vehicleKey, Upgrades>` | potenziamenti **per-veicolo** (ogni veicolo tiene il suo set armor/engine/turret/fuelTank; i salvataggi vecchi piatti degradano a `{}`) | Shop, Debug |
 | `vehicle` | string | veicolo equipaggiato | Shop, Debug |
 | `ownedVehicles` | string[] | veicoli posseduti | Shop, Debug |
-| `currentWeapon` | WeaponType | arma equipaggiata | Game (cambio arma), Shop, Debug |
 | `ownedWeapons` | WeaponType[] | armi possedute | Shop, Debug |
-| `upgrades` | Upgrades | potenziamenti (armor/engine/turret/fuelTank) | Shop, Debug |
-| `survivors` | string[] | sopravvissuti reclutati | Shop, Debug |
-| `components` | {engine,wheels,tank,turret,armor}\|null | salute componenti riportata tra missioni | Game (fine missione), Shop (riparazione → 100) |
-| `lastScore` | number | punteggio ultima missione | Game |
+| `currentWeapon` | WeaponType | arma equipaggiata | Game (cambio arma), Shop, Debug |
+| `ammo` | `Partial<Record<WeaponType, number>>` | **munizioni finite** (pivot horror): riserva per arma; la MG (∞) non è tracciata. Vedi §11 | Game (consumo/raccolta), Shop (restock) |
+| `components` | `Record<ComponentKey, number>\|null` | salute (0..100) per componente tra missioni; `null` = veicolo fresco | Game (fine missione), Shop (riparazione → 100) |
+| `lastScore` | number | punteggio ultima missione (overlay/record) | Game |
+| `routeModifier` | string | Track B: chiave del nodo di percorso scelto (`'none'` = nessuno) | Route, Debug |
+| `recruitLockMission` | number | missione in cui si è GIÀ reclutato (1 a sosta); `-1` = nessuno | Shop |
+| `food` | number | M2: scorta di campagna di cibo (drenata a inizio missione dai sopravvissuti a bordo) | Game, Shop |
+| `hungry` | string[] | M2: sopravvissuti affamati nella missione corrente (abilità spenta) | Game |
+| `foodMission` | number | M2: missione per cui il cibo è già stato consumato (evita doppio addebito al retry) | Game |
+| `injured` | string[] | M3: sopravvissuti feriti (abilità spenta finché non curati al negozio) | Game, Shop |
+| `starveStreak` | number | M3: missioni consecutive con almeno un affamato (a soglia uno se ne va) | Game |
 
-Letture difensive ovunque: `getRun(this.registry, 'money') ?? 0` (ritorna `undefined` se la chiave non c'è ancora). **Reset partita** (nuova run / game over → menu) = `resetRunState(registry)`, che riscrive tutte le chiavi ai default in un solo punto (`money 0`, `vehicle 'civilian_car'`, `weapon 'mg'`, ecc.) — chiamato da `GameScene`, `MenuScene.newGame` e `DebugScene.startFresh`.
+Letture difensive ovunque: `getRun(this.registry, 'money') ?? 0` (ritorna `undefined` se la chiave non c'è ancora). **Reset partita** (Nuova Partita / Debug) = `resetRunState(registry)`, che riscrive tutte le chiavi ai default in un solo punto (`money 0`, `vehicle 'civilian_car'`, `weapon 'mg'`, `food 40`, ecc.) — chiamato da `GameScene`, `MenuScene.newGame` e `DebugScene.startFresh`.
+
+> **Checkpoint cross-sessione (campagna a checkpoint).** Il `registry` è volatile (perso a fine sessione). Per "CONTINUA" tra le sessioni del browser, `RunState` espone `snapshotRun(registry)` → cattura le 18 chiavi in un `RunData` serializzabile, e `restoreRun(registry, run)` → l'inverso. Lo snapshot d'**inizio missione** viene persistito su `localStorage` da [`SaveData.ts`](../src/SaveData.ts) (`zombieRoad.save.v1`, campo `run`, accanto a `bestMission`/`bestScore`): `SaveData.saveRun`/`loadRun`/`hasRun`/`clearRun`. Il game over **non** azzera (si rigioca la missione pagando un pedaggio); solo "Nuova Partita" (e il Debug) chiamano `clearRun()`.
 
 ### 6.2 `Settings` — preferenze persistenti (localStorage, cross-run)
 
@@ -193,9 +217,10 @@ Guida completa ("aggiungere una lingua / una chiave", insidie font/layout) in [`
 
 ## 7. Audio — wiring (riassunto; dettaglio sonoro in ART_BIBLE_AUDIO)
 
-- `GameScene.create()` legge l'`AudioContext` da Phaser (`(this.sound as WebAudioSoundManager).context`), istanzia `this.sfx = new SoundManager(ctx)`, applica `setVolume(Settings.volume)` e `startEngine()`.
+- `GameScene.create()` legge l'`AudioContext` da Phaser (`(this.sound as WebAudioSoundManager).context`), istanzia `this.sfx = new SoundManager(ctx)`, applica `setVolume(Settings.volume)`, poi avvia **due voci persistenti**: `startEngine()` e `startAmbience()`.
 - Tutti i trigger usano **optional chaining** (`this.sfx?.playShot()`) → niente crash se l'audio non è inizializzato.
-- **Ciclo di vita motore:** stop allo `SHUTDOWN` scena / pausa / missione completata / game over; **restart + riallineo volume** all'evento `RESUME` (ritorno dalla pausa Impostazioni).
+- **Voce 1 — motore.** Loop del veicolo, modulato dal throttle (vedi §10). Ciclo di vita: stop allo `SHUTDOWN` scena / pausa / missione completata / game over; **restart + riallineo volume** all'evento `RESUME` (uscita dalla pausa).
+- **Voce 2 — drone d'angoscia (pivot horror).** Bordone grave dissonante persistente, volutamente **sotto** il motore: due sine quasi all'unisono (≈2.5 Hz di battimento) + lowpass cupo + LFO lento. Avviato in `create()` con `startAmbience()` (idempotente). Ogni frame `GameScene.updateAmbience()` calcola un fattore di tensione 0..1 (prossimità boss, HP basso, sferzate, carburante basso) e lo passa a `setDread(factor)`, che alza livello + apertura del filtro + dissonanza. Stesso ciclo di vita del motore: `stopAmbience()` a pausa / missione completata / game over; allo `SHUTDOWN` scena `dispose()` ferma entrambe le voci (`stopEngine()` + `stopAmbience()`) e scollega la catena master.
 - `SettingsScene` crea una **sua** istanza `SoundManager` solo per l'**anteprima** del volume (`playZombieKill()`).
 
 ---
@@ -219,16 +244,56 @@ Il combat è a **mira col mouse** (combat reboot, branch `aim-combat`), non più
 
 ---
 
-## 9. Dove guardare per…
+## 9. Input gamepad & `MenuPad` (pivot horror: il pad pilota tutto)
+
+Il gamepad è uno **schema di input alternativo** (tastiera+mouse restano il default); abilitato in [`game.ts`](../src/game.ts) con `input: { gamepad: true }`. La Gamepad API del browser non espone i pad finché l'utente non preme un tasto dopo il load → l'attivazione è al primo input.
+
+- **In gioco ([`GameScene`](../src/scenes/GameScene.ts)).** `activePad()` ritorna `getPad(0)` se connesso. Lo stick sinistro guida la corsia, lo stick destro la mira; **LT (`L2`, analogico) = acceleratore** e **LB (`L1`) = freno** (throttle, §10); **RT (`R2`, analogico) spara**; START apre la pausa. Il flag `usingPad` realizza **"last input wins"**: un input mouse/tastiera lo spegne, un input pad (stick oltre la deadzone) lo riaccende → l'UI mostra/nasconde gli affordance pad di conseguenza.
+- **Nei menu ([`MenuPad.ts`](../src/MenuPad.ts)).** Helper **riusabile** istanziato da ogni scena-menu (`MenuScene`, `PauseScene`, `RouteScene`, `ShopScene`, `SettingsScene`, `DebugScene`): croce/stick spostano il **focus** con **navigazione spaziale** (l'elemento più vicino nella direzione premuta, con penalità sull'asse trasversale → funziona per liste *e* griglie senza ordinamento per indice); A/Start attivano, B torna indietro. L'attivazione **riusa il `pointerdown` già esistente** dell'elemento (`go.emit('pointerdown', …)`) → zero logica duplicata ai call-site. Stesso "last input wins" di `GameScene` (mouse/tastiera spengono il cursore pad). Richiede che i focusable espongano `getBounds()`/`emit()`: per questo `Ui.RoundRect` (gli helper `box`/`button`) li espone, oltre ai `GameObject` nativi.
+
+---
+
+## 10. Throttle / `worldScale` — il "tempo del mondo"
+
+Il giocatore controlla un **throttle** (gas/freno) che non sposta il veicolo nel mondo (resta a sinistra) ma **scala la velocità con cui il mondo scorre**: è la locomozione "soggettiva" di uno scroller a corsia fissa.
+
+- `this.throttle` ∈ `[0, THROTTLE_MAX]`: `0` = freno/STOP totale, `1` = crociera di riferimento (`SCROLL_SPEED`), `THROTTLE_MAX` = tutto gas. Le due sorgenti (tasti/freccia e grilletti analogici) confluiscono in `throttleInput()`; `THROTTLE_ACCEL`/`THROTTLE_DRAG`/`THROTTLE_BRAKE` ne governano salita/inerzia/freno.
+- `throttleScroll() = SCROLL_SPEED * throttle` è il fattore unico applicato ogni frame da `applyWorldScroll()` allo scroll di **ambiente, strisce di corsia, pickup/hazard/nubi** e da `update*` all'avanzamento (`distance`), al carburante e al **pitch del motore** (solo suono). Conseguenza: throttle = `0` congela visivamente il mondo ma il giocatore resta vulnerabile (orda).
+- È un sistema di **game-feel/locomozione**, non un moltiplicatore di bilanciamento da validare: le costanti `THROTTLE_*` sono di feel, non lette dai validatori 🔒.
+
+---
+
+## 11. Munizioni finite (pivot horror)
+
+Le armi (tranne la MG, ∞) hanno una **riserva finita** → tensione da gestione risorse.
+
+- La capacità per arma vive in `WEAPON_AMMO` ([`GameData.ts`](../src/GameData.ts)); `weaponInfiniteAmmo(w)` è vero per la MG (`WEAPON_AMMO['mg'] === 0`). La **riserva corrente** è `RunData.ammo` (`Partial<Record<WeaponType, number>>`, §6.1): caricata a inizio missione, consumata sparando, ricaricata da casse/garage e dal **restock** del negozio, persistita a fine missione (e nello snapshot checkpoint).
+- I numeri (capacità, costo restock) sono **valori di bilanciamento** → in [`BALANCE.md`](./BALANCE.md), non qui.
+
+---
+
+## 12. Track B — percorsi (`Routes.ts` / `RouteScene`)
+
+Tra il negozio e la missione successiva il giocatore sceglie un **nodo di percorso** rischio/ricompensa.
+
+- I nodi sono dati neutri in [`Routes.ts`](../src/Routes.ts) (`ROUTE_NODES`: ognuno con accent, etichette i18n e moltiplicatori). [`RouteScene`](../src/scenes/RouteScene.ts) li disegna come carte (navigabili anche col pad, §9), salva la chiave scelta in `routeModifier` (registry, §6.1) e avvia la missione.
+- `GameScene.create()` legge `routeModifier` e applica i moltiplicatori (densità nemici, hazard, monete). `'none'` = nessun modificatore.
+
+---
+
+## 13. Dove guardare per…
 
 | Devo… | Vai a |
 |---|---|
 | capire una coordinata/centratura | §3 (design space, `designW`) → [`Config.ts`](../src/Config.ts) |
 | capire perché una texture è nitida/sfocata | §4 (`OS_G`/`OVERSAMPLE`) |
 | seguire un passaggio tra schermate | §5 + `Juice.go`/`fadeAndRun` ([`Juice.ts`](../src/Juice.ts)) |
-| sapere dove vive lo stato della run | §6.1 (`registry`) |
+| sapere dove vive lo stato della run | §6.1 (`registry`/`RunData`) + checkpoint ([`SaveData.ts`](../src/SaveData.ts)) |
 | toccare volume/risoluzione/fx | §6.2 ([`Settings.ts`](../src/Settings.ts)) |
-| aggiungere/modificare un suono | [`ART_BIBLE_AUDIO.md`](./ART_BIBLE_AUDIO.md) |
+| aggiungere/modificare un suono (motore/drone) | §7 + [`ART_BIBLE_AUDIO.md`](./ART_BIBLE_AUDIO.md) |
+| far navigare un menu col gamepad | §9 ([`MenuPad.ts`](../src/MenuPad.ts)) |
+| capire gas/freno e lo scroll del mondo | §10 (`throttle`/`worldScale`) |
+| toccare munizioni / percorsi | §11 (`ammo`) · §12 ([`Routes.ts`](../src/Routes.ts)) |
 | aggiungere un nemico/boss | [`ART_BIBLE_ZOMBIES.md`](./ART_BIBLE_ZOMBIES.md) §10 |
-| cambiare un prezzo/HP/danno | [`BALANCE.md`](./BALANCE.md) (+ `validate:art` se è visivo) |
+| cambiare un prezzo/HP/danno/munizioni | [`BALANCE.md`](./BALANCE.md) (+ `validate:art` se è visivo) |
 | cambiare una regola di gioco | [`GAME_DESIGN.md`](./GAME_DESIGN.md) |

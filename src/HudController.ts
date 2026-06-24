@@ -3,6 +3,8 @@ import Ui, { UI } from './Ui';
 import Settings from './Settings';
 import { WEAPONS, WEAPON_KEYS, WeaponType } from './GameData';
 import { t } from './i18n';
+import { OVERSAMPLE } from './Config';
+import { distanceKm } from './World';
 import type { ComponentKey } from './World';
 import type { ComponentData } from './scenes/GameScene';
 
@@ -77,6 +79,7 @@ export default class HudController {
   private overdriveTxt!: Phaser.GameObjects.Text;
   private debugTxt!: Phaser.GameObjects.Text;
   private weaponSlots: { key: WeaponType; txt: Phaser.GameObjects.Text }[] = [];
+  private iconTip!: Phaser.GameObjects.Text; // tooltip in hover sulle icone HUD (teach-once: il nome resta consultabile)
   private cache = { score: -1, km: -1, fuel: -1, health: -1, attached: -1, combo: '', dash: '', overdrive: '', weapon: '' };
   // Tutti gli oggetti creati da build(): tracciati per poterli distruggere su un re-build
   // (es. cambio lingua a partita in pausa → l'HUD va ridisegnato nella nuova lingua).
@@ -89,6 +92,20 @@ export default class HudController {
 
   /** Registra un oggetto creato da build() così può essere distrutto al re-build. */
   private own<T extends { destroy(): void }>(o: T): T { this.objects.push(o); return o; }
+
+  /**
+   * Icona HUD procedurale (texture `icon_*`, vedi IconTextures) al posto di un'etichetta di testo.
+   * `px` = dimensione di display in pixel di design (la texture è 16·OVERSAMPLE → scala di conseguenza).
+   * Tooltip al passaggio del mouse: il nome (`labelKey`, i18n) resta consultabile → il giocatore impara
+   * il simbolo (teach-once); col pad non c'è cursore, la legenda vive nel doc/onboarding. Vedi ART_BIBLE_ICONE.
+   */
+  private hudIcon(x: number, y: number, key: string, px: number, labelKey: string, depth: number) {
+    const img = this.own(this.scene.add.image(x, y, key).setScale(px / (16 * OVERSAMPLE)).setDepth(depth));
+    img.setInteractive({ useHandCursor: false });
+    img.on('pointerover', () => this.iconTip.setText(t(labelKey)).setPosition(x, y + 11).setVisible(true));
+    img.on('pointerout',  () => this.iconTip.setVisible(false));
+    return img;
+  }
 
   build(o: HudBuildOpts) {
     this.missionDist = o.missionDist;
@@ -107,7 +124,13 @@ export default class HudController {
     panel.fillStyle(UI.black, 0.62); panel.fillRoundedRect(0,0,dW,84,{ tl:0, tr:0, bl:16, br:16 });
     panel.lineStyle(1,UI.strokeDim,0.7); panel.lineBetween(0,46,dW,46);
 
-    this.own(Ui.text(s, 8,8,t('hud.health'),{fontSize:'11px',color:UI.redText}).setDepth(D+1));
+    // Tooltip condiviso delle icone HUD (teach-once): nascosto finché il mouse non passa su un'icona.
+    this.iconTip = this.own(Ui.text(s, 0, 0, '', {
+      fontSize:'10px', color:UI.white, backgroundColor:'#000000d0', padding:{ x:5, y:2 },
+    }).setOrigin(0.5, 0).setDepth(D+30).setVisible(false));
+
+    // SALUTE — icona croce (sostituisce l'etichetta di testo; nome in hover). Vedi ART_BIBLE_ICONE.
+    this.hudIcon(15, 13, 'icon_health', 14, 'hud.health', D+1);
     this.own(Ui.box(s, 8+BAR_W/2,34,BAR_W,10,{ fill:UI.barRed, radius:3 }).setDepth(D+1));
     this.healthFill = this.own(s.add.rectangle(8,34,BAR_W,10,UI.hpFill).setOrigin(0,0.5).setDepth(D+2));
     // % salute sovrapposta alla barra: ridondanza non cromatica (U5, accessibilità daltonismo).
@@ -115,7 +138,7 @@ export default class HudController {
       fontSize:'9px', color:UI.white, stroke:'#000000', strokeThickness:2,
     }).setOrigin(0.5).setDepth(D+3));
 
-    this.own(Ui.text(s, 138,8,t('hud.fuel'),{fontSize:'11px',color:UI.amberSoft}).setDepth(D+1));
+    this.hudIcon(145, 13, 'icon_fuel', 14, 'hud.fuel', D+1); // CARBURANTE — icona goccia
     this.own(Ui.box(s, 138+BAR_W/2,34,BAR_W,10,{ fill:UI.barAmber, radius:3 }).setDepth(D+1));
     this.fuelFill = this.own(s.add.rectangle(138,34,BAR_W,10,UI.fuelBar).setOrigin(0,0.5).setDepth(D+2));
 
@@ -151,7 +174,7 @@ export default class HudController {
     // Barra progresso missione
     const DIST_KM = Math.floor(o.missionDist / 100);
     const DIST_BAR_W = 110;
-    this.own(Ui.text(s, 290,24,t('hud.route'),{fontSize:'10px',color:'#7777aa'}).setDepth(D+1));
+    this.hudIcon(295, 25, 'icon_route', 12, 'hud.route', D+1); // PERCORSO — icona bandiera
     this.distTxt = this.own(Ui.text(s, 395,24,'',{fontSize:'10px',color:UI.blueInfo}).setDepth(D+2));
     this.own(Ui.box(s, 290+DIST_BAR_W/2,37,DIST_BAR_W,7,{ fill:UI.barBlue, radius:2 }).setDepth(D+1));
     this.distFill = this.own(s.add.rectangle(290,37,DIST_BAR_W,7,UI.distBar).setOrigin(0,0.5).setDepth(D+2));
@@ -170,7 +193,8 @@ export default class HudController {
     compKeys.forEach((key,i) => {
       const comp = o.components[key];
       const sx = 10 + i * 158;
-      this.own(Ui.text(s, sx,49,t(comp.label),{fontSize:'10px',color:UI.muted}).setDepth(D+1));
+      // Icona componente (engine/wheels/tank/turret → icon_<key>); nome in hover. Vedi ART_BIBLE_ICONE.
+      this.hudIcon(sx + 7, 55, `icon_${key}`, 13, comp.label, D+1);
       this.own(Ui.box(s, sx+COMP_BAR_W/2,72,COMP_BAR_W,7,{ fill:UI.barGrey, radius:2 }).setDepth(D+1));
       const fill = this.own(s.add.rectangle(sx,72,COMP_BAR_W,7,comp.baseColor).setOrigin(0,0.5).setDepth(D+2));
       comp.fill = fill;
@@ -211,7 +235,7 @@ export default class HudController {
     const fuel = Math.round(o.fuel);
     if (fuel !== this.cache.fuel)        { this.fuelNum.setText(`${fuel}%`);                  this.cache.fuel  = fuel; }
     if (o.score !== this.cache.score)    { this.scoreTxt.setText(t('hud.score',{n:o.score})); this.cache.score = o.score; }
-    const km = Math.floor(o.distance / 100);
+    const km = distanceKm(o.distance);
     if (km !== this.cache.km)            { this.distTxt.setText(t('hud.km',{n:km}));          this.cache.km    = km; }
     if (o.attachedCount !== this.cache.attached) { this.attachedTxt.setText(o.attachedCount > 0 ? t('hud.attached',{n:o.attachedCount}) : ''); this.cache.attached = o.attachedCount; }
 

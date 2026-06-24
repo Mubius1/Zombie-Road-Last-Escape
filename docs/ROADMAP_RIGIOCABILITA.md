@@ -10,6 +10,8 @@
 
 > 🗺️ **AGGIORNAMENTO 2 — il gioco NON è un roguelike: è una CAMPAGNA A CHECKPOINT.** Decisione del designer (giugno 2026): la morte non azzera più la corsa. Il gioco **salva a ogni missione** (su disco, anche cross-sessione → "CONTINUA") e al game over **rigioca la missione corrente** pagando un pedaggio (−25% monete), invece di ripartire da zero. Solo "Nuova Partita" azzera. **Conseguenza su questa roadmap: Track D (meta-progressione) si ridimensiona** — il progresso del viaggio già persiste, quindi una valuta meta non è più la spina dorsale della retention (resta un *extra* opzionale per sblocchi-sidegrade). Il vincolo "unlock = sidegrade, non potere" si **allenta** (non c'è più un pilastro "la morte azzera tutto" da proteggere): resta buona norma anti-power-creep, non un dogma. La rigiocabilità si appoggia ora alla **varietà** (Track B/C). Vedi [GAME_DESIGN §10/§11](GAME_DESIGN.md#10--condizioni-di-vittoria-e-sconfitta).
 
+> 🩸 **AGGIORNAMENTO 3 — PIVOT SURVIVAL HORROR: l'asse di design è cambiato.** Decisione del designer (giugno 2026): il gioco non è più un *arcade survival power-fantasy* ("guido e falcio orde a fuoco illimitato"), ma un **survival horror su ruote** — vulnerabilità tesa al posto della potenza. Quattro leve spostano il registro: **munizioni finite** (ogni colpo pesa, ∞ solo sulla MG di ripiego), **penombra / visione limitata** (i fari sono l'unica luce affidabile, le minacce *emergono* dal buio), **ritmo dread→burst** (il vecchio spawn costante a *sferzate* `SURGE_*` è **rimosso**; al suo posto un director a fasi **CALM ↔ BURST** che scala dal basso, M1 gentile), **throttle** (acceleratore/freno con inerzia e STOP). Aggiunto anche **gamepad completo** (è input, non gameplay). **Conseguenza su questa roadmap:** il framing "più verbi, più decisioni/secondo, premia l'aggressività" di §0–§2 è ora **datato** — l'asse non è più "decisioni/secondo" ma **gestione della scarsità sotto dread**. Le voci Track A sono tutte FATTE (vedi §9) e vanno lette al passato; Track B/C/D restano validi nella sostanza, ma il loro *tono* va riletto in chiave horror (es. C2 e D2, riscritte sotto). La combo/punteggio **sopravvive ma è declassata** da valuta-dopamina centrale a *contatore di efficienza*. Vedi [GAME_DESIGN §0](GAME_DESIGN.md#0--visione-e-pilastri) (pivot horror + 7 pilastri).
+
 ## §0 · Diagnosi: due problemi distinti, un ordine obbligato
 
 Sono emersi due problemi, di natura diversa — e l'ordine in cui si affrontano conta più della lista stessa.
@@ -52,9 +54,11 @@ Il gioco ha sistemi ricchi *attorno* al combat (degrado componenti, carburante, 
 
 ---
 
-## §2 · Track A — Approfondire il core combat 🔴 *priorità assoluta*
+## §2 · Track A — Approfondire il core combat 🔴 *priorità assoluta* — ✅ **interamente implementato**
 
-> Obiettivo: alzare lo skill ceiling e le decisioni/secondo **senza tradire la fantasia** "guido e falcio orde". È il lavoro che attacca direttamente il "non diverte".
+> Obiettivo (formulazione originale, pre-pivot): alzare lo skill ceiling e le decisioni/secondo **senza tradire la fantasia** "guido e falcio orde". È il lavoro che attacca direttamente il "non diverte".
+>
+> 🩸 **Rilettura post-pivot horror (AGGIORNAMENTO 3).** Tutta Track A è **FATTA** (§9) — le sezioni sotto sono quindi *storia di come ci siamo arrivati*, non lavoro pendente, e vanno lette al passato. Cambia anche la cornice: con il **pivot survival horror** l'obiettivo non è più "più decisioni/secondo / premia l'aggressività", ma **gestione della scarsità sotto dread** — le munizioni finite e il ritmo dread→burst spostano il valore di Overdrive/Scatto da *sfogo aggressivo* a *valvola da spendere con parsimonia* quando l'ondata ti sommerge. I sistemi restano identici nel codice; cambia ciò che *significano* nel feel.
 
 ### A3 · Overdrive — risorsa attiva caricata dalla combo
 *(il singolo intervento con più impatto sul game-feel; lo metto per primo perché è il più economico in rapporto al ritorno)*
@@ -90,9 +94,9 @@ Così la combo diventa *tua* e lo Scatto smette di essere l'unico verbo attivo.
 
 ---
 
-### A2 · Nemici "a risposta"
+### A2 · Nemici "a risposta" — ✅ *fatto: Caricatore e Sputatore sono canon nel roster a 8 tipi*
 
-Non più spugne: nemici che **mappano a un verbo specifico**. Il sistema lo supporta già — basta estendere l'union `ZombieType` ([`World.ts`](../src/World.ts)), le tabelle `ZOMBIE_STATS` / `ZOMBIE_MOTION` / `SPAWN_POOL` e lo switch `onVehicleHitZombie` ([`GameScene.ts`](../src/scenes/GameScene.ts)). Il movimento è già **procedurale** in `updateZombieMotion()`: per un nuovo tipo basta configurarne la firma in `ZOMBIE_MOTION`.
+Non più spugne: nemici che **mappano a un verbo specifico**. Entrambi sono ora **canon** — righe in `ZOMBIE_STATS` / `ZOMBIE_MOTION` / `SPAWN_POOL` ([`GameScene.ts`](../src/scenes/GameScene.ts)), `case` in `onVehicleHitZombie`, schede §6.6 bis/ter nell'[art bible zombi](ART_BIBLE_ZOMBIES.md) (coperte da `validate:art`). La descrizione sotto è *com'erano stati progettati*; il movimento è **procedurale** in `updateZombieMotion()`, quindi è bastato configurarne la firma in `ZOMBIE_MOTION`.
 
 | Tipo nuovo | Comportamento | Verbo richiesto | Numeri proposti (vel · hp · danno · punti · peso pool) |
 |---|---|---|---|
@@ -112,9 +116,11 @@ Il **Caricatore** rende il movimento verticale una *reazione* (non riempitivo); 
 
 ---
 
-### A1 · Hazard di corsia
+### A1 · Hazard di corsia — ✅ *fatto*
 
-Oggi la strada è **vuota** di ostacoli: gli unici collider sono zombi, proiettili e taniche; l'ambiente genera solo decal cosmetici (sangue/skid/detriti). Aggiungo ostacoli che scorrono col mondo (a `-SCROLL_SPEED`) e rendono la posizione verticale una decisione continua, indipendente dall'autofire.
+> ⚠️ *Stato superato.* "La strada è vuota di ostacoli" descriveva il **prima**: oggi gli hazard sono implementati (gruppo `hazards`, `spawnHazard`, texture `hazard_wreck`/`hazard_oil`/`hazard_mine` coperte da `validate:art`). Testo conservato per contesto storico.
+
+Prima del fix la strada era **vuota** di ostacoli: gli unici collider erano zombi, proiettili e taniche; l'ambiente generava solo decal cosmetici (sangue/skid/detriti). Sono stati aggiunti ostacoli che scorrono col mondo (a `-SCROLL_SPEED`) e rendono la posizione verticale una decisione continua, indipendente dalla mira.
 
 | Hazard | Effetto al contatto | Numeri proposti |
 |---|---|---|
@@ -203,24 +209,25 @@ Il telegrafo riusa lo stile di `enterPhase2` (shake + tint) e lo stinger `playBo
 
 Oggi la regione cambia **solo i colori** (`ENVIRONMENTS`, applicata in `buildWorld` di [`GameScene.ts`](../src/scenes/GameScene.ts)): nessun effetto di gameplay. Aggiungo un modificatore per regione, applicato a inizio missione (nuovo `applyEnvironmentModifier`, dopo `buildWorld`).
 
-| Regione | Meccanica proposta |
-|---|---|
-| Città Distrutta | strada più stretta / più relitti |
-| Autostrada Abbandonata | `SCROLL_SPEED` +15%, più corridori |
-| Deserto | drain carburante ×1,25, meno taniche |
-| Foresta Infestata | visibilità ridotta (foschia), minacce a distanza più letali |
-| Zona Industriale | olio + fuoco, più hazard |
-| Base Militare | più corazzati/caricatori, più monete |
-| Città Finale | spawn misti d'élite |
+> 🩸 **Rilettura post-pivot horror.** L'idea originale "Foresta = visibilità ridotta (foschia)" è ora **ridondante**: con il pivot la **penombra è un pilastro globale** (i fari come unica luce affidabile, foschia che mangia i bordi — [GAME_DESIGN §0 pilastro 3](GAME_DESIGN.md#0--visione-e-pilastri)), non più un differenziatore esclusivo della Foresta. Se *tutte* le regioni sono buie, "una regione buia" non distingue più nulla. La meccanica-regione va quindi spostata su **assi che restano leggibili come differenza** anche dentro un mondo già notturno — soprattutto i tre assi che il pivot ha reso centrali: **densità/forma dell'ondata** (quanto è feroce il dread→burst), **scarsità di risorse** (munizioni/taniche più rare → tensione economica), **tipo di minaccia** dominante (chi ti caccia nel buio).
 
-Implementato come tabella `REGION_MODIFIERS` per `envIndex` con moltiplicatori (`spawnMult`, `fuelDrainMult`, `scrollMult`, `hazardMult`, `poolBias`, `visibility`), letti nei punti di spawn/fuel/scroll.
+| Regione | Meccanica proposta (rivista in chiave horror) |
+|---|---|
+| Città Distrutta | strada più stretta / più relitti (claustrofobia: meno spazio per schivare) |
+| Autostrada Abbandonata | `SCROLL_SPEED` +15%, più corridori → ondate che ti raggiungono prima |
+| Deserto | **scarsità**: drain carburante ×1,25 **e** meno taniche (la risorsa stringe) |
+| Foresta Infestata | **densità d'ondata**: burst più lunghi/fitti (`BURST_MS_BASE`↑) e più Sputatori — la foresta *brulica*, non solo "è buia" |
+| Zona Industriale | olio + fuoco, più hazard (la corsia è il pericolo) |
+| Base Militare | **scarsità munizioni** (meno casse) + più Corazzati/Caricatori → conta ogni colpo |
+| Città Finale | spawn misti d'élite (ondate-élite, picco di minaccia mista) |
+
+Implementato come tabella `REGION_MODIFIERS` per `envIndex` con moltiplicatori (`spawnMult`, `fuelDrainMult`, `scrollMult`, `hazardMult`, `poolBias`, `burstMult`, `ammoCrateMult`), letti nei punti di spawn/fuel/scroll/director. *(L'asse "visibilità" è dismesso: la penombra è già globale.)*
 
 **File da toccare:**
 - [`src/World.ts`](../src/World.ts) — tabella `REGION_MODIFIERS` (o campi aggiuntivi su `EnvConfig`).
-- [`src/scenes/GameScene.ts`](../src/scenes/GameScene.ts) — `applyEnvironmentModifier` + uso dei moltiplicatori in spawn/fuel/scroll.
-- [`src/Environment.ts`](../src/Environment.ts) — foschia/visibilità ridotta per la Foresta.
+- [`src/scenes/GameScene.ts`](../src/scenes/GameScene.ts) — `applyEnvironmentModifier` + uso dei moltiplicatori in spawn/fuel/scroll **e nel director dread→burst** (durata/intervallo d'ondata) e nello spawn delle casse munizioni.
 
-**Aggiornamenti documentali (a implementazione):** [GAME_DESIGN §3](GAME_DESIGN.md#3--struttura-del-mondo) (colonna "meccanica" alla tabella regioni — è una **regola**) · BALANCE (moltiplicatori regione) · [ART_BIBLE_AMBIENTE](ART_BIBLE_AMBIENTE.md) (foschia/visual).
+**Aggiornamenti documentali (a implementazione):** [GAME_DESIGN §3](GAME_DESIGN.md#3--struttura-del-mondo) (colonna "meccanica" alla tabella regioni — è una **regola**) · BALANCE (moltiplicatori regione) · [ART_BIBLE_AMBIENTE](ART_BIBLE_AMBIENTE.md) (eventuali accenti visivi per-regione, **non** più la foschia, già globale).
 
 ---
 
@@ -257,7 +264,9 @@ Se costruita: estendo [`SaveData.ts`](../src/SaveData.ts) — che oggi contiene 
 
 ### D2 · Daily challenge + leaderboard (locale)
 
-Pulsante "Sfida del Giorno" nel menu (seed = `YYYYMMDD`): stesso contenuto per tutti, un tentativo al giorno. **Leaderboard locale** (best giornaliero salvato in `SaveData`) è banale. **Online richiede un backend** — fuori scope per un gioco offline 100% procedurale: lo segnalo come decisione esplicita. Alternativa senza server: un **codice-punteggio condivisibile** (seed + score + checksum) per la dimensione social a costo zero.
+Pulsante "Sfida del Giorno" nel menu (seed = `YYYYMMDD`): stesso contenuto per tutti, un tentativo al giorno. **Leaderboard locale** (best giornaliero salvato in `SaveData`) è banale. **Online richiede un backend** — fuori scope per un gioco offline 100% procedurale: lo segnalo come decisione esplicita. Alternativa senza server: un **codice-record condivisibile** (seed + metrica + checksum) per la dimensione social a costo zero.
+
+> 🩸 **Rilettura post-pivot horror — quale metrica classificare.** Il pivot ha **declassato combo/punteggio** da valuta-dopamina centrale a semplice *contatore di efficienza* ([GAME_DESIGN §0](GAME_DESIGN.md#0--visione-e-pilastri)): una classifica *a punteggio* premierebbe il farming aggressivo di kill, l'opposto della fantasia "sopravvivi nel buio contando i proiettili". Per una daily horror la metrica naturale è la **sopravvivenza / distanza** — *quanto lontano* sei arrivato (missione + km nella missione), col punteggio al più come spareggio secondario. In più, metriche di stile coerenti col registro (munizioni risparmiate, danni subiti, ondate sopravvissute) possono diventare sfide-modificatore (Track D4). Il codice-record condivisibile usa quindi la metrica di **distanza/sopravvivenza**, non il solo score.
 
 **Dipende da D0.**
 
@@ -334,7 +343,7 @@ Questa roadmap, da sola, **non tocca codice** → tutti i validatori restano ver
 | A1 | Hazard di corsia | A | ✅ fatto |
 | — | **Combat reboot (mira col mouse)** | **fondazione** | ✅ fatto (branch `aim-combat`) — esito del fun-gate; convive con Track A |
 | B1 | Nodo scelta percorso | B | ✅ fatto (3 nodi: Orda Fitta / Strada Minata / Tratta Tranquilla · `RouteScene` tra negozio e missione) |
-| B2 | Eventi in-run | B | ✅ fatto (scheduler a soglie · 4 eventi: Orda Notturna / Blocco Stradale / Tempesta / Convoglio da scortare) |
+| B2 | Eventi in-run | B | ✅ fatto (scheduler a soglie · **5 eventi**: Orda Notturna / Blocco Stradale / Tempesta / Convoglio da scortare / **Salvataggio** sopravvissuto `rescue`) |
 | C1 | Pattern d'attacco boss | C | ⬜ da fare |
 | C2 | Meccanica per regione | C | ⬜ da fare |
 | D0 | RNG seedabile | D | ⬜ da fare |
@@ -342,5 +351,28 @@ Questa roadmap, da sola, **non tocca codice** → tutti i validatori restano ver
 | D2 | Daily challenge + leaderboard locale | D | ⬜ da fare |
 | D3 | Ascension | D | ⬜ da fare |
 | D4 | Achievement / sfide | D | ⬜ da fare |
+
+### Sistemi del PIVOT SURVIVAL HORROR (fuori dalle tracce A–D originali — vedi AGGIORNAMENTO 3)
+
+Questi non erano voci della roadmap (sono nati dopo, dal pivot horror), ma sono **sistemi maggiori già implementati** che ridefiniscono l'asse di gioco e su cui Track B/C/D ora poggiano: li traccio qui perché la checklist resti la fotografia veritiera di *cos'è il gioco oggi*.
+
+| ID | Voce | Stato |
+|---|---|---|
+| H1 | **Director dread→burst** (fasi CALM ↔ BURST; `CALM_INTERVAL`/`BURST_INTERVAL`/`BURST_MS_BASE`/`CALM_MS_MIN-MAX`; scala da M1 gentile · sostituisce le *sferzate* `SURGE_*` **rimosse**) | ✅ fatto |
+| H2 | **Munizioni finite** (riserva per arma, ∞ solo MG di ripiego · casse su strada + rifornimento al garage · click + ripiego automatico a secco) | ✅ fatto |
+| H3 | **Throttle** (acceleratore/freno con inerzia e STOP totale · il carburante drena anche da fermo) | ✅ fatto |
+| H4 | **Gamepad completo** + `MenuPad` (navigazione pad dei menu) — solo input, nessun impatto su hitbox/bilanciamento | ✅ fatto |
+
+### Debito tecnico residuo (migrato dall'audit storico)
+
+Voci di **debito tecnico ancora aperte** nel codice attuale, estratte dall'audit `docs/archive/ANALISI_2026-06-17.md` (archiviato perché pre-pivot) e **ri-verificate** contro il codice di oggi — scartate quelle già risolte (flag tsconfig, ESLint/CI, igiene repo). Non sono gameplay: sono qualità interna.
+
+| ID | Debito | Dove | Nota |
+|---|---|---|---|
+| P1-fase2 | **Object pooling incompleto**: razzi creati con `.create()` non poolato; particelle/detriti/gore sono `add.image()` + tween fire-and-forget | `GameScene` (`spawnHitParticles`/`killBurst`/spawn razzi), `BossController.spawnDebris` | basso rischio; ottimizzazione a densità massima |
+| A6 | **Factory `Graphics` duplicata**: `make.graphics({add:false})` ripetuto ~10× in 5 file; `OS_G` duplicata | `EntityTextures`, `VehicleTextures`, `Juice`, `Environment`, `Shadows` | estrarre un helper condiviso |
+| ~~A8~~ | ~~Hotkey debug + god-mode attivi in produzione~~ | ~~`GameScene`~~ | ✅ **risolto**: hotkey debug (`0/G/B/N/H/E`) e `DebugScene` gatati da `import.meta.env.DEV` → rimossi dal bundle `vite build` (verificato). |
+| A4 | **Stato entità stringly-typed**: zombi via `setData/getData` con ~18 chiavi-stringa, nessuna interfaccia `ZombieData` tipizzata | `GameScene` (motion/spawn/aggancio) | sorgente di bug silenziosi; tipizzare |
+| — | **Unit-test assenti**: nessun runner (vitest/jest) né `*.test.ts` | `package.json` (script `test`) | CI + ESLint già presenti; mancano solo i test delle formule pure (vedi [TESTING.md](TESTING.md) §2) |
 
 > **Manutenzione.** Quando una voce viene implementata: (1) aggiorna il suo stato qui, (2) migra numeri/regole/visual nei documenti canonici (GAME_DESIGN / BALANCE / art bible), (3) verifica `npm run validate`. Questa roadmap descrive *intenti e piano*; la verità eseguibile resta nel codice e nei documenti di §7.

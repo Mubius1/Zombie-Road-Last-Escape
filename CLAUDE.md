@@ -10,6 +10,7 @@
 - [`docs/ART_BIBLE_AMBIENTE.md`](docs/ART_BIBLE_AMBIENTE.md) — strada, sfondo a strati, illuminazione del mondo.
 - [`docs/ART_BIBLE_OGGETTI.md`](docs/ART_BIBLE_OGGETTI.md) — veicoli, armi/proiettili, pickup, componenti, sopravvissuti.
 - [`docs/ART_BIBLE_INTERFACCE.md`](docs/ART_BIBLE_INTERFACCE.md) — UI/HUD: titolo, HUD di gioco, negozio, impostazioni/pausa, overlay di esito, debug.
+- [`docs/ART_BIBLE_ICONE.md`](docs/ART_BIBLE_ICONE.md) — iconografia: dottrina icona-vs-testo, glifi HUD procedurali (`IconTextures.ts`), teach-once.
 - [`docs/ART_BIBLE_AUDIO.md`](docs/ART_BIBLE_AUDIO.md) — suoni & loop del motore: forma d'onda, frequenze, inviluppi, gerarchia di mix (`SoundManager.ts`).
 
 Vale per qualsiasi modifica a nemici, veicoli, armi, oggetti, **interfacce/HUD**, **suoni**, grafica procedurale, animazioni o effetti. Le art bible sono la **fonte di verità** estetica e di game-feel: non improvvisare palette, pose o numeri — segui (o aggiorna esplicitamente) le loro schede.
@@ -64,7 +65,7 @@ Se cambi una **regola di gioco** (core loop, game over, ruoli) aggiorna `GAME_DE
 | `npm run lint` | **ESLint** type-checked (typescript-eslint): floating/misused-promises, inutilizzati, ecc. — `lint:fix` per l'autofix |
 | `npm run preview` | anteprima della build |
 
-> **CI:** `.github/workflows/ci.yml` esegue `npm run build` + `npm run lint` a ogni push/PR (gate anti-deriva + type-check + lint + build). Test unitari delle formule pure restano da aggiungere.
+> **CI:** `.github/workflows/ci.yml` esegue `npm run build` + `npm run lint` a ogni push/PR (gate anti-deriva + type-check + lint + build). Strategia di QA e checklist di playtest manuale in [`docs/TESTING.md`](docs/TESTING.md); test unitari delle formule pure restano da aggiungere.
 >
 > **Type-check stretto** (`tsconfig.json`): oltre a `strict`, sono attivi `noUnusedLocals`/`noUnusedParameters`, `noImplicitOverride`, `noFallthroughCasesInSwitch`, `noUncheckedIndexedAccess` (→ gli accessi indicizzati sono `T | undefined`: asserisci `!` alla fonte solo dove l'indice è provabilmente valido), e `moduleResolution: "Bundler"`.
 

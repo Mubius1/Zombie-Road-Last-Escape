@@ -50,9 +50,11 @@ Questo documento è la **fonte di verità** del *design del gioco*: cosa fa il g
         └────────┴───────┘                 └──────────┘
 ```
 
+> ⚠️ **Boss attualmente DISATTIVATI** (`BOSSES_ENABLED = false` in `GameScene`, scelta di design). Il codice boss resta **tutto** in gioco (`BossController`, `BOSS_CONFIG`, fasi…): è spento solo lo **spawn automatico a fine percorso**. Con il flag a `false` la missione si completa **al raggiungimento della distanza** (`MISSION_DIST`), senza duello (vedi passi 2–3). Per riattivarli: flag a `true`. Le sezioni boss qui sotto descrivono il comportamento **a flag attivo**.
+
 1. **Missione** (`GameScene`): il veicolo è ancorato a sinistra (`VEHICLE_X = 150`) e si muove solo in verticale dentro la strada. Il mondo scorre, gli zombi arrivano da destra. **Miri col mouse** (la torretta segue il puntatore nell'arco frontale) e spari verso il mirino tenendo premuto. Avanzi accumulando **distanza**.
-2. **Boss** all'**82%** della distanza di missione: mentre il boss è vivo l'avanzamento si congela e gli spawn ordinari si fermano — è un duello.
-3. **Missione completata** (boss sconfitto → completamento): converti il punteggio in **monete**, salvi lo stato dei componenti, passi al **Negozio**.
+2. **Boss** all'**82%** della distanza di missione: mentre il boss è vivo l'avanzamento si congela e gli spawn ordinari si fermano — è un duello. *(Disattivato: con `BOSSES_ENABLED = false` non appare e l'avanzamento prosegue.)*
+3. **Missione completata** (a flag attivo: boss sconfitto → completamento; **a flag spento: al raggiungimento di `MISSION_DIST`**): converti il punteggio in **monete**, salvi lo stato dei componenti, passi al **Negozio**.
 4. **Negozio** (`ShopScene` — "GARAGE"): spendi le monete in riparazioni, potenziamenti, armi, veicoli; recluti **un** sopravvissuto (max 1 a sosta) tra 3 offerti, compri **razioni** e **curi** i feriti. Poi parte la missione successiva.
 5. **Loop a cicli**: regioni e boss ciclano (§3). Completare il ciclo delle **7 regioni** dà una **vittoria di ciclo** (schermata dedicata), poi si prosegue in **endless+** con difficoltà crescente (§10). L'obiettivo di lungo termine resta il **record** di missione/punteggio (salvato, §11).
 
@@ -118,6 +120,8 @@ Tutto vive in uno **spazio di design alto 600** (vedi [CLAUDE.md → Risoluzione
 > Palette e materia di ogni regione sono specificate nell'[art bible ambiente](ART_BIBLE_AMBIENTE.md). Qui conta solo che **scandiscono la varietà visiva** della corsa, non cambiano le regole.
 
 ### Boss di regione
+> ⚠️ **Attualmente disattivati** (`BOSSES_ENABLED = false`): non compaiono a fine percorso, ma dati e codice restano intatti (questa scheda descrive il comportamento a flag attivo).
+
 4 boss in `BOSS_CONFIG`, anch'essi **in ciclo**: `boss = BOSS_ORDER[(missione − 1) mod 4]`.
 
 | Boss | HP | Note di design |
@@ -135,7 +139,7 @@ Tutto vive in uno **spazio di design alto 600** (vedi [CLAUDE.md → Risoluzione
 
 | Parametro | Valore | Significato |
 |---|---|---|
-| Distanza missione | `MISSION_DIST = 18000` u | ~**180 km** mostrati; ~75 s di guida pura a `SCROLL_SPEED=240 u/s` |
+| Distanza missione | `MISSION_DIST = 18000` u | ~**180 km** mostrati (`KM_PER_UNIT`, un tratto credibile); ~75 s di guida pura a `SCROLL_SPEED=240 u/s`. Carburante **persistente**: un pieno copre ~3 missioni (§ Carburante in BALANCE) |
 | Trigger boss | `82%` (`BOSS_TRIGGER`) | il boss appare a 14 760 u; l'avanzamento si congela finché vive |
 | Spawn zombi (ritmo del terrore) | director a fasi **dread → burst** | **quiete** tesa (spawn radi, `CALM_INTERVAL`) ↔ **ondata** serrata (`BURST_INTERVAL` + batch d'apertura + stinger); sospeso durante il boss (§5, [BALANCE §1bis](BALANCE.md)) |
 | Gigante | ogni `22 000` ms | spawn speciale fuori dal pool ordinario |

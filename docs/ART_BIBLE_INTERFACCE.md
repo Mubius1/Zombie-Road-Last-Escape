@@ -345,7 +345,9 @@ Niente icone importate: usiamo **caratteri** coerenti, sempre con lo stesso sign
 **Hub:** velo + scatola `540×576`; titolo **"IMPOSTAZIONI"** `34px`; tre pulsanti `320×56` (stile blu `0x14141f` / hover `0x1d1d2e` / bordo `#2a3a66` / testo `#9ab6ff`): **GRAFICA · AUDIO · GENERALE**. In basso "▶ RIPRENDI · ESC" (+ "Esci al menu") in pausa, oppure "◂ INDIETRO" dal menu.
 
 **Categorie** (titolo `34px` + footer "‹ Categorie" che torna all'hub):
-- **GRAFICA** — Risoluzione · Schermo intero · Effetti schermo (filmico) · **Bloom** · **Ombre 2.5D** · **Dettaglio asfalto**. I 3 toggle nuovi pilotano `Settings.bloom`/`shadows`/`asphaltDetail` → gating in `PostFx`/`Shadows`/`AsphaltPipeline` (applicato all'avvio della partita / ingresso scena).
+- **GRAFICA** — Risoluzione · Schermo intero · **Effetti schermo** · **Ombre 2.5D** · **Dettaglio asfalto**.
+  - **Effetti schermo = PRESET + Avanzato** (`buildScreenFx`): invece di 6 toggle tecnici sparsi (vignetta/grana/scanline/grading/aberrazione/bloom), una riga di **preset radio** `Off · Minimo · Cinematico · Pieno` (combo sensate in `FX_PRESETS`) che il 90% dei giocatori sceglie a colpo d'occhio; un **"▸ Avanzato"** rivela i 6 toggle fini per i power-user (quando chiuso, un riepilogo a destra mostra il preset attivo o "Personalizzato"). Preset attivo = bordo/fill **verde** (come i toggle ON); inattivi blu; chip accesi verde.
+  - **Aggiornamento live** (`setFx`/`refreshFx`): cambiare preset o toggle ricolora **dal vivo** senza flash; il `scene.restart` (snappy, `nav:true`) scatta **solo** quando si attraversa la soglia master `Settings.screenFx` (l'overlay filmico del menu va ri-attaccato/staccato) o si apre/chiude "Avanzato" (ri-layout + ri-registrazione pad). I 6 flag pilotano `FilmPipeline`/`PostFx` (uniform per-frame); `bloom`/`shadows`/`asphaltDetail` → `PostFx`/`Shadows`/`AsphaltPipeline`.
 - **AUDIO** — Volume (barra 10 celle + 🔇 Muto + anteprima sonora).
 - **GENERALE** — Lingua · Daltonismo (accessibilità).
 

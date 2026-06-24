@@ -46,7 +46,8 @@ function isWebGL(scene: Phaser.Scene): boolean {
  * Attacca la catena di post-processing alla camera principale della scena.
  * Ritorna true se attiva (WebGL); false su Canvas (il chiamante usa il fallback Juice).
  *
- * `vignette` regola la forza della vignetta per QUESTA camera (1 = gioco, ~0.45 = menu).
+ * `vignette` regola la forza della vignetta per QUESTA camera. Oggi solo GameScene attacca la pipeline
+ * (i menu NON hanno effetti schermo); resta parametrico per riuso futuro.
  */
 export function attachPostFx(scene: Phaser.Scene, vignette = 1): boolean {
   if (!isWebGL(scene)) return false;

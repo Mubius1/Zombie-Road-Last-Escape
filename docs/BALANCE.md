@@ -18,9 +18,9 @@ Fonte: costanti in testa a `GameScene.ts`. La colonna **Valore** è validata (un
 | `costante` | Valore | Effetto |
 |---|---|---|
 | `SCROLL_SPEED` | 240 | velocità di scorrimento del mondo (u/s) = ritmo base |
-| `MISSION_DIST` | 18000 | lunghezza missione in u (~180 km mostrati, ~75 s di guida) |
+| `MISSION_DIST` | 18000 | lunghezza missione in u (~180 km mostrati · `KM_PER_UNIT`, ~75 s di guida — un singolo tratto credibile) |
 | `BOSS_TRIGGER` | 0.82 | frazione di missione a cui appare il boss (82% → 14 760 u) |
-| `BASE_FUEL_DRAIN` | 2.2 | consumo carburante base /s (serbatoio integro) |
+| `BASE_FUEL_DRAIN` | 0.5 | consumo carburante base /s (serbatoio integro) — × il `fuelEff` per-veicolo (§3 bis). Lento: il carburante PERSISTE tra le missioni (un pieno ≈ 3 missioni) |
 | `MAX_FUEL` | 100 | carburante massimo (+30 con upgrade) |
 | `GIANT_SPAWN_INTERVAL` | 22000 | spawn del Gigante errante (ms) |
 | `COMBO_WINDOW` | 2500 | finestra per mantenere la catena (ms) |
@@ -37,7 +37,7 @@ Fonte: costanti in testa a `GameScene.ts`. La colonna **Valore** è validata (un
 | `ENGINE_SCROLL_MIN` | 0.45 | M1 motore onesto: ritmo di avanzamento a motore distrutto (45%); a 100% = pieno |
 | `ARMOR_MULT_FLOOR` | 0.40 | M2 corazza passiva: moltiplicatore danno minimo (riduzione max 60%) |
 
-> *Non validati (valori inline):* tanica = **+30** carburante per pickup; intervallo tanica **7500 ms** (**5000 ms** con Esploratore).
+> *Non validati (valori inline):* tanica su strada = **+15** carburante (top-up modesto); intervallo tanica **15000 ms** (**10000 ms** con Esploratore); convoglio salvato = **+18**; `KM_PER_UNIT = 0.01` (`World.ts`) = fattore distanza→km mostrati (**solo display**: il gameplay resta in unità). Il **pieno vero** si fa al garage (negozio → *Rifornimento*, §8). Carburante **persistente** tra le missioni: `RunData.fuel` (caricato a inizio missione, persistito a fine, ripristinato alla morte — modello B).
 
 > **Sovraccarico (Overdrive, A3).** La barra (`OVERDRIVE_MAX`) si carica a ogni uccisione di `OVERDRIVE_CHARGE_BASE + OVERDRIVE_CHARGE_COMBO · moltiplicatore_combo` (→ ~15-20 kill per riempirla a combo media). A barra piena, **F** attiva il Sovraccarico per `OVERDRIVE_DURATION` ms: cadenza di fuoco ×`OVERDRIVE_FIRE_MULT`, veicolo-ariete (il contatto uccide senza danni ai componenti) e onda d'urto frontale da `OVERDRIVE_SHOCK_DMG` all'attivazione. *Da tarare a playtest.*
 
@@ -161,7 +161,32 @@ Fonte: `VEHICLES` (`GameData.ts`). Prezzo e colore sono già validati dall'art b
 - *Tensione di design:* i mezzi più corazzati (Camion, Pesante) sono **più lenti** → trade-off tra incassare e schivare.
 - *Sperimentale = "glass cannon" (B3):* resta il re di **velocità (1.2)** e **cadenza (1.5)** ma con salute/armatura **ridimensionate** (60/20, sotto SUV/Camion/Pesante) → non è più dominante su tutti gli assi: è una scelta aggressiva ad alto rischio, non un upgrade assoluto. Più punitivo con lo scaling NG+ (§5).
 - **Capienza sopravvissuti** (`survivorSlots`, NON validata — gameplay): posti oltre al guidatore — Auto Civile **4**, Pickup **2**, Furgone **5**, SUV **4**, Camion **4**, Pesante **3**, Sperimentale **2**. I mezzi da combattimento sacrificano posti → trade-off potenza/persone; cambiando mezzo gli eccedenti restano indietro.
-- **Specifiche descrittive** (`horsepower`/`weight`/`topSpeed`, solo flavor/UI, NON gameplay): cavalli, peso (kg) e velocità max (km/h) mostrati nella scheda al passaggio del mouse nel negozio. NON influenzano il gioco (la velocità reale è `speedMult`); servono a "sentire" il mezzo. Descrizioni in `vehicle.<key>.desc`.
+- **Specifiche dal mezzo reale** (`horsepower`/`weight`/`topSpeed`): mostrate nella scheda del negozio per "sentire" il mezzo. **`weight` e `horsepower` ora CONTANO**: alimentano il **consumo carburante** realistico (§3 bis, `vehicleFuelEff`) → ogni veicolo ha la sua autonomia. `topSpeed` resta flavor (la velocità reale è `speedMult`). Descrizioni in `vehicle.<key>.desc`.
+
+### §3 bis · Consumo & autonomia carburante (derivato, NON validato)
+
+Il consumo **non è più uguale per tutti**: ogni veicolo brucia in proporzione ai suoi **dati reali** (massa + potenza), via `vehicleFuelEff()` (`GameData.ts`). Così `weight`/`horsepower` — prima solo flavor — **contano**: un bestione da 12 t è assetato, una city-car è parca.
+
+```
+fuelEff = 0.62 + weight/15000 + horsepower/4200      // × sul consumo base BASE_FUEL_DRAIN
+```
+
+**Modello "viaggio" (carburante persistente).** Il pieno **NON** si ricarica a ogni missione: `RunData.fuel` si porta avanti (un singolo tratto-missione mostra **~180 km** credibili, ma un pieno copre **~3 missioni**). Così l'autonomia mostrata è da auto vera (centinaia di km) **senza** uccidere la scarsità: il carburante è un **bene di campagna** da gestire sul lungo viaggio. Si rabbocca con taniche rare su strada (+15) e soprattutto al **garage** (negozio → *Rifornimento*, fa il pieno; §8). Autonomia stimata mostrata nella **scheda veicolo** del negozio (`vehicleRangeKm`).
+
+Autonomia di display ≈ `serbatoio · KM_PER_FUEL / fuelEff` con `KM_PER_FUEL = 4.8` (= `SCROLL_SPEED·KM_PER_UNIT/BASE_FUEL_DRAIN`):
+
+| Veicolo | kg / CV | `fuelEff` (×) | Autonomia¹ pieno (100) | Missioni/pieno² |
+|---|---|---|---|---|
+| Auto Civile | 1200 / 90 | 0.72 | ~665 km | ~3.7 |
+| Pickup | 1900 / 150 | 0.78 | ~613 km | ~3.4 |
+| Furgone Blindato | 2800 / 140 | 0.84 | ~571 km | ~3.2 |
+| SUV Militare | 2600 / 250 | 0.85 | ~563 km | ~3.1 |
+| Camion Corazzato | 7000 / 300 | 1.16 | ~414 km | ~2.3 |
+| Mezzo Pesante | 12000 / 520 | 1.54 | ~311 km | ~1.7 |
+| Sperimentale | 1600 / 600 | 0.87 | ~552 km | ~3.1 |
+
+> ¹ A velocità di crociera (throttle 1), serbatoio e motore integri, tanica base 100 (senza upgrade *Serbatoio* +30).
+> ² Missioni (~180 km) coperte da un pieno. Il **Mezzo Pesante** è l'estremo "logistica": scambia autonomia per corazza/potenza. **In taratura:** burn (`BASE_FUEL_DRAIN`), valore/intervallo tanica (§1) e costo *Rifornimento* (§8) sono i dial di scarsità — da rifinire a playtest.
 
 ---
 
@@ -173,10 +198,12 @@ I **4 componenti** (salute 0–100) si danneggiano per aggancio zombi (14/1,6 s)
 |---|---|---|---|
 | **Motore** → ritmo avanz. | `SCROLL_SPEED · (ENGINE_SCROLL_MIN + (1−ENGINE_SCROLL_MIN)·mot/100)` | pieno (240 u/s) | 45% (108 u/s) — **NON game over** |
 | **Ruote** → velocità vert. | `230 · speedMult · (0.15 + 0.85·ruote/100) · max(0.3, 1 − agganciati·0.12)` | piena | 15% (× malus aggancio) |
-| **Serbatoio** → consumo | `2.2 · (1 + (1 − serb/100)·2) · (0.5 + 0.5·throttle)` | 2.2/s¹ | 6.6/s (3×)¹ |
+| **Serbatoio** → consumo | `0.5 · (1 + (1 − serb/100)·2) · (0.5 + 0.5·throttle) · fuelEff` | 0.5/s¹ ² | 1.5/s (3×)¹ ² |
 | **Torretta** → cooldown | `(base/fireMult) · (1 + (1 − torr/100)·1.4)` | base | +140% · **a 0 = non spara** |
 
 > ¹ **Throttle (pivot horror):** il consumo è ora moltiplicato dal fattore `0.5 + 0.5·throttle` → **crociera (throttle=1) = invariato** (le colonne "A 100%/0%" valgono a crociera), **gas (1.6) ≈ ×1.3**, **freno/fermo (0) = ×0.5** (drena comunque: fermarsi non è gratis). Vedi §1bis.
+>
+> ² **fuelEff (§3 bis):** moltiplicatore di consumo per-veicolo (da massa/potenza), ×0.72 (Auto Civile) … ×1.54 (Mezzo Pesante). Le colonne "A 100%/0%" valgono a `fuelEff=1` (≈ pickup); gli altri mezzi scalano in proporzione.
 
 > **Motore onesto (M1):** il motore non uccide più a 0 — regola il **ritmo di avanzamento** (accumulo di `distance` → km, soglia boss, carburante-nel-tempo). Sano = missione breve; rovinato = arranchi (più lunga, più esposizione, più carburante). `ENGINE_SCROLL_MIN = 0.45`.
 
@@ -315,6 +342,7 @@ Fonte: `SHOP_ITEMS` (`ShopScene.ts`).
 | `chiave` | Voce | Costo ★ | Tipo | Effetto |
 |---|---|---|---|---|
 | `repair` | Ripara tutto | 80 | ripetibile | tutti i componenti → 100% |
+| `refuel` | Rifornimento | 50 | ripetibile | fa il **pieno** del veicolo corrente (carburante "viaggio", persistente §1); universale, compare solo se il serbatoio non è già pieno |
 | `restock` | Rifornimento munizioni | 120 | ripetibile | ricarica al **massimo** le armi finite possedute (pivot horror); compare solo se possiedi un'arma finita |
 | `armor` | Corazza rinforzata | 150 | una tantum | +20 armatura (≈ −20% danno, §4) |
 | `engine` | Motore potenziato | 120 | una tantum | velocità verticale ×1.15 |
