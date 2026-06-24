@@ -200,6 +200,24 @@ const es: Record<string, string> = {
   'loc.market.flavor': 'Una caravana de carroñeros. Venden de todo — a su manera.',
   'game.arrivingAt': '→ Llegas a: {place}',
 
+  // ── Paradas diegéticas / hub a pie ──
+  'hub.station.workshop': 'Banco de trabajo',
+  'hub.station.pump': 'Surtidor',
+  'hub.station.fire': 'Hoguera',
+  'hub.station.guard': 'Puesto de guardia',
+  'hub.station.stall': 'Puesto',
+  'hub.depart': 'Partir',
+  'hub.prompt': '{label}  ·  [E]',
+  'hub.promptPad': '{label}  ·  (A)',
+  'hub.hint': 'Camina (WASD / flechas) · acércate y pulsa E',
+  'hub.galleryBar': 'GALERÍA DE LUGARES · {name} ({i}/{n}) · 1–5 cambiar · ESC salir',
+  'debug.locations': 'LUGARES',
+  'shop.back': '◂ ATRÁS',
+  'hub.refuel': 'Repostar',
+  'hub.refuelDone': 'Repostado · −{c}★',
+  'hub.tankFull': 'Depósito lleno',
+  'hub.noMoney': 'Monedas insuficientes',
+
   // ── Eventos en misión (Track B2) ──
   'event.night': 'HORDA NOCTURNA',
   'event.roadblock': 'BLOQUEO',

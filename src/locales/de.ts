@@ -200,6 +200,24 @@ const de: Record<string, string> = {
   'loc.market.flavor': 'Eine Karawane von Aasgeiern. Sie verkaufen alles — auf ihre Art.',
   'game.arrivingAt': '→ Ankunft bei: {place}',
 
+  // ── Diegetische Halte / Hub zu Fuß ──
+  'hub.station.workshop': 'Werkbank',
+  'hub.station.pump': 'Zapfsäule',
+  'hub.station.fire': 'Lagerfeuer',
+  'hub.station.guard': 'Wachposten',
+  'hub.station.stall': 'Stand',
+  'hub.depart': 'Losfahren',
+  'hub.prompt': '{label}  ·  [E]',
+  'hub.promptPad': '{label}  ·  (A)',
+  'hub.hint': 'Laufen (WASD / Pfeile) · herangehen und E drücken',
+  'hub.galleryBar': 'ORTE-GALERIE · {name} ({i}/{n}) · 1–5 wechseln · ESC verlassen',
+  'debug.locations': 'ORTE',
+  'shop.back': '◂ ZURÜCK',
+  'hub.refuel': 'Tanken',
+  'hub.refuelDone': 'Getankt · −{c}★',
+  'hub.tankFull': 'Tank voll',
+  'hub.noMoney': 'Nicht genug Münzen',
+
   // ── Missions-Events (Track B2) ──
   'event.night': 'NACHTHORDE',
   'event.roadblock': 'STRASSENSPERRE',

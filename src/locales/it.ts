@@ -219,6 +219,24 @@ const it: Record<string, string> = {
   'loc.market.flavor': 'Una carovana di sciacalli. Vendono di tutto — a modo loro.',
   'game.arrivingAt': '→ Arrivi a: {place}',
 
+  // ── Soste diegetiche / hub a piedi (SOSTE_DIEGETICHE.md) ──
+  'hub.station.workshop': 'Banco da lavoro',
+  'hub.station.pump': 'Pompa di servizio',
+  'hub.station.fire': 'Fuoco',
+  'hub.station.guard': 'Posto di guardia',
+  'hub.station.stall': 'Bancarella',
+  'hub.depart': 'Riparti',
+  'hub.prompt': '{label}  ·  [E]',
+  'hub.promptPad': '{label}  ·  (A)',
+  'hub.hint': 'Cammina (WASD / frecce) · avvicìnati e premi E',
+  'hub.galleryBar': 'GALLERIA LUOGHI · {name} ({i}/{n}) · 1–5 cambia · ESC esci',
+  'debug.locations': 'GALLERIA LUOGHI',
+  'shop.back': '◂ INDIETRO',
+  'hub.refuel': 'Fai benzina',
+  'hub.refuelDone': 'Rifornito · −{c}★',
+  'hub.tankFull': 'Serbatoio pieno',
+  'hub.noMoney': 'Monete insufficienti',
+
   // ── Eventi in-run (Track B2) ──
   'event.night': 'ORDA NOTTURNA',
   'event.roadblock': 'BLOCCO STRADALE',

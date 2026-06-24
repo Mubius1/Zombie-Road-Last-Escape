@@ -865,7 +865,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   /** Conferma col pad sulla schermata di esito: A/Start come SPAZIO (negozio a fine missione, riavvio al game over). */
   private confirmOutcome() {
-    if (this.missionDone) Juice.go(this, 'ShopScene');                         // = keydown-SPACE a fine missione
+    if (this.missionDone) Juice.go(this, 'StopScene');                         // = keydown-SPACE a fine missione (sosta diegetica)
     else if (!this.alive) Juice.fadeAndRun(this, () => this.scene.restart());  // = SPAZIO al game over (vedi update())
   }
 
@@ -2716,7 +2716,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.addMenuReturn(cx, cy+108);
 
     this.time.delayedCall(600, () => {
-      this.input.keyboard?.once('keydown-SPACE', () => Juice.go(this, 'ShopScene'));
+      this.input.keyboard?.once('keydown-SPACE', () => Juice.go(this, 'StopScene'));
       this.input.keyboard?.once('keydown-M', () => Juice.go(this, 'MenuScene'));
     });
   }

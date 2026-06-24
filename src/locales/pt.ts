@@ -200,6 +200,24 @@ const pt: Record<string, string> = {
   'loc.market.flavor': 'Uma caravana de saqueadores. Vendem de tudo — à maneira deles.',
   'game.arrivingAt': '→ Chegas a: {place}',
 
+  // ── Paragens diegéticas / hub a pé ──
+  'hub.station.workshop': 'Bancada',
+  'hub.station.pump': 'Bomba de combustível',
+  'hub.station.fire': 'Fogueira',
+  'hub.station.guard': 'Posto de guarda',
+  'hub.station.stall': 'Banca',
+  'hub.depart': 'Partir',
+  'hub.prompt': '{label}  ·  [E]',
+  'hub.promptPad': '{label}  ·  (A)',
+  'hub.hint': 'Caminha (WASD / setas) · aproxima-te e prime E',
+  'hub.galleryBar': 'GALERIA DE LOCAIS · {name} ({i}/{n}) · 1–5 trocar · ESC sair',
+  'debug.locations': 'LOCAIS',
+  'shop.back': '◂ VOLTAR',
+  'hub.refuel': 'Abastecer',
+  'hub.refuelDone': 'Abastecido · −{c}★',
+  'hub.tankFull': 'Tanque cheio',
+  'hub.noMoney': 'Moedas insuficientes',
+
   // ── Eventos na missão (Track B2) ──
   'event.night': 'HORDA NOTURNA',
   'event.roadblock': 'BLOQUEIO',

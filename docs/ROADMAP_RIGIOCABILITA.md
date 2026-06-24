@@ -181,6 +181,8 @@ Uno scheduler in `update` legato alla percentuale di distanza attiva/disattiva u
 
 ### B3 · Soste / luoghi di fine missione (Idea 1) — ✅ *fatto*
 
+> 🚶 **Evoluzione — soste diegetiche (Fasi 1+2 ✅):** queste soste sono ora **luoghi giocabili** — hub esplorabili a piedi (`StopScene`) con un **autista-protagonista**, scena procedurale per-luogo, anteprima nella **Galleria Luoghi** in debug. Qualità "elevatissima" e incontri Tier C (Fasi 3–4) da fare → scheda dedicata [`SOSTE_DIEGETICHE.md`](SOSTE_DIEGETICHE.md).
+
 > Nata da una **speculazione** del designer: *«se al termine degli x km non si arrivasse al garage ma da qualche altra parte?»*. Risposta minima e spedibile: la sosta diventa **uno di più luoghi**, ognuno con identità e servizi diversi — varietà strutturale del meta-loop (attacca "ogni missione finisce identica") **senza** disegnare nuove strade. Coerente col pivot horror: la **sicurezza completa** (garage) è una sosta fra tante, non la norma.
 
 `ShopScene` legge il luogo da [`src/Locations.ts`](../src/Locations.ts) (modulo dati neutro sul modello di [`Routes.ts`](../src/Routes.ts)): titolo, accento, riga d'atmosfera e quali pannelli mostrare. **Equità:** i rifornimenti essenziali (`repair`/`refuel`/`restock`) sono ovunque; variano gli extra (potenziamenti/armi/sopravvissuti/veicoli). Selezione **deterministica** per regione (`STOP_CYCLE`), col **garage ricorrente** ~ogni 3-4 soste. `GameScene` anticipa la destinazione nell'overlay di fine missione.

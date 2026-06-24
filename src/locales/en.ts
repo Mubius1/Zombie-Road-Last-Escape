@@ -200,6 +200,24 @@ const en: Record<string, string> = {
   'loc.market.flavor': 'A caravan of scavengers. They sell everything — their way.',
   'game.arrivingAt': '→ Arriving at: {place}',
 
+  // ── Diegetic stops / on-foot hub (SOSTE_DIEGETICHE.md) ──
+  'hub.station.workshop': 'Workbench',
+  'hub.station.pump': 'Fuel pump',
+  'hub.station.fire': 'Campfire',
+  'hub.station.guard': 'Guard post',
+  'hub.station.stall': 'Stall',
+  'hub.depart': 'Depart',
+  'hub.prompt': '{label}  ·  [E]',
+  'hub.promptPad': '{label}  ·  (A)',
+  'hub.hint': 'Walk (WASD / arrows) · get close and press E',
+  'hub.galleryBar': 'LOCATION GALLERY · {name} ({i}/{n}) · 1–5 switch · ESC exit',
+  'debug.locations': 'LOCATIONS',
+  'shop.back': '◂ BACK',
+  'hub.refuel': 'Refuel',
+  'hub.refuelDone': 'Refueled · −{c}★',
+  'hub.tankFull': 'Tank full',
+  'hub.noMoney': 'Not enough coins',
+
   // ── In-run events (Track B2) ──
   'event.night': 'NIGHT HORDE',
   'event.roadblock': 'ROADBLOCK',

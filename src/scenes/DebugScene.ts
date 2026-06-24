@@ -209,9 +209,17 @@ export default class DebugScene extends Phaser.Scene {
       b.on('pointerdown', cb);
       this.reg(b);
     };
-    mk2(140, 220, t('debug.newGame'), 0x1a4a1a, () => this.startFresh());
-    mk2(400, 150, t('debug.shop'), 0x2a2a5a, () => Juice.go(this, 'ShopScene'));
-    mk2(620, 220, t('debug.toGame'), 0x3a3a3a, () => Juice.go(this, 'GameScene'));
+    mk2(108, 168, t('debug.newGame'), 0x1a4a1a, () => this.startFresh());
+    mk2(296, 120, t('debug.shop'), 0x2a2a5a, () => Juice.go(this, 'ShopScene'));
+    mk2(468, 150, t('debug.locations'), 0x1a3a4a, () => this.openLocationGallery());
+    mk2(658, 168, t('debug.toGame'), 0x3a3a3a, () => Juice.go(this, 'GameScene'));
+  }
+
+  /** Galleria Luoghi: apre l'hub diegetico (StopScene) in modalità ispezione, ciclabile coi tasti 1–5. */
+  private openLocationGallery() {
+    this.registry.set('hubGallery', true);
+    this.registry.set('hubGalleryIndex', 0);
+    Juice.go(this, 'StopScene');
   }
 
   // ─── Actions ─────────────────────────────────────────────────────────────────

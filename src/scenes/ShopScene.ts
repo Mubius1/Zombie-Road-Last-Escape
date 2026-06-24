@@ -23,7 +23,7 @@ interface ShopItem {
 
 // Catalogo COMPLETO dei potenziamenti. 'repair' è universale; quali degli altri compaiano nel negozio
 // dipende dal veicolo corrente (VEHICLES[key].upgrades). Acquisti = per-veicolo (RunData.upgrades).
-const SHOP_ITEMS: ShopItem[] = [
+export const SHOP_ITEMS: ShopItem[] = [
   { key: 'repair',     label: 'item.repair.label',     cost:  80, desc: 'item.repair.desc',     oneTime: false },
   { key: 'refuel',     label: 'item.refuel.label',     cost:  50, desc: 'item.refuel.desc',     oneTime: false }, // carburante "viaggio": fa il pieno; compare solo se il serbatoio non è già pieno
   { key: 'restock',    label: 'item.restock.label',    cost: 120, desc: 'item.restock.desc',    oneTime: false }, // munizioni: ricarica al massimo le armi finite (pivot horror)
@@ -99,15 +99,18 @@ export default class ShopScene extends Phaser.Scene {
     // (già incrementato) → stabile tra i refresh post-acquisto, niente da cachare.
     this.location = locationForMission(this.missionNum);
 
-    // Offerta reclute: calcolata UNA volta per visita REALE (non sui refresh post-azione, altrimenti
-    // comprare/vendere rimescola la terna e permette il reroll gratis). Cache nel registry (non nel checkpoint).
-    if (!this.replay) {
+    // Offerta reclute: calcolata UNA volta per SOSTA (non sui refresh post-azione né sul rientro dall'hub,
+    // altrimenti uscire/rientrare nel negozio rimescola la terna = reroll gratis). Cache nel registry,
+    // marcata col numero di missione → fresca solo a una sosta nuova; riusata per refresh e rientri.
+    const offerMission = this.registry.get('offeredSurvivorsMission') as number | undefined;
+    const cachedKeys = (this.registry.get('offeredSurvivors') as string[] | undefined) ?? [];
+    if (offerMission !== this.missionNum || cachedKeys.length === 0) {
       const available = SURVIVORS.filter(s => !this.survivors.includes(s.key));
       this.offeredSurvivors = Phaser.Utils.Array.Shuffle([...available]).slice(0, 3);
       this.registry.set('offeredSurvivors', this.offeredSurvivors.map(s => s.key));
+      this.registry.set('offeredSurvivorsMission', this.missionNum);
     } else {
-      const keys = (this.registry.get('offeredSurvivors') as string[] | undefined) ?? [];
-      this.offeredSurvivors = keys.map(k => SURVIVORS.find(s => s.key === k)).filter(Boolean) as SurvivorData[];
+      this.offeredSurvivors = cachedKeys.map(k => SURVIVORS.find(s => s.key === k)).filter(Boolean) as SurvivorData[];
     }
 
     // Audio del negozio (feedback acquisti U7 / diniego U6) — istanza statica riusata fra i restart.
@@ -462,8 +465,9 @@ export default class ShopScene extends Phaser.Scene {
   // ─── Continue button ─────────────────────────────────────────────────────────
 
   private drawContinueButton() {
-    const cont = Ui.button(this, this.designW/2, H - 28, 240, 44, t('shop.continue'), {
-      fill: 0x1a3a1a, hover: 0x224422, color: UI.green,
+    // "Indietro": esce dal negozio e torna alla sosta (l'hub). Colore neutro (non più verde "prosegui").
+    const cont = Ui.button(this, this.designW/2, H - 28, 240, 44, t('shop.back'), {
+      fill: 0x1e2336, hover: 0x29304a, color: UI.blue,
       onClick: () => this.continueGame(),
     });
     this.nav(cont.bg);
@@ -655,6 +659,8 @@ export default class ShopScene extends Phaser.Scene {
   }
 
   private continueGame() {
-    Juice.go(this, 'RouteScene'); // Track B1: prima la scelta di percorso, poi la missione
+    // Soste diegetiche: dal negozio si ESCE tornando alla sosta (l'hub a piedi). Il viaggio prosegue
+    // SOLO scegliendo di ripartire dal veicolo nella sosta → niente più proseguimento forzato dal menu.
+    Juice.go(this, 'StopScene');
   }
 }

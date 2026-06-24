@@ -200,6 +200,24 @@ const fr: Record<string, string> = {
   'loc.market.flavor': "Une caravane de charognards. Ils vendent de tout — à leur façon.",
   'game.arrivingAt': '→ Arrivée à : {place}',
 
+  // ── Haltes diégétiques / hub à pied ──
+  'hub.station.workshop': 'Établi',
+  'hub.station.pump': 'Pompe à carburant',
+  'hub.station.fire': 'Feu de camp',
+  'hub.station.guard': 'Poste de garde',
+  'hub.station.stall': 'Étal',
+  'hub.depart': 'Repartir',
+  'hub.prompt': '{label}  ·  [E]',
+  'hub.promptPad': '{label}  ·  (A)',
+  'hub.hint': "Marche (WASD / flèches) · approche-toi et appuie sur E",
+  'hub.galleryBar': 'GALERIE DES LIEUX · {name} ({i}/{n}) · 1–5 changer · ESC quitter',
+  'debug.locations': 'LIEUX',
+  'shop.back': '◂ RETOUR',
+  'hub.refuel': 'Faire le plein',
+  'hub.refuelDone': 'Plein fait · −{c}★',
+  'hub.tankFull': 'Réservoir plein',
+  'hub.noMoney': 'Pièces insuffisantes',
+
   // ── Événements en mission (Track B2) ──
   'event.night': 'HORDE NOCTURNE',
   'event.roadblock': 'BARRAGE',
