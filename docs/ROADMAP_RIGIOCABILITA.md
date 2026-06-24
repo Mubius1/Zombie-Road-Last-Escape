@@ -179,6 +179,23 @@ Uno scheduler in `update` legato alla percentuale di distanza attiva/disattiva u
 **File da toccare:** [`src/scenes/GameScene.ts`](../src/scenes/GameScene.ts) (scheduler + implementazioni eventi); [`src/EntityTextures.ts`](../src/EntityTextures.ts) / [`src/SoundManager.ts`](../src/SoundManager.ts) (VFX/stinger).
 **Aggiornamenti documentali:** [GAME_DESIGN §4](GAME_DESIGN.md#4--anatomia-di-una-missione) · BALANCE (parametri evento).
 
+### B3 · Soste / luoghi di fine missione (Idea 1) — ✅ *fatto*
+
+> Nata da una **speculazione** del designer: *«se al termine degli x km non si arrivasse al garage ma da qualche altra parte?»*. Risposta minima e spedibile: la sosta diventa **uno di più luoghi**, ognuno con identità e servizi diversi — varietà strutturale del meta-loop (attacca "ogni missione finisce identica") **senza** disegnare nuove strade. Coerente col pivot horror: la **sicurezza completa** (garage) è una sosta fra tante, non la norma.
+
+`ShopScene` legge il luogo da [`src/Locations.ts`](../src/Locations.ts) (modulo dati neutro sul modello di [`Routes.ts`](../src/Routes.ts)): titolo, accento, riga d'atmosfera e quali pannelli mostrare. **Equità:** i rifornimenti essenziali (`repair`/`refuel`/`restock`) sono ovunque; variano gli extra (potenziamenti/armi/sopravvissuti/veicoli). Selezione **deterministica** per regione (`STOP_CYCLE`), col **garage ricorrente** ~ogni 3-4 soste. `GameScene` anticipa la destinazione nell'overlay di fine missione.
+
+| Luogo | Extra | | Luogo | Extra |
+|---|---|---|---|---|
+| **Garage** | tutto | | **Posto di blocco** | armi |
+| **Deposito** | — | | **Mercato nero** | potenziamenti · armi · veicoli |
+| **Accampamento** | sopravvissuti | | | |
+
+**Estensioni possibili** (non in questa tappa): selezione **seedabile/varia** (su Track D0), i *twist* attivi della speculazione (assedio, pedaggio, saccheggio sotto minaccia), un *full-heal* dedicato (ospedale/chiesa), stock raro **rotante** al mercato. La metrica di gating è **strutturale** (quali pannelli) + **flavor**, senza nuovi numeri di bilanciamento → nessuna riga 🔒 nuova.
+
+**File toccati:** nuovo [`src/Locations.ts`](../src/Locations.ts) · [`src/scenes/ShopScene.ts`](../src/scenes/ShopScene.ts) (titolo/atmosfera/gating pannelli) · [`src/scenes/GameScene.ts`](../src/scenes/GameScene.ts) (anteprima destinazione) · `src/locales/*` (13 chiavi ×6 lingue).
+**Aggiornamenti documentali:** [GAME_DESIGN §1/§9](GAME_DESIGN.md#9--progressione-e-meta-negozio) (regola: dove si arriva + tabella luoghi). Nessun impatto su `validate:balance`/`validate:art` (dati neutri + token UI riusati); `validate:i18n` copre le nuove chiavi.
+
 ---
 
 ## §4 · Track C — Boss e regioni davvero distinti
@@ -344,6 +361,7 @@ Questa roadmap, da sola, **non tocca codice** → tutti i validatori restano ver
 | — | **Combat reboot (mira col mouse)** | **fondazione** | ✅ fatto (branch `aim-combat`) — esito del fun-gate; convive con Track A |
 | B1 | Nodo scelta percorso | B | ✅ fatto (3 nodi: Orda Fitta / Strada Minata / Tratta Tranquilla · `RouteScene` tra negozio e missione) |
 | B2 | Eventi in-run | B | ✅ fatto (scheduler a soglie · **5 eventi**: Orda Notturna / Blocco Stradale / Tempesta / Convoglio da scortare / **Salvataggio** sopravvissuto `rescue`) |
+| B3 | **Soste / luoghi di fine missione** (Idea 1) | B | ✅ fatto (5 luoghi: Garage / Deposito / Accampamento / Posto di blocco / Mercato nero · `src/Locations.ts` · selezione deterministica per regione · rifornimenti essenziali ovunque, extra per luogo) |
 | C1 | Pattern d'attacco boss | C | ⬜ da fare |
 | C2 | Meccanica per regione | C | ⬜ da fare |
 | D0 | RNG seedabile | D | ⬜ da fare |

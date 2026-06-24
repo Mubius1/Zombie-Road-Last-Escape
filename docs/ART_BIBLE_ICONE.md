@@ -82,6 +82,14 @@ Un'icona astratta è ambigua **la prima volta**. Non si risolve col testo perman
 - **Gamepad:** niente cursore → la legenda vive nell'**onboarding** / nella schermata del veicolo / in questo documento. (TODO: una
   legenda opzionale richiamabile dall'HUD col pad.)
 
+> **Eccezione — barre componenti (HUD).** Per le 4 icone di componente (motore/ruote/serbatoio/torretta) il teach-once
+> via hover **non basta**: in combattimento il mouse è impegnato a mirare e sparare, nessuno passa il cursore sull'HUD.
+> Lì l'icona è affiancata da una **sigla 3-lettere sempre visibile** (`comp.<key>Abbr` i18n: `MOT · RUO · SER · TOR` in
+> italiano) + la `%`. Non è un ritorno al testo-prototipo: è icona **+** sigla minima per un concetto astratto e specifico
+> non leggibile a colpo d'occhio mid-azione. Il tooltip in hover resta e mostra il **nome esteso** (`comp.<key>`). Le icone-risorsa
+> immediate (salute, carburante) restano **icona nuda** — lì la silhouette basta. Resa in `HudController` (vedi
+> `ART_BIBLE_INTERFACCE` §4.2).
+
 ---
 
 ## 6. Vocabolario esteso — **pianificato**

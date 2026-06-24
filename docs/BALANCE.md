@@ -186,7 +186,7 @@ Autonomia di display ≈ `serbatoio · KM_PER_FUEL / fuelEff` con `KM_PER_FUEL =
 | Sperimentale | 1600 / 600 | 0.87 | ~552 km | ~3.1 |
 
 > ¹ A velocità di crociera (throttle 1), serbatoio e motore integri, tanica base 100 (senza upgrade *Serbatoio* +30).
-> ² Missioni (~180 km) coperte da un pieno. Il **Mezzo Pesante** è l'estremo "logistica": scambia autonomia per corazza/potenza. **In taratura:** burn (`BASE_FUEL_DRAIN`), valore/intervallo tanica (§1) e costo *Rifornimento* (§8) sono i dial di scarsità — da rifinire a playtest.
+> ² Missioni (~180 km) coperte da un pieno. Il **Mezzo Pesante** è l'estremo "logistica": scambia autonomia per corazza/potenza. **In taratura:** burn (`BASE_FUEL_DRAIN`) e costo *Rifornimento* al garage (§8) sono i dial di scarsità — le taniche su strada sono state **rimosse** (il garage è l'unica ricarica) — da rifinire a playtest.
 
 ---
 
@@ -375,7 +375,7 @@ Fonte: `SHOP_ITEMS` (`ShopScene.ts`).
 | Meccanico | +8 salute al componente peggiore | ogni 5 s |
 | Medico | +0.3 salute | al secondo (continuo) |
 | Soldato | colpo auto verso lo zombi più vicino | ogni 1.6 s (G9: era 3 s, contributo troppo marginale) |
-| Esploratore | taniche più frequenti (5 s vs 7,5 s) | passivo |
+| Esploratore | consumo carburante −20% (`EXPLORER_FUEL_MULT` 0.8) | passivo |
 | Saccheggiatore | +12% monete a fine missione (compone col nodo di percorso) | a fine missione |
 | Cecchino | colpo forte (danno 5) allo zombi più resistente davanti | ogni 2,2 s |
 | Artificiere | tasto C: granata ad area (raggio 110, danno 8) | ricarica 5,5 s |
@@ -413,7 +413,7 @@ Reclutare non è più "prendili tutti": è un loop di gestione (recluta · sfama
   - generosità economica → divisore `⌊score/8⌋` in `triggerMissionComplete`;
   - ritmo → `SCROLL_SPEED`, `MISSION_DIST`, formula `spawnInterval`;
   - letalità → `ZOMBIE_STATS[*].damage`, soglie corazza in `dealDamage`;
-  - pressione carburante → `BASE_FUEL_DRAIN`, intervallo/valore taniche;
+  - pressione carburante → `BASE_FUEL_DRAIN`, costo *Rifornimento* al garage (niente taniche su strada);
   - tankiness boss → `BOSS_CONFIG[*].hp` e `reward`.
 
 ---

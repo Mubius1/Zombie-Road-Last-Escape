@@ -51,10 +51,13 @@ export interface SettingsData {
   brightness: number;
   /** Lingua dei testi dell'interfaccia (vedi i18n.ts). */
   language: Lang;
+  /** Tutorial di onboarding già visto/saltato? false = lo mostra a inizio Missione 1 (vedi docs/TUTORIAL.md).
+   *  È una PREFERENZA (non stato di partita) → sopravvive a "Nuova Partita". */
+  tutorialSeen: boolean;
 }
 
 const STORAGE_KEY = 'zombieRoad.settings.v1';
-const DEFAULTS: SettingsData = { volume: 1, vignetteFx: true, grainFx: true, scanlineFx: true, gradingFx: true, aberrationFx: true, bloom: true, shadows: true, asphaltDetail: true, resolution: 0, fullscreen: false, colorblind: false, language: 'it', brightness: 1 };
+const DEFAULTS: SettingsData = { volume: 1, vignetteFx: true, grainFx: true, scanlineFx: true, gradingFx: true, aberrationFx: true, bloom: true, shadows: true, asphaltDetail: true, resolution: 0, fullscreen: false, colorblind: false, language: 'it', brightness: 1, tutorialSeen: false };
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const clampBright = (v: number) => (v < 0.6 ? 0.6 : v > 1.4 ? 1.4 : v);
@@ -81,6 +84,7 @@ function loadSettings(): SettingsData {
       colorblind: typeof p.colorblind === 'boolean' ? p.colorblind             : DEFAULTS.colorblind,
       brightness: typeof p.brightness === 'number'  ? clampBright(p.brightness) : DEFAULTS.brightness,
       language:   isLang(p.language)                ? p.language                : detectLang(),
+      tutorialSeen: typeof p.tutorialSeen === 'boolean' ? p.tutorialSeen         : DEFAULTS.tutorialSeen,
     };
   } catch {
     return { ...DEFAULTS };
@@ -138,6 +142,9 @@ export default class Settings {
 
   static get language(): Lang { return this.data.language; }
   static set language(v: Lang) { if (isLang(v)) { this.data.language = v; this.save(); } }
+
+  static get tutorialSeen(): boolean { return this.data.tutorialSeen; }
+  static set tutorialSeen(v: boolean) { this.data.tutorialSeen = v; this.save(); }
 
   private static save() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data)); } catch { /* storage non disponibile */ }

@@ -151,6 +151,11 @@ const it: Record<string, string> = {
   'comp.tank': 'SERBAT.',
   'comp.turret': 'TORR.',
   'comp.armor': 'CORAZZA',
+  // Sigle 3-lettere per le barre componenti dell'HUD (icona + sigla + %); il nome esteso resta in hover.
+  'comp.engineAbbr': 'MOT',
+  'comp.wheelsAbbr': 'RUO',
+  'comp.tankAbbr': 'SER',
+  'comp.turretAbbr': 'TOR',
   'hud.armorStat': '🛡 −{p}%',
 
   // ── Regioni / ambienti ───────────────────────────────────────────────────────────
@@ -198,6 +203,21 @@ const it: Record<string, string> = {
   'route.minefield.desc': 'Irta di relitti, olio e mine. Guida pulita = bottino in più.',
   'route.rest.label': 'Tratta Tranquilla',
   'route.rest.desc': 'Pochi nemici, pochi ostacoli — per rifiatare. Ma poche monete.',
+
+  // ── Soste / luoghi di fine missione (Idea 1 · Track B3) ──
+  'shop.titleAt': '{place}  —  Fine Missione {n}',
+  'shop.supplies': 'RIFORNIMENTI',
+  'loc.garage.name': 'GARAGE',
+  'loc.garage.flavor': 'Un garage ancora in piedi: luce, attrezzi, un attimo di respiro.',
+  'loc.depot.name': 'DEPOSITO',
+  'loc.depot.flavor': 'Un deposito saccheggiato a metà. Carburante e munizioni, poi via.',
+  'loc.camp.name': 'ACCAMPAMENTO',
+  'loc.camp.flavor': 'Un pugno di sopravvissuti diffidenti attorno al fuoco. Si recluta e si cura.',
+  'loc.checkpoint.name': 'POSTO DI BLOCCO',
+  'loc.checkpoint.flavor': 'Un posto di blocco militare. Armi e piombo, se hai con cosa pagare.',
+  'loc.market.name': 'MERCATO NERO',
+  'loc.market.flavor': 'Una carovana di sciacalli. Vendono di tutto — a modo loro.',
+  'game.arrivingAt': '→ Arrivi a: {place}',
 
   // ── Eventi in-run (Track B2) ──
   'event.night': 'ORDA NOTTURNA',
@@ -258,7 +278,7 @@ const it: Record<string, string> = {
   'survivor.soldier.name': 'Soldato',
   'survivor.soldier.ability': 'Torretta auto ogni {s} secondi',
   'survivor.explorer.name': 'Esploratore',
-  'survivor.explorer.ability': 'Taniche appaiono ogni {s}s (vs {base}s)',
+  'survivor.explorer.ability': 'Consumo carburante −{p}%',
   'survivor.mechanic.bio': "Gestiva un'autofficina in periferia: nessun motore gli ha mai detto di no.",
   'survivor.medic.bio': 'Infermiera al pronto soccorso; ai primi morsi, non è scappata.',
   'survivor.soldier.bio': "Caporale dei reparti d'assalto, congedato un mese prima del crollo.",
@@ -311,6 +331,20 @@ const it: Record<string, string> = {
   'obj.fuel_can': 'Tanica',
   'obj.particle': 'Particella',
   'obj.toxic_cloud': 'Nube tox.',
+
+  // ── Tutorial di onboarding (vedi docs/TUTORIAL.md) ─────────────────────────────
+  'settings.tutorial': 'TUTORIAL',
+  'settings.tutorialDesc': "Mostra l'introduzione ai comandi a inizio partita",
+  'tutorial.move': 'Usa  ↑ ↓  per cambiare corsia',
+  'tutorial.movePad': 'Stick sinistro per cambiare corsia',
+  'tutorial.throttle': '→  accelera  ·  ←  frena',
+  'tutorial.throttlePad': 'LT accelera  ·  LB frena',
+  'tutorial.aim': 'Muovi il mouse per mirare  ·  clic per sparare',
+  'tutorial.aimPad': 'Stick destro per mirare  ·  RT per sparare',
+  'tutorial.aimProgress': 'Abbattuti  {n}/{total}',
+  'tutorial.skip': 'ESC per saltare',
+  'tutorial.skipPad': 'START per saltare',
+  'tutorial.done': 'Pronto. Buona fortuna là fuori.',
 };
 
 export default it;

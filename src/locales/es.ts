@@ -136,6 +136,10 @@ const es: Record<string, string> = {
   'comp.tank': 'DEPÓS.',
   'comp.turret': 'TORR.',
   'comp.armor': 'BLINDAJE',
+  'comp.engineAbbr': 'MOT',
+  'comp.wheelsAbbr': 'RUE',
+  'comp.tankAbbr': 'DEP',
+  'comp.turretAbbr': 'TOR',
   'hud.armorStat': '🛡 −{p}%',
 
   'region.city': 'Ciudad en Ruinas',
@@ -180,6 +184,21 @@ const es: Record<string, string> = {
   'route.minefield.desc': 'Restos, aceite y minas por doquier. Conducir limpio = más botín.',
   'route.rest.label': 'Tramo Tranquilo',
   'route.rest.desc': 'Pocos enemigos, pocos peligros — un respiro. Pero poco dinero.',
+
+  // ── Paradas / lugares de fin de misión (Idea 1 · Track B3) ──
+  'shop.titleAt': '{place}  —  Misión {n} Completada',
+  'shop.supplies': 'SUMINISTROS',
+  'loc.garage.name': 'GARAJE',
+  'loc.garage.flavor': 'Un garaje aún en pie: luz, herramientas, un respiro.',
+  'loc.depot.name': 'DEPÓSITO',
+  'loc.depot.flavor': 'Un depósito a medio saquear. Combustible y munición, y a seguir.',
+  'loc.camp.name': 'CAMPAMENTO',
+  'loc.camp.flavor': 'Un puñado de supervivientes recelosos junto al fuego. Recluta y cura.',
+  'loc.checkpoint.name': 'PUESTO DE CONTROL',
+  'loc.checkpoint.flavor': 'Un puesto de control militar. Armas y plomo, si puedes pagar.',
+  'loc.market.name': 'MERCADO NEGRO',
+  'loc.market.flavor': 'Una caravana de carroñeros. Venden de todo — a su manera.',
+  'game.arrivingAt': '→ Llegas a: {place}',
 
   // ── Eventos en misión (Track B2) ──
   'event.night': 'HORDA NOCTURNA',
@@ -237,7 +256,7 @@ const es: Record<string, string> = {
   'survivor.soldier.name': 'Soldado',
   'survivor.soldier.ability': 'Torreta automática cada {s} segundos',
   'survivor.explorer.name': 'Explorador',
-  'survivor.explorer.ability': 'Bidones aparecen cada {s}s (vs {base}s)',
+  'survivor.explorer.ability': 'Consumo de combustible −{p}%',
   'survivor.mechanic.bio': 'Llevaba un taller de barrio: ningún motor le dijo jamás que no.',
   'survivor.medic.bio': 'Enfermera de urgencias; a las primeras mordidas, no huyó.',
   'survivor.soldier.bio': 'Cabo de las unidades de asalto, licenciado un mes antes del colapso.',
@@ -287,6 +306,20 @@ const es: Record<string, string> = {
   'obj.fuel_can': 'Bidón',
   'obj.particle': 'Partícula',
   'obj.toxic_cloud': 'Nube tóx.',
+
+  // ── Tutorial de iniciación (ver docs/TUTORIAL.md) ──────────────────────────────
+  'settings.tutorial': 'TUTORIAL',
+  'settings.tutorialDesc': 'Muestra la introducción a los controles al empezar',
+  'tutorial.move': 'Usa  ↑ ↓  para cambiar de carril',
+  'tutorial.movePad': 'Stick izquierdo para cambiar de carril',
+  'tutorial.throttle': '→  acelera  ·  ←  frena',
+  'tutorial.throttlePad': 'LT acelera  ·  LB frena',
+  'tutorial.aim': 'Mueve el ratón para apuntar  ·  clic para disparar',
+  'tutorial.aimPad': 'Stick derecho para apuntar  ·  RT para disparar',
+  'tutorial.aimProgress': 'Abatidos  {n}/{total}',
+  'tutorial.skip': 'ESC para saltar',
+  'tutorial.skipPad': 'START para saltar',
+  'tutorial.done': 'Listo. Buena suerte ahí fuera.',
 };
 
 export default es;

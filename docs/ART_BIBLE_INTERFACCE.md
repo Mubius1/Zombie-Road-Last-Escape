@@ -276,7 +276,7 @@ Niente icone importate: usiamo **caratteri** coerenti, sempre con lo stesso sign
 - **Selettore armi** (x 620, y 34): una **cifra-hotkey** (`1`–`5`) per ogni arma **posseduta**; quella attiva in **oro** `#ffee44`, le altre `#888899`. Il nome esteso dell'arma attiva resta in **arma** (y 22).
 - **PERCORSO** (x 290, y 24): label `10px` `#7777aa`; valore km `#aaaaff`; barra `110×7` su fondo `0x111122`, fill `0x4466cc`; meta "/ N km" `9px` `#445577`.
 - **Sopravvissuti** (in alto a destra, se presenti): icone testuali dei ruoli a bordo (`[M] [+] [S] [E] [$] [X] [B]` per i 7) `11px` `#cccc44`; l'**affamato** (M2 cibo) ha suffisso `!` e l'intera riga vira ambra.
-- **Componenti** (**4**, fascia `y 49–72`): per ciascuno label `10px` `#888888` + barra `120×7` su fondo `0x1a1a1a`, fill = **`comp.baseColor`** (funzionale, vedi `ART_BIBLE_OGGETTI` §4.2: motore `#44cc44`, ruote `#44aa88`, serbatoio `#ff8800`, torretta `#8899ff`).
+- **Componenti** (**4**, fascia `y 49–72`): per ciascuno **icona** (`icon_<key>`, 13px) + **sigla 3-lettere** (`comp.<key>Abbr`, `9px`, es. `MOT · RUO · SER · TOR`) + **`%`** sulla stessa riga, e barra `120×8` su fondo `0x1a1a1a`. Il **fill usa lo schema di stato UNIFICATO** della salute — `#44cc44` (≥60%) → `#ffaa00` (30–60%) → `#ff2222` (<30%) → `0x440000` (KO), con variante daltonico-safe (`CB_COMP`). **Risalto a danno:** una cella **sana è leggermente smorzata** ma **sempre leggibile** (barra alpha ~0.85, icona/sigla ~0.6–0.75 — la barra resta visibile anche nell'angolo basso-sx sotto la vignetta); appena il componente scende sotto il 60% torna a **piena opacità** e vira ambra/rosso → il danno *salta all'occhio* (il segnale forte è il **colore**, non l'invisibilità del sano) (coerente con la dottrina "stati transitori → icona + colore", `ART_BIBLE_ICONE` §1). I colori-identità per-componente di `ART_BIBLE_OGGETTI` §4.2 (motore `#44cc44`, ruote `#44aa88`, serbatoio `#ff8800`, torretta `#8899ff`) restano la firma del componente ma **non** sono più sul fill della barra (4 colori-base diversi = caos cromatico, non lettura di stato): ora l'identità la portano **icona + sigla**, il colore della barra dice lo **stato**.
 - **Armatura passiva** (M2, 5º slot `x ~642`): la corazza **non è più una barra** che degrada → **badge statico** `comp.armor` + valore `🛡 −X%` (`hud.armorStat`, `#88aaff` bold), riduzione danno da `vehicleArmorBonus`. Vedi `BALANCE §4`.
 - **Hint comandi** (basso, `y H-6`): `"↑↓/WS Muovi · MOUSE mira · CLIC spara · 1-5/Q Arma · SHIFT Scatto · F Sovracc. · C Granata"` `11px` `#888866` centrato; "0=Debug" `9px`; indicatore GOD MODE a destra `10px` `#00ff88` bold.
 
@@ -463,8 +463,8 @@ Gli hex e le taglie di questo documento **non devono divergere** dal codice. `np
 - Famiglie/ruoli narrativi §3.1 e superfici §3.2 ↔ token `UI` (la **§3.6** è la mirror verificata; §3.1/§3.2 restano descrittive).
 - Scala tipografica §3.3 ↔ `fontSize` nel codice.
 - Banda di profondità §3.4 ↔ `setDepth`/`D` in `GameScene`.
-- Geometrie HUD (barre `110×10`/`110×7`/`120×7`, fascia `0–84`) §4.2 ↔ `buildHUD`.
-- Colori indicatore componenti §4.2 ↔ `this.components` (vedi anche `ART_BIBLE_OGGETTI` §4.2).
+- Geometrie HUD (barre `110×10`/`110×7`/`120×8`, fascia `0–84`) §4.2 ↔ `buildHUD`.
+- Colori barra componenti §4.2 ↔ `compStateColor`/`CB_COMP` in `HudController` (schema di stato unificato; i colori-identità `comp.baseColor` non sono più sul fill — vedi `ART_BIBLE_OGGETTI` §4.2).
 - Soglie salute §4.2 ↔ `updateHUD`.
 
 ---

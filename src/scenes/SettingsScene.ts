@@ -530,12 +530,15 @@ export default class SettingsScene extends Phaser.Scene {
     this.pageFooter();
   }
 
-  /** Pagina GENERALE: lingua + accessibilità (daltonismo). */
+  /** Pagina GENERALE: lingua + accessibilità (daltonismo) + tutorial. */
   private buildGeneralPage() {
     this.pageHeader(t('settings.catGeneral'));
-    this.buildBrightness(H / 2 - 120); // Luminosità: prima opzione in alto
-    this.buildLanguage(H / 2 + 10);
-    this.buildColorblind(H / 2 + 130);
+    this.buildBrightness(H / 2 - 150); // Luminosità: prima opzione in alto
+    this.buildLanguage(H / 2 - 40);
+    this.buildColorblind(H / 2 + 60);
+    // Tutorial di onboarding (docs/TUTORIAL.md): toggle "mostra" = !tutorialSeen. Riusa buildToggle.
+    this.buildToggle(H / 2 + 150, t('settings.tutorial'), t('settings.tutorialDesc'),
+      () => !Settings.tutorialSeen, v => { Settings.tutorialSeen = !v; });
     this.pageFooter();
   }
 

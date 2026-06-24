@@ -21,6 +21,20 @@ const CB_COMP = { zero: 0x552200, low: 0xff7a2a, mid: 0xffd23a, base: 0x3a9bff }
 // label testuale "PRONTO/ATTIVO" è ridondanza non cromatica, come la % sulle altre barre.
 const OD_COLORS = { charge: 0xcc8a2a, ready: 0xffcc33, active: 0xfff0a0 };
 
+// Componenti HUD: larghezza barra + sigle 3-lettere (chiavi i18n).
+const COMP_BAR_W = 120;
+const COMP_ABBR: Record<ComponentKey, string> = {
+  engine: 'comp.engineAbbr', wheels: 'comp.wheelsAbbr', tank: 'comp.tankAbbr', turret: 'comp.turretAbbr',
+};
+// Colore di STATO della barra componente (band 0=KO · 1=basso · 2=medio · 3=sano): stesso schema
+// verde→ambra→rosso della salute (con variante daltonico-safe CB_COMP). Unifica la lettura — il colore
+// dice lo *stato*, non *quale* componente (quello lo portano icona + sigla). Vedi ART_BIBLE_INTERFACCE §4.2.
+function compStateColor(band: number, cb: boolean): number {
+  if (cb) return band === 0 ? CB_COMP.zero : band === 1 ? CB_COMP.low : band === 2 ? CB_COMP.mid : CB_COMP.base;
+  return band === 0 ? 0x440000 : band === 1 ? UI.hpLow : band === 2 ? UI.hpMid : UI.hpHigh;
+}
+const hexStr = (n: number) => '#' + n.toString(16).padStart(6, '0');
+
 export interface HudBuildOpts {
   missionNum: number;
   missionDist: number;
@@ -79,6 +93,8 @@ export default class HudController {
   private overdriveTxt!: Phaser.GameObjects.Text;
   private debugTxt!: Phaser.GameObjects.Text;
   private weaponSlots: { key: WeaponType; txt: Phaser.GameObjects.Text }[] = [];
+  // Celle componenti (icona + sigla + %): tracciate per il risalto a danno (alpha/colore in update()).
+  private compCells: { key: ComponentKey; icon: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; abbr: string; pctShown: number; band: number }[] = [];
   private iconTip!: Phaser.GameObjects.Text; // tooltip in hover sulle icone HUD (teach-once: il nome resta consultabile)
   private cache = { score: -1, km: -1, fuel: -1, health: -1, attached: -1, combo: '', dash: '', overdrive: '', weapon: '' };
   // Tutti gli oggetti creati da build(): tracciati per poterli distruggere su un re-build
@@ -116,7 +132,7 @@ export default class HudController {
     // I Text vengono (ri)creati a ogni build: azzera la cache così il primo update li popola.
     this.cache = { score: -1, km: -1, fuel: -1, health: -1, attached: -1, combo: '', dash: '', overdrive: '', weapon: '' };
     const s = this.scene, dW = this.designW;
-    const D = 20, BAR_W = 110, COMP_BAR_W = 120;
+    const D = 20, BAR_W = 110;
     // Blocco di destra ancorato a dW: in 4:3 (dW=800) coincide con i vecchi 620/700; in 16:9 si
     // sposta verso destra invece di addensarsi a sinistra (U1). Lo score/combo/percorso restano a sx.
     const rxMiss = dW - 180, rxAtt = dW - 100;
@@ -189,15 +205,23 @@ export default class HudController {
       this.own(Ui.text(s, dW-10,8,txt,{fontSize:'11px',color: o.hungry.length > 0 ? UI.amberSoft : '#cccc44'}).setOrigin(1,0).setDepth(D+1));
     }
 
+    // Componenti (4): icona + SIGLA 3-lettere + % e barra a schema colore UNIFICATO (verde→ambra→rosso,
+    // come salute). La sigla disambigua l'icona — il teach-once in hover non scatta in azione (mouse
+    // impegnato a mirare). Le celle sane sono SMORZATE; una cella ferita torna a piena opacità + vira
+    // ambra/rosso → il danno "salta all'occhio". Vedi ART_BIBLE_INTERFACCE §4.2 e ART_BIBLE_ICONE.
     const compKeys: ComponentKey[] = ['engine','wheels','tank','turret']; // M2: 5→4 barre (no 'armor')
+    this.compCells = [];
     compKeys.forEach((key,i) => {
       const comp = o.components[key];
       const sx = 10 + i * 158;
-      // Icona componente (engine/wheels/tank/turret → icon_<key>); nome in hover. Vedi ART_BIBLE_ICONE.
-      this.hudIcon(sx + 7, 55, `icon_${key}`, 13, comp.label, D+1);
-      this.own(Ui.box(s, sx+COMP_BAR_W/2,72,COMP_BAR_W,7,{ fill:UI.barGrey, radius:2 }).setDepth(D+1));
-      const fill = this.own(s.add.rectangle(sx,72,COMP_BAR_W,7,comp.baseColor).setOrigin(0,0.5).setDepth(D+2));
+      const icon = this.hudIcon(sx + 7, 54, `icon_${key}`, 13, comp.label, D+1); // nome completo in hover
+      const abbr = t(COMP_ABBR[key]);
+      const label = this.own(Ui.text(s, sx + 18, 54, abbr, { fontSize:'9px', color:UI.muted })
+        .setOrigin(0,0.5).setDepth(D+1));
+      this.own(Ui.box(s, sx+COMP_BAR_W/2,72,COMP_BAR_W,8,{ fill:UI.barGrey, radius:2 }).setDepth(D+1));
+      const fill = this.own(s.add.rectangle(sx,72,COMP_BAR_W,8,UI.hpHigh).setOrigin(0,0.5).setDepth(D+2));
       comp.fill = fill;
+      this.compCells.push({ key, icon, label, abbr, pctShown: -1, band: -1 });
     });
     // M2: armatura PASSIVA → badge statico (non degrada) nello slot liberato dalla 5ª barra.
     const ax = 10 + 4 * 158;
@@ -282,17 +306,25 @@ export default class HudController {
     const odStr = o.overdriveActive ? t('hud.overdriveActive') : odReady ? t('hud.overdriveReady') : '';
     if (odStr !== this.cache.overdrive) { this.overdriveTxt.setText(odStr); this.cache.overdrive = odStr; }
 
-    for (const key of Object.keys(o.components) as ComponentKey[]) {
-      const comp = o.components[key];
+    // Componenti: barra a schema di stato unificato + risalto a danno (le celle sane sono smorzate).
+    for (const cell of this.compCells) {
+      const comp = o.components[cell.key];
       if (!comp.fill) continue;
       const pct = comp.health / 100;
-      comp.fill.displayWidth = Math.max(0, pct * 120);
-      comp.fill.setFillStyle(
-        pct<=0   ? (cb?CB_COMP.zero:0x440000) :
-        pct<0.3  ? (cb?CB_COMP.low :0xff2222) :
-        pct<0.6  ? (cb?CB_COMP.mid :0xffcc00) :
-                   (cb?CB_COMP.base:comp.baseColor),
-      );
+      comp.fill.displayWidth = Math.max(0, pct * COMP_BAR_W);
+      const band = pct <= 0 ? 0 : pct < 0.3 ? 1 : pct < 0.6 ? 2 : 3;
+      const col = compStateColor(band, cb);
+      comp.fill.setFillStyle(col);
+      const healthy = band === 3;
+      // Sano = leggermente smorzato ma SEMPRE leggibile (la barra resta visibile anche nell'angolo
+      // basso-sx sotto la vignetta); ferito = piena opacità + colore caldo → il danno salta all'occhio.
+      // Il segnale forte di danno è il COLORE, non l'invisibilità del sano.
+      comp.fill.setAlpha(healthy ? 0.85 : 1);
+      cell.icon.setAlpha(healthy ? 0.6 : 1);
+      cell.label.setAlpha(healthy ? 0.75 : 1);
+      if (band !== cell.band) { cell.label.setColor(hexStr(col)); cell.band = band; } // setColor solo al cambio banda
+      const shown = Math.round(pct * 100);
+      if (shown !== cell.pctShown) { cell.label.setText(`${cell.abbr} ${shown}%`); cell.pctShown = shown; } // setText solo al cambio %
     }
   }
 

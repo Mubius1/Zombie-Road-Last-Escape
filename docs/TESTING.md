@@ -146,7 +146,7 @@ Da percorrere prima di ogni release o dopo modifiche a gameplay/scene. Niente di
 
 **Guida & mondo**
 - [ ] Il veicolo si muove su/giù; il mondo scorre verso sinistra; il veicolo resta a sinistra.
-- [ ] L'arma spara; il carburante cala; raccogliere una **tanica** lo ripristina (+30).
+- [ ] L'arma spara; il carburante cala; **non ci sono taniche su strada** (il pieno si fa al garage).
 - [ ] Lo **scatto** (dash) ha cooldown e grazia post-scatto.
 
 **Throttle — acceleratore/freno (pivot horror)**

@@ -11,6 +11,7 @@ import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { resetRunState, getRun, setRun, snapshotRun, restoreRun } from '../RunState';
 import SaveData from '../SaveData';
 import { routeNode } from '../Routes';
+import { locationForMission, accentCss } from '../Locations';
 import { buildEntityTextures, buildSurvivorTextures } from '../EntityTextures';
 import { buildIcons } from '../IconTextures';
 import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
@@ -97,6 +98,7 @@ const GRENADE_CD = 5500;        // ms di ricarica della granata (Artificiere, ta
 const GRENADE_AOE = 110;        // raggio dell'esplosione granata
 const GRENADE_DMG = 8;          // danno della granata nell'area
 const LOOTER_MONEY_MULT = 1.12; // +12% monete a fine missione (Saccheggiatore)
+const EXPLORER_FUEL_MULT = 0.8; // −20% consumo carburante (Esploratore): unica fonte di efficienza dopo la rimozione delle taniche su strada
 // M2 cibo & mantenimento: costanti condivise in GameData.FOOD (vedi BALANCE.md §8).
 // M3 rischio & permanenza dei sopravvissuti.
 const INJURY_CHANCE = 0.25;         // prob. di ferire un sopravvissuto su colpo pesante / salute bassa
@@ -117,6 +119,24 @@ const CONVOY_REWARD_FUEL = 18;       // carburante condiviso dal convoglio salva
 const MAX_AIM = Phaser.Math.DegToRad(82); // arco frontale di mira (±82° da destra)
 const KNOCK = 220;        // impulso di rinculo dei colpi (px/s, decade) — solo game-feel
 const KNOCK_DECAY = 0.84; // decadimento del rinculo per frame
+// ── Tutorial di onboarding (3 passi core, vedi docs/TUTORIAL.md) ──
+const TUT_AIM_GOAL = 3;          // zombi-scuola da abbattere nel passo "mira"
+const TUT_AIM_SPAWN_MS = 1500;   // cadenza di spawn dei bersagli-scuola (ms)
+const TUT_MOVE_MARGIN = 60;      // distanza dal centro corsia per "toccare" la fascia alta/bassa (passo "muovi")
+const TUT_ACCEL_HI = 1.25;       // soglia di throttle che conta come "ha accelerato"
+const TUT_ACCEL_LO = 0.9;        // soglia di throttle sotto cui conta come "ha rallentato/frenato"
+type TutStep = 'move' | 'throttle' | 'aim';
+/** Stato del tutorial contestuale (null quando inattivo). I prompt si adattano a tastiera/pad dal vivo. */
+interface TutorialState {
+  step: TutStep;
+  reachedHigh: boolean;   // passo "muovi": ha toccato la fascia alta
+  reachedLow: boolean;    // passo "muovi": ha toccato la fascia bassa
+  accelerated: boolean;   // passo "throttle": ha superato TUT_ACCEL_HI almeno una volta
+  kills: number;          // passo "mira": bersagli abbattuti
+  aimSpawnTimer: number;  // passo "mira": ms al prossimo bersaglio
+  prompt: Phaser.GameObjects.Text;
+  skip: Phaser.GameObjects.Text;
+}
 // ── Densità "orda" (combat reboot): sferzate periodiche di nemici oltre allo spawn regolare. ──
 // Ritmo del terrore (pivot horror): il director alterna QUIETE tese (sagome isolate) e ONDATE serrate
 // (dread → burst), invece di una pressione costante. All'inizio di ogni ondata: stinger + drone al massimo.
@@ -210,7 +230,6 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   vehicle!: Phaser.Physics.Arcade.Sprite;
   zombies!: Phaser.Physics.Arcade.Group;
   private bullets!: Phaser.Physics.Arcade.Group;
-  private fuelCans!: Phaser.Physics.Arcade.Group;
   private ammoCrates!: Phaser.Physics.Arcade.Group; // casse di munizioni sulla strada (pivot horror)
   toxicClouds!: Phaser.Physics.Arcade.Group;
   private spitProjectiles!: Phaser.Physics.Arcade.Group; // proiettili dello Sputatore (A2)
@@ -234,7 +253,6 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private rescueUntil = 0;                                // scadenza (oltre → il bloccato se ne va)
   private rescueRing: Phaser.GameObjects.Rectangle | null = null;     // riempimento barra scorta
   private rescueRingBg: Phaser.GameObjects.Rectangle | null = null;   // sfondo barra scorta
-  private lastHazardY = ROAD_CENTER;                      // corsia dell'ultimo hazard (bias taniche)
 
   private attachedZombies: AttachedZombie[] = [];
   private components!: Record<ComponentKey, ComponentData>;
@@ -343,6 +361,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private heartTimer = 0;
   private burstDreadUntil = 0;   // mentre un'ondata (ritmo dread→burst) è in corso, il drone va al massimo
   private throttle = 1;          // throttle del giocatore: 0=fermo · 1=crociera · THROTTLE_MAX=gas (modula lo scroll)
+  // Tutorial di onboarding (docs/TUTORIAL.md): null quando inattivo. Reimpostato in create() (scene.restart
+  // riusa l'istanza → l'inizializzatore di campo non rigira). Lo gestisce initTutorial/updateTutorial.
+  private tut: TutorialState | null = null;
 
   /** Larghezza dello spazio di design (800 in 4:3, maggiore in 16:9 → più strada). */
   designW = DESIGN_W;
@@ -446,7 +467,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.combo = 0; this.comboTimer = 0;
     this.dashReadyAt = 0; this.dashGraceUntil = 0;
     this.overdrive = 0; this.overdriveActiveUntil = 0; this.overdriveGlow = null;
-    this.oilUntil = 0; this.lastHazardY = ROAD_CENTER;
+    this.oilUntil = 0;
     this.stormUntil = 0; this.nextEventIdx = 0; this.lastEvent = '';
     this.eventOverlay?.destroy(); this.eventOverlay = null;
     this.eventThresholds = EVENT_FRACTIONS.map(f => f * MISSION_DIST); // Track B2: soglie eventi della missione
@@ -479,10 +500,11 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.buildHUD(missionNum);
     this.buildInput();
 
-    const fuelDelay = this.hasActiveSurvivor('explorer') ? 10000 : 15000; // taniche rare (scarsità "viaggio"): il rifornimento vero è al garage
-    this.time.addEvent({ delay: fuelDelay, callback: this.spawnFuelCan, callbackScope: this, loop: true });
+    // Niente taniche su strada (scelta di design): il carburante si ricarica SOLO al garage (+ eventi convoglio/salvataggio).
     this.time.addEvent({ delay: Math.round(HAZARD_SPAWN_INTERVAL / route.hazardMult), callback: this.spawnHazard, callbackScope: this, loop: true }); // Track B1: frequenza × nodo
     this.time.addEvent({ delay: 13000, callback: this.spawnAmmoCrate, callbackScope: this, loop: true }); // munizioni: casse rade (scarsità)
+
+    this.initTutorial(); // onboarding contestuale alla prima Missione 1 (docs/TUTORIAL.md)
 
     // Audio
     const webAudio = this.sound as Phaser.Sound.WebAudioSoundManager;
@@ -573,6 +595,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.updateFuel(dt);
     this.updateDistance(dt);
     this.updateAmbience(delta);
+    this.updateTutorial(delta);        // onboarding: avanza i passi e pilota lo spawn-scuola (gating sotto)
     this.updateZombieSpawning(delta);
     this.updateGiantSpawning(delta);
     this.boss.update(delta);
@@ -601,7 +624,6 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         if (s.active && s.visible && !(skipOil && s.texture.key === 'hazard_oil')) out.push(s);
     };
     push(this.zombies);
-    push(this.fuelCans);
     push(this.ammoCrates);
     push(this.hazards, true);
     if (this.boss?.group) push(this.boss.group);
@@ -687,7 +709,6 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.zombies         = this.physics.add.group();
     this.bullets         = this.physics.add.group();
     this.rockets         = this.physics.add.group();
-    this.fuelCans        = this.physics.add.group();
     this.ammoCrates      = this.physics.add.group();
     this.toxicClouds     = this.physics.add.group();
     this.spitProjectiles = this.physics.add.group();
@@ -700,8 +721,6 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       (b,z) => this.onBulletHitZombie(b as Phaser.Physics.Arcade.Sprite, z as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.vehicle, this.zombies,
       (_v,z) => this.onVehicleHitZombie(z as Phaser.Physics.Arcade.Sprite));
-    this.physics.add.overlap(this.vehicle, this.fuelCans,
-      (_v,f) => this.onCollectFuel(f as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.vehicle, this.ammoCrates,
       (_v,c) => this.onCollectAmmo(c as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.vehicle, this.toxicClouds,
@@ -877,6 +896,85 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.tweens.add({ targets: txt, alpha: 0, y: ROAD_TOP + 4, delay: 1400, duration: 900, onComplete: () => txt.destroy() });
   }
 
+  // ─── Tutorial di onboarding (docs/TUTORIAL.md) ─────────────────────────────────
+
+  /** Avvia il tutorial contestuale se è la prima Missione 1 mai giocata (mai visto/saltato, non Debug).
+   *  I prompt vivono nella fascia di terra sotto la strada → non coprono l'azione (ART_BIBLE_INTERFACCE). */
+  private initTutorial() {
+    this.tut = null;
+    if (this.debugRun || this.missionNumber !== 1 || Settings.tutorialSeen) return;
+    const prompt = Ui.text(this, this.designW / 2, ROAD_BOTTOM + 34, '', {
+      fontSize: '18px', fontStyle: 'bold', color: '#bcd2e8', stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(60);
+    const skip = Ui.text(this, this.designW / 2, ROAD_BOTTOM + 60, '', {
+      fontSize: '11px', color: '#7d93a8',
+    }).setOrigin(0.5).setDepth(60);
+    this.tut = { step: 'move', reachedHigh: false, reachedLow: false, accelerated: false, kills: 0, aimSpawnTimer: 600, prompt, skip };
+    this.refreshTutorialPrompt();
+  }
+
+  /** Fa avanzare i 3 passi (muovi → throttle → mira) e, nel passo mira, evoca i bersagli-scuola. */
+  private updateTutorial(delta: number) {
+    const tut = this.tut;
+    if (!tut) return;
+    if (tut.step === 'move') {
+      if (this.vehicle.y < ROAD_CENTER - TUT_MOVE_MARGIN) tut.reachedHigh = true;
+      if (this.vehicle.y > ROAD_CENTER + TUT_MOVE_MARGIN) tut.reachedLow = true;
+      if (tut.reachedHigh && tut.reachedLow) tut.step = 'throttle';
+    } else if (tut.step === 'throttle') {
+      if (this.throttle > TUT_ACCEL_HI) tut.accelerated = true;
+      // completa quando, DOPO aver accelerato, rallenta sotto la crociera (gas rilasciato o freno)
+      if (tut.accelerated && this.throttle < TUT_ACCEL_LO) { tut.step = 'aim'; tut.aimSpawnTimer = 400; }
+    } else {
+      // Rifornisce bersagli-scuola finché non raggiungi le uccisioni-obiettivo (max 2 a schermo): se uno
+      // sfugge o si aggrappa senza morire, ne arriva comunque un altro → il passo non si blocca mai.
+      if (tut.kills >= TUT_AIM_GOAL) { this.endTutorial(false); return; }
+      tut.aimSpawnTimer -= delta;
+      if (tut.aimSpawnTimer <= 0 && this.zombies.countActive(true) < 2) {
+        this.spawnTutorialZombie();
+        tut.aimSpawnTimer = TUT_AIM_SPAWN_MS;
+      }
+    }
+    this.refreshTutorialPrompt();
+  }
+
+  /** Aggiorna il testo del prompt secondo il passo e il dispositivo attivo (tastiera/pad), dal vivo. */
+  private refreshTutorialPrompt() {
+    const tut = this.tut;
+    if (!tut) return;
+    const main = tut.step === 'move'     ? t(this.padKey('tutorial.move'))
+               : tut.step === 'throttle' ? t(this.padKey('tutorial.throttle'))
+               : t(this.padKey('tutorial.aim')) + '    ' + t('tutorial.aimProgress', { n: tut.kills, total: TUT_AIM_GOAL });
+    if (tut.prompt.active && tut.prompt.text !== main) tut.prompt.setText(main);
+    const skip = t(this.padKey('tutorial.skip'));
+    if (tut.skip.active && tut.skip.text !== skip) tut.skip.setText(skip);
+  }
+
+  /** Chiude il tutorial: marca "visto" (preferenza persistente) e ripulisce i prompt.
+   *  `skipped` = saltato con ESC/START → nessun messaggio finale. */
+  private endTutorial(skipped: boolean) {
+    const tut = this.tut;
+    if (!tut) return;
+    this.tut = null;
+    Settings.tutorialSeen = true;
+    tut.skip.destroy();
+    if (skipped) { tut.prompt.destroy(); return; }
+    tut.prompt.setText(t('tutorial.done')).setColor('#9be29b');
+    this.tweens.add({ targets: tut.prompt, alpha: 0, y: tut.prompt.y - 16, delay: 1200, duration: 800,
+      onComplete: () => tut.prompt.destroy() });
+  }
+
+  /** Bersaglio-scuola del passo "mira": un common lento nell'arco frontale, facile da centrare. */
+  private spawnTutorialZombie() {
+    const stats = ZOMBIE_STATS.common;
+    const y = Phaser.Math.Between(ROAD_TOP + 40, ROAD_BOTTOM - 40);
+    const z = this.zombies.create(this.designW + 30, y, 'zombie_common') as Phaser.Physics.Arcade.Sprite;
+    z.setScale(stats.scale / OVERSAMPLE).setData('hp', this.scaledHp(stats.hp)).setData('type', 'common');
+    z.setData('rockPhase', Math.random() * 6.28);
+    z.setVelocityX(-(stats.speed + SCROLL_SPEED)).setDepth(9).setBodySize(20, 28);
+    z.play('walk_common'); z.anims.setProgress(Math.random());
+  }
+
   /** Pausa la partita e apre le Impostazioni in overlay (ESC le richiude e riprende). */
   /** Torretta rotante (overlay sopra il veicolo: ruotare il corpo cambierebbe la hitbox) + mirino. */
   private buildAim() {
@@ -930,6 +1028,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private openPauseMenu() {
     if (!this.alive || this.missionDone) return; // non in game over / fine missione
+    if (this.tut) { this.endTutorial(true); return; } // durante il tutorial ESC/START = SALTA (docs/TUTORIAL.md §5)
     if (this.scene.isPaused()) return;            // già in pausa
     this.sfx?.stopEngine();                        // silenzia il motore durante la pausa
     this.sfx?.stopAmbience();                       // ...e il drone d'angoscia
@@ -1018,7 +1117,6 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   /** Riallinea ogni frame lo scroll dei gruppi che derivano SOLO dal mondo (no locomozione propria) al throttle. */
   private applyWorldScroll() {
     const sx = -this.throttleScroll();
-    this.fuelCans.setVelocityX(sx);
     this.ammoCrates.setVelocityX(sx);
     this.hazards.setVelocityX(sx);
     this.toxicClouds.setVelocityX(sx);
@@ -1194,6 +1292,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   /** Aggiunge punteggio da un'uccisione applicando il moltiplicatore combo. */
   addKillScore(base: number) {
+    if (this.tut?.step === 'aim') this.tut.kills++; // tutorial: conta i bersagli-scuola abbattuti
     this.combo++;
     this.comboTimer = COMBO_WINDOW;
     this.score += base * this.comboMultiplier();
@@ -1204,6 +1303,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private updateFuel(dt: number) {
     if (this.debugGod) { this.fuel = this.maxFuel; return; }
+    if (this.tut) return; // carburante congelato durante il tutorial: si impara accel/freno, non la scarsità (docs/TUTORIAL.md §10)
     // Niente consumo durante il duello col boss (mondo congelato) né la celebrazione (G7 / X4):
     // col carburante che drena su un avanzamento fermo si poteva fare game over a metà boss.
     if (this.boss.active || this.boss.defeated) return;
@@ -1272,6 +1372,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
    */
   private updateZombieSpawning(delta: number) {
     if (this.boss.active || this.boss.defeated) return;
+    if (this.tut) return; // durante il tutorial gli spawn ordinari sono sospesi (lo "scuola" li gestisce updateTutorial)
     this.phaseTimer -= delta;
     if (this.phaseTimer <= 0) this.advanceSpawnPhase();
     this.spawnTimer -= delta;
@@ -1309,6 +1410,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private updateGiantSpawning(delta: number) {
     if (this.boss.active || this.boss.defeated) return; // niente gigante durante la celebrazione di vittoria (X6)
+    if (this.tut) return;                               // né durante il tutorial
     this.giantTimer -= delta;
     if (this.giantTimer <= 0) {
       this.spawnGiant();
@@ -1437,7 +1539,6 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     const clean = (g: Phaser.Physics.Arcade.Group, l: number, r: number) =>
       (g.getChildren() as Phaser.Physics.Arcade.Sprite[]).forEach(s => { if (s.active && (s.x<l||s.x>r)) s.destroy(); });
     clean(this.zombies,    -100, this.designW+100);
-    clean(this.fuelCans,   -80,  this.designW+80);
     clean(this.ammoCrates, -80,  this.designW+80);
     clean(this.toxicClouds,-80,  this.designW+80);
     clean(this.spitProjectiles, -40, this.designW+60);
@@ -1966,20 +2067,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.clearRoadObjects();
   }
 
-  private spawnFuelCan() {
-    if (!this.alive || this.missionDone) return;
-    // A1: ~40% delle taniche escono nella corsia di un hazard recente → "su o giù?" diventa rischio/ricompensa.
-    const y = Math.random() < 0.4
-      ? Phaser.Math.Clamp(this.lastHazardY + Phaser.Math.Between(-20, 20), ROAD_TOP + 22, ROAD_BOTTOM - 22)
-      : Phaser.Math.Between(ROAD_TOP + 22, ROAD_BOTTOM - 22);
-    const f = this.fuelCans.create(this.designW + 20, y, 'fuel_can') as Phaser.Physics.Arcade.Sprite;
-    // Texture sovracampionata (OS_G) → torna a scala design; hitbox invariata (frame×scala = 22×26).
-    f.setVelocityX(-SCROLL_SPEED).setDepth(6).setScale(1 / OVERSAMPLE);
-  }
-
   /** Cassa di munizioni sulla strada (pivot horror): solo se possiedi un'arma finita (la MG è ∞ → inutile). */
   private spawnAmmoCrate() {
-    if (!this.alive || this.missionDone || this.boss.active || this.boss.defeated) return;
+    if (!this.alive || this.missionDone || this.boss.active || this.boss.defeated || this.tut) return;
     if (!this.ownedWeapons.some(w => !weaponInfiniteAmmo(w))) return;
     const y = Phaser.Math.Between(ROAD_TOP + 22, ROAD_BOTTOM - 22);
     const c = this.ammoCrates.create(this.designW + 24, y, 'ammo_crate') as Phaser.Physics.Arcade.Sprite;
@@ -1988,14 +2078,13 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   // ─── Hazard di corsia (A1) ───────────────────────────────────────────────────
   private spawnHazard() {
-    if (!this.alive || this.missionDone || this.boss.active || this.boss.defeated) return;
+    if (!this.alive || this.missionDone || this.boss.active || this.boss.defeated || this.tut) return;
     const r = Math.random();
     const kind = r < 0.4 ? 'wreck' : r < 0.75 ? 'oil' : 'mine';
     const y = Phaser.Math.Between(ROAD_TOP + 24, ROAD_BOTTOM - 24);
     const h = this.hazards.create(this.designW + 30, y, `hazard_${kind}`) as Phaser.Physics.Arcade.Sprite;
     // Texture sovracampionata (OS_G) → torna a scala design; hitbox = frame×scala (auto).
     h.setVelocityX(-SCROLL_SPEED).setScale(1 / OVERSAMPLE).setDepth(kind === 'oil' ? 5 : 7).setData('kind', kind);
-    this.lastHazardY = y;
   }
 
   private onHazardHit(h: Phaser.Physics.Arcade.Sprite) {
@@ -2373,15 +2462,6 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.hitStop(30);
   }
 
-  private onCollectFuel(can: Phaser.Physics.Arcade.Sprite) {
-    if (!can.active) return;
-    can.destroy();
-    this.fuel = Math.min(this.maxFuel, this.fuel + 15); // tanica = top-up modesto (scarsità "viaggio"); il pieno si fa al garage
-    this.sfx?.playFuelPickup();
-    this.vehicle.setTint(0x88ff88);
-    this.time.delayedCall(200, () => { if (this.vehicle?.active) this.vehicle.clearTint(); });
-  }
-
   /** Raccolta cassa munizioni (pivot horror): ricarica l'arma equipaggiata (o la più scarica se hai la MG). */
   private onCollectAmmo(crate: Phaser.Physics.Arcade.Sprite) {
     if (!crate.active) return;
@@ -2552,7 +2632,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // Throttle (pivot): accelerare brucia di più, frenare di meno (ma il serbatoio drena comunque nel tempo →
     // fermarsi non è gratis). Fattore 0.5 (freno pieno) · 1.0 (crociera, bilanciamento invariato) · 1.3 (gas).
     // `fuelEff`: consumo REALISTICO per-veicolo (massa+potenza, BALANCE §3 bis) → ogni mezzo ha la sua autonomia.
-    return BASE_FUEL_DRAIN * (1 + (1 - this.components.tank.health / 100) * 2) * (0.5 + 0.5 * this.throttle) * this.fuelEff;
+    const explorerEff = this.hasActiveSurvivor('explorer') ? EXPLORER_FUEL_MULT : 1; // Esploratore: −20% consumo
+    return BASE_FUEL_DRAIN * (1 + (1 - this.components.tank.health / 100) * 2) * (0.5 + 0.5 * this.throttle) * this.fuelEff * explorerEff;
   }
 
   /** M1 motore onesto: il motore regola il RITMO DI AVANZAMENTO (accumulo di distance/km). Sano →
@@ -2601,7 +2682,6 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.sfx?.stopEngine();
     this.sfx?.stopAmbience();
     this.zombies.setVelocityX(0); this.zombies.setVelocityY(0); // anche Y per il Caricatore in carica (A2)
-    this.fuelCans.setVelocityX(0);
     this.ammoCrates.setVelocityX(0);
     this.bullets.setVelocityX(0); this.bullets.setVelocityY(0);
     this.crosshair?.setVisible(false); this.turret?.setVisible(false); // niente mirino sopra l'overlay di fine missione
@@ -2629,6 +2709,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     Ui.text(this, cx,cy-14,t('game.distanceLine', { n: distanceKm(this.distance) }),{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
     Ui.text(this, cx,cy+20,t('game.coinsEarned', { n: earned }),{fontSize:'18px',color:UI.gold}).setOrigin(0.5).setDepth(31);
     Ui.text(this, cx,cy+55,t('game.coinsTotal', { n: (getRun(this.registry, 'money') ?? 0) }),{fontSize:'15px',color:UI.goldDim}).setOrigin(0.5).setDepth(31);
+    // Idea 1 (B3): anticipa DOVE arrivi (garage o luogo specialista). missionNumber è già incrementato.
+    const stop = locationForMission(this.missionNumber);
+    Ui.text(this, cx,cy+68,t('game.arrivingAt', { place: t(stop.nameKey) }),{fontSize:'11px',color:accentCss(stop.accent)}).setOrigin(0.5).setDepth(31);
     this.outcomeText(cx, cy+82, 'game.toShop', { fontSize:'13px', color:UI.faint });
     this.addMenuReturn(cx, cy+108);
 
@@ -2655,6 +2738,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (!this.alive) return;
     this.alive = false;
     this.lostSurvivor = '';
+    // Morte durante il tutorial: togli i prompt dallo schermo MA non marcare "visto" (tutorialSeen resta
+    // false → ricompare al retry, finché non lo completi/salti). Vedi docs/TUTORIAL.md.
+    if (this.tut) { this.tut.prompt.destroy(); this.tut.skip.destroy(); this.tut = null; }
 
     SaveData.record(this.missionNumber, this.score); // aggiorna il record (G5)
 
@@ -2692,7 +2778,6 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.cameras.main.shake(500, 0.018);
     this.zombies.setVelocityX(0); this.zombies.setVelocityY(0); // anche Y: il Caricatore in carica ha velocityY persistente (A2)
     this.bullets.setVelocityX(0); this.bullets.setVelocityY(0); // anche Y: i colpi mirati hanno velocità diagonale
-    this.fuelCans.setVelocityX(0);
     this.ammoCrates.setVelocityX(0);
     this.boss.projectiles.setVelocityX(0); // niente proiettili boss sospesi sopra l'overlay (X9)
     this.boss.group.setVelocityX(0);

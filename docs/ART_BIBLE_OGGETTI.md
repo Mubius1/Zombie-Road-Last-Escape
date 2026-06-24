@@ -43,7 +43,7 @@ I tre pilastri del titolo (coesione · game feel · rifinitura) tradotti sugli o
 | Dati veicoli (prezzo, colore, bonus) | `src/GameData.ts` → `VEHICLES`, `VEHICLE_KEYS`, `VehicleData` |
 | Dati sopravvissuti (nome proprio, abilità, colore) | `src/GameData.ts` → `SURVIVORS`, `SurvivorData` (`properName`) |
 | Ritratti sopravvissuti (texture procedurali) | `src/EntityTextures.ts` → `buildSurvivorTextures()` |
-| Spawn tanica (intervallo, esploratore) | `GameScene.spawnFuelCan()` + timer in `create()` |
+| Carburante: efficienza Esploratore (−20%) | `GameScene.getEffectiveFuelDrain()` (`EXPLORER_FUEL_MULT`) — pickup tanica su strada **rimosso** |
 | Effetti dei sopravvissuti (riparazioni, torretta auto) | `GameScene.updateSurvivorEffects()` |
 | Galleria di test (veicoli a scala reale) | `src/scenes/DebugScene.ts` → `drawVehicles()` |
 | Vetrina armi/veicoli nel negozio | `src/scenes/ShopScene.ts` |
@@ -271,17 +271,17 @@ Tutto ciò che è meccanico (torrette, canne, testate, beccucci, bull bar) usa l
 
 ---
 
-### 4.8 TANICA DI CARBURANTE — `fuel_can` · **22×26** · *il pickup*
-**Concept:** il carburante è il timer della corsa. La tanica è l'**unico pickup** e deve gridare "prendimi" nel caos: rosso industriale + etichetta di pericolo gialla.
+### 4.8 TANICA DI CARBURANTE — `fuel_can` · **22×26** · *texture conservata (pickup su strada rimosso)*
+**Concept:** il carburante è il timer della corsa. La tanica **non compare più su strada** (scelta di design: il pieno si fa solo al garage) — la texture resta per la galleria debug ed eventuale riuso. La direzione visiva qui sotto vale se reintrodotta: rosso industriale + etichetta di pericolo gialla, deve gridare "prendimi" nel caos.
 
 **Palette (jerry-can, sovracampionata `OS_G` 2×):**
 corpo rosso — base `#cc3300`, mezzo-tono `#e23d12`, **luce alto-sinistra `#ff5530`**, rim `#ff8a5c` (alpha `0.55`–`0.7`), ombra `#5e1000` / `#8a1c00` / `#6e1400` · costole pressate — luce `#ff7a52` / `#ff6a44`, ombra `#7a1600` / `#701400` · piede `#4a0c00` / `#8a1c00` · collare/tappo `#7a1800` / `#a8300a` / `#cc4a1e` · **beccuccio e maniglia = kit metallo §3.2 `#4a4a52` / `#70707a` / `#26262c`** + imbocco `#9a9aa4` + specular `#a6a6b0` · **etichetta di pericolo gialla `#ffdd00` / `#ffee66` (bordo `#b89000`) + fiamma `#cc1800` / `#ff3300` / nucleo `#ffcc00`** · **ombra a terra** `#000000` alpha `0.22`.
 
 **Silhouette:** classica **tanica jerry-can** con beccuccio e maniglia in alto + costole laterali pressate = riconoscibile all'istante. L'**etichetta gialla** è il gancio di lettura a distanza; l'**ombra di contatto** la stacca dall'asfalto.
 
-**VFX:** alla raccolta → feedback di carburante (HUD) + SFX. Scorre/spawna come oggetto del mondo.
+**VFX (se reintrodotta):** alla raccolta → feedback di carburante (HUD) + SFX; scorre come oggetto del mondo.
 
-**Note di gameplay:** spawn ogni **7.5 s** (ogni **5 s** col sopravvissuto **Esploratore**). Ripristina carburante alla raccolta. **Sovracampionata** come zombie/veicolo: la texture è generata a `OVERSAMPLE`× e lo sprite torna a scala design con `setScale(1/OVERSAMPLE)` → nitidezza nativa, **hitbox invariata** (frame × scala = 22×26). Hitbox indipendente dalla grafica.
+**Note di gameplay:** **pickup su strada rimosso** — il carburante si ricarica solo al garage (item *Rifornimento*); l'**Esploratore** dà **−20%** consumo. La texture resta (galleria debug / riuso): **sovracampionata** come zombie/veicolo, generata a `OVERSAMPLE`× e riportata a scala design con `setScale(1/OVERSAMPLE)`, **hitbox invariata** (frame × scala = 22×26).
 
 ---
 
@@ -324,7 +324,7 @@ Cupola metallica (`#33333a` / `#55555c` / `#70707a`) con spuntoni `#3a3a42` e **
 | `mechanic` | Meccanico | `#44aaff` | ripara 8hp al componente peggiore ogni 5 s |
 | `medic` | Medico | `#ff6666` | rigenera 0.3 salute/s |
 | `soldier` | Soldato | `#ffcc44` | **torretta automatica**: spara un `bullet` **ciano `#00ffff`** ogni 3 s |
-| `explorer` | Esploratore | `#44ff88` | **più taniche**: spawn ogni 5 s invece di 7.5 s |
+| `explorer` | Esploratore | `#44ff88` | **consumo carburante −20%** (`EXPLORER_FUEL_MULT` 0.8) |
 
 > Il colore-token è un **accento** coerente con la palette firma; resta un'icona UI, non una creatura del mondo. Se in futuro avranno una rappresentazione a bordo del veicolo, dovrà seguire la regola di luce e il kit metallo come tutto il resto.
 

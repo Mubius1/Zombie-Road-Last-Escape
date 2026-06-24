@@ -10,6 +10,7 @@ import MenuPad, { Focusable } from '../MenuPad';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { getRun, setRun, snapshotRun } from '../RunState';
 import SaveData from '../SaveData';
+import { locationForMission, accentCss, StopLocation } from '../Locations';
 import { t } from '../i18n';
 
 const H = 600;
@@ -51,6 +52,8 @@ export default class ShopScene extends Phaser.Scene {
   private injured: string[] = []; // M3: sopravvissuti feriti (marker 🩹 + cura nel negozio)
   private missionNum = 2;
   private offeredSurvivors: SurvivorData[] = [];
+  /** Idea 1 (B3): luogo della sosta (garage o specialista). Determina titolo, atmosfera e pannelli. */
+  private location!: StopLocation;
 
   private moneyText!: Phaser.GameObjects.Text;
   // SoundManager condiviso (statico): il negozio fa scene.restart a ogni acquisto, quindi NON va
@@ -91,6 +94,10 @@ export default class ShopScene extends Phaser.Scene {
     this.missionNum     = getRun(this.registry, 'missionNumber')  ?? 2;
     this.currentWeapon  = getRun(this.registry, 'currentWeapon')  ?? 'mg';
     this.ownedWeapons   = getRun(this.registry, 'ownedWeapons')   ?? ['mg'];
+
+    // Idea 1 (B3): dove arrivi al termine degli x km. Funzione DETERMINISTICA del numero di missione
+    // (già incrementato) → stabile tra i refresh post-acquisto, niente da cachare.
+    this.location = locationForMission(this.missionNum);
 
     // Offerta reclute: calcolata UNA volta per visita REALE (non sui refresh post-azione, altrimenti
     // comprare/vendere rimescola la terna e permette il reroll gratis). Cache nel registry (non nel checkpoint).
@@ -141,24 +148,28 @@ export default class ShopScene extends Phaser.Scene {
     bg.fillRect(0, 0, this.designW, H);
     this.add.rectangle(this.designW/2, 32, this.designW, 64, UI.panelAlt);
 
-    Ui.text(this, this.designW/2, 8, t('shop.title', { n: this.missionNum - 1 }), {
-      fontSize: '20px', color: UI.greenSoft, fontStyle: 'bold',
+    // Idea 1 (B3): titolo = NOME DEL LUOGO (non più sempre "GARAGE") + riga d'atmosfera, tinti d'accento.
+    const accent = accentCss(this.location.accent);
+    Ui.text(this, this.designW/2, 6, t('shop.titleAt', { place: t(this.location.nameKey), n: this.missionNum - 1 }), {
+      fontSize: '20px', color: accent, fontStyle: 'bold',
     }).setOrigin(0.5, 0);
 
     this.moneyText = Ui.text(this, this.designW - 12, 8, t('shop.money', { n: this.money }), {
       fontSize: '18px', color: UI.gold,
     }).setOrigin(1, 0);
 
-    Ui.text(this, this.designW/2, 46, t('shop.nextMission', { n: this.missionNum }), {
-      fontSize: '12px', color: UI.faint,
+    Ui.text(this, this.designW/2, 32, t(this.location.flavorKey), {
+      fontSize: '11px', color: accent, fontStyle: 'italic',
+    }).setOrigin(0.5, 0);
+    Ui.text(this, this.designW/2, 49, t('shop.nextMission', { n: this.missionNum }), {
+      fontSize: '11px', color: UI.faint,
     }).setOrigin(0.5, 0);
 
     this.drawDivider(66);
     this.drawUpgradesPanel();
-    this.drawWeaponsPanel();
-    this.drawSurvivorsPanel();
-    this.drawDivider(418);
-    this.drawVehiclesPanel();
+    if (this.location.weapons)   this.drawWeaponsPanel();
+    if (this.location.survivors) this.drawSurvivorsPanel();
+    if (this.location.vehicles) { this.drawDivider(418); this.drawVehiclesPanel(); }
     this.drawContinueButton();
 
     // Navigazione col gamepad: tutti gli elementi attivabili raccolti durante il disegno.
@@ -175,20 +186,23 @@ export default class ShopScene extends Phaser.Scene {
 
   private drawUpgradesPanel() {
     const px = 14 + this.ox, py = 76;
+    // Idea 1 (B3): i RIFORNIMENTI (repair/refuel/restock) sono ovunque; i potenziamenti one-time solo
+    // nei luoghi con `upgrades`. Senza di essi il pannello si rietichetta "RIFORNIMENTI".
+    const showUpgrades = this.location.upgrades;
     const vName = t(VEHICLES[this.currentVehicle]?.name ?? '');
-    Ui.text(this, px, py, t('shop.upgrades'), { fontSize: '13px', color: UI.blueInfo, fontStyle: 'bold' });
-    // Sottotitolo (allineato a destra del pannello, così non tocca l'header): catalogo di QUESTO veicolo.
-    Ui.text(this, px + 434, py + 2, t('shop.upgradesFor', { v: vName }), { fontSize: '10px', color: UI.faint }).setOrigin(1, 0);
+    Ui.text(this, px, py, showUpgrades ? t('shop.upgrades') : t('shop.supplies'), { fontSize: '13px', color: UI.blueInfo, fontStyle: 'bold' });
+    // Sottotitolo (catalogo di QUESTO veicolo): solo se il luogo vende potenziamenti.
+    if (showUpgrades) Ui.text(this, px + 434, py + 2, t('shop.upgradesFor', { v: vName }), { fontSize: '10px', color: UI.faint }).setOrigin(1, 0);
 
     // 'repair' è universale; 'restock' compare solo se possiedi un'arma finita (la MG è ∞ → inutile);
-    // gli altri dipendono dal catalogo del veicolo CORRENTE.
+    // gli altri (one-time) dipendono dal catalogo del veicolo CORRENTE e solo dove `showUpgrades`.
     const catalog = (VEHICLES[this.currentVehicle]?.upgrades ?? []) as string[];
     const hasFinite = this.ownedWeapons.some(w => !weaponInfiniteAmmo(w));
     const items = SHOP_ITEMS.filter(it =>
       it.key === 'repair'  ? true :
       it.key === 'refuel'  ? this.refuelNeeded() : // universale, ma solo se c'è da rifornire
       it.key === 'restock' ? hasFinite :
-      catalog.includes(it.key));
+      showUpgrades && catalog.includes(it.key));
 
     const colW = 216, rowH = 50, boxW = 208;
     items.forEach((item, i) => {

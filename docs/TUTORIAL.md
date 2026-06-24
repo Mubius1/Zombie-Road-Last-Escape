@@ -1,6 +1,6 @@
 # 🎓 Tutorial Design — Zombie Road: Last Escape
 
-> **Stato:** v0.1 · bozza di design (non ancora implementato)
+> **Stato:** v0.2 · implementato (core 3 passi) · vivo
 > **Ambito:** il **tutorial di onboarding** — cosa si insegna al primo avvio, dove, quando e come. Solo design e UX: nessun codice qui.
 > **Cosa NON copre:** numeri di bilanciamento del director di spawn "scuola" → vanno in [`BALANCE.md`](BALANCE.md) quando si implementa; resa visiva fine dei prompt → vincolata da [`ART_BIBLE_INTERFACCE.md`](ART_BIBLE_INTERFACCE.md).
 > **Documenti fonte:** regole di gioco in [`GAME_DESIGN.md`](GAME_DESIGN.md) (core loop §1, mira-col-mouse §0); chrome/HUD in [`ART_BIBLE_INTERFACCE.md`](ART_BIBLE_INTERFACCE.md).
@@ -38,15 +38,15 @@ Il combat reboot ha molti verbi; insegnarli tutti al primo giro sommerge il nuov
 ## §2 · Dove e quando si attiva
 
 ### Trigger di primo avvio
-Oggi **non esiste** alcun flag "tutorial già visto" (verificato: nessun `tutorialSeen`/`firstRun` in `src/`). Va aggiunto — vedi §8.
+È stato aggiunto il flag `Settings.tutorialSeen` (prima non esisteva) — vedi §8.
 
-Condizione di avvio automatico:
+Condizione di avvio automatico (in `GameScene.initTutorial()`):
 
 ```
-primaVolta = (SaveData.bestMission === 0) && !Settings.tutorialSeen
+!Settings.tutorialSeen && missionNumber === 1 && !debugRun
 ```
 
-`SaveData.bestMission === 0` = nessuna missione mai completata; `Settings.tutorialSeen` = il giocatore non l'ha già visto/saltato. Entrambe vere → il tutorial parte.
+`tutorialSeen` = il giocatore non l'ha ancora visto/saltato (default `false`); `missionNumber === 1` = solo all'inizio della prima missione (un retry dopo la morte in M2+ non lo riattiva); `!debugRun` = mai nei run di prova. **Scelta:** si usa solo `tutorialSeen` (non `bestMission === 0`) così la voce "Tutorial" nelle Impostazioni (§5) lo riattiva per chiunque inizi una Nuova Partita, non solo per chi non ha mai finito una missione.
 
 ### Punto nel flusso delle scene
 Il tutorial **non è una scena nuova**: vive **dentro `GameScene`** durante la Missione 1, attivato a inizio `create()` quando `primaVolta` è vera. Motivazioni:
@@ -108,8 +108,8 @@ Il tutorial **usa lo stesso pattern**: ogni passo definisce due chiavi i18n (`tu
 
 ## §5 · Skip e replay
 
-- **Skip:** sempre disponibile. Proposta: **tieni premuto `ESC`** (tastiera) / **`START`** (pad) per saltare → setta `tutorialSeen = true`, spegne lo stato tutorial, la missione prosegue normale. Il prompt di skip è anch'esso dinamico (§4). "Tieni premuto" anziché un tap evita lo skip accidentale.
-- **Replay:** voce **"Rivedi tutorial"** in [`SettingsScene`](../src/scenes/SettingsScene.ts) che azzera `tutorialSeen` (e, se si vuole, riporta a una missione-scuola). Serve a chi l'ha saltato o vuole ripassare i comandi.
+- **Skip:** sempre disponibile. **`ESC` (tastiera) / `START` (pad) saltano il tutorial** → settano `tutorialSeen = true`, spengono lo stato tutorial, la missione prosegue normale. Il prompt di skip è dinamico (§4). **Risoluzione del conflitto pausa↔skip** (era una domanda aperta): mentre il tutorial è attivo, `ESC`/`START` significano "salta" (intercettati in `openPauseMenu()`); a tutorial concluso tornano a essere "pausa". Durante un tutorial di ~30s la pausa non serve, e chi preme ESC di solito vuole proprio uscire dal tutorial.
+- **Replay:** voce **"Tutorial"** (toggle) nella pagina *Generale* di [`SettingsScene`](../src/scenes/SettingsScene.ts): ON = `tutorialSeen=false` → ricompare alla prossima Missione 1. Riusa `buildToggle` (zero UI nuova). Serve a chi l'ha saltato o vuole ripassare i comandi.
 
 ---
 
@@ -155,22 +155,23 @@ Vincolo di progetto: **nessun letterale rivolto al giocatore nel codice** → tu
 
 ---
 
-## §9 · Checklist di implementazione (quando si parte)
+## §9 · Cosa è stato toccato (stato implementazione)
 
-Solo mappa dei tocchi previsti — nessun codice qui.
-
-1. `src/Settings.ts` — campo `tutorialSeen` + load/save (chiave `zombieRoad.settings.v1`).
-2. `src/scenes/GameScene.ts` — stato tutorial: rilevamento `primaVolta` in `create()`, macchina a 3 passi con criteri di avanzamento, softening del director di spawn mentre attivo, prompt dinamico via `usingPad`/`padKey`, gestione skip.
-3. `src/locales/*.ts` — sezione `tutorial.*` in tutte e 6 le lingue → `npm run validate:i18n`.
-4. `src/scenes/SettingsScene.ts` — voce "Rivedi tutorial".
-5. `docs/ART_BIBLE_INTERFACCE.md` — scheda "Prompt di tutorial" → `npm run validate:art` se nuovi token.
-6. Se il softening dello spawn introduce numeri-sorgente → tabella in `docs/BALANCE.md` → `npm run validate:balance`.
+- [x] `src/Settings.ts` — campo `tutorialSeen` + load/save (chiave `zombieRoad.settings.v1`).
+- [x] `src/scenes/GameScene.ts` — stato `tut`: `initTutorial()` in `create()`, `updateTutorial()` (macchina a 3 passi + spawn-scuola), `refreshTutorialPrompt()`/`endTutorial()`/`spawnTutorialZombie()`, conteggio uccisioni in `addKillScore`, gating spawn/giganti/pickup/carburante, skip in `openPauseMenu`, pulizia in `endGame`.
+- [x] `src/locales/*.ts` — sezione `tutorial.*` + `settings.tutorial*` in tutte e 6 le lingue (passa `validate:i18n`).
+- [x] `src/scenes/SettingsScene.ts` — toggle "Tutorial" in pagina *Generale* (riusa `buildToggle`, ri-spaziate le righe).
+- [ ] `docs/ART_BIBLE_INTERFACCE.md` — scheda "Prompt di tutorial" (posizione/taglia/colore/tween): **da aggiungere** se si rifinisce la resa visiva. Per ora i prompt usano `Ui.text` con palette chrome blu/grigia, fascia di terra sotto la strada (`ROAD_BOTTOM+34/+60`), depth 60.
+- [x] `docs/BALANCE.md` — **non serve**: le costanti del tutorial sono game-feel locale, non bilanciamento (vedi §10).
 
 ---
 
-## §10 · Domande aperte (da decidere a implementazione)
+## §10 · Decisioni (domande aperte risolte in implementazione)
 
-- **N zombi** del passo 3: 3 o 5? (Tarare sul fun, non sulla durata.)
-- **Criterio movimento** passo 1: "tocca entrambe le fasce" vs "input cumulativo"? La prima è più leggibile come obiettivo.
-- **Skip su gamepad:** `START` tenuto premuto va in conflitto con la pausa (`START`)? Valutare un pulsante alternativo o un tap-vs-hold chiaro.
-- **Carburante durante il tutorial:** congelato del tutto, o solo rallentato per accennare la risorsa senza punire?
+- **N zombi** del passo 3: **3** (`TUT_AIM_GOAL`). Tarato sul fun; alzabile lì.
+- **Criterio movimento** passo 1: **"tocca entrambe le fasce"** (alta e bassa, soglia `TUT_MOVE_MARGIN=60` dal centro corsia) — obiettivo più leggibile dell'input cumulativo.
+- **Skip su gamepad:** risolto — durante il tutorial `START`/`ESC` = salta (vedi §5); nessun conflitto con la pausa, che torna attiva a tutorial finito.
+- **Carburante durante il tutorial:** **congelato** (`updateFuel` esce subito se `tut` attivo). Il passo 2 insegna la *meccanica* accel/freno, non la *scarsità* (che resta una scoperta della missione vera).
+
+### Costanti (in `GameScene.ts`)
+`TUT_AIM_GOAL=3` · `TUT_AIM_SPAWN_MS=1500` · `TUT_MOVE_MARGIN=60` · `TUT_ACCEL_HI=1.25` · `TUT_ACCEL_LO=0.9`. Sono valori di *game-feel del tutorial* (non bilanciamento della campagna) → non in `BALANCE.md`.

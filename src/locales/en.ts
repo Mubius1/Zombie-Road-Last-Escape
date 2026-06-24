@@ -136,6 +136,10 @@ const en: Record<string, string> = {
   'comp.tank': 'TANK',
   'comp.turret': 'TURRET',
   'comp.armor': 'ARMOR',
+  'comp.engineAbbr': 'ENG',
+  'comp.wheelsAbbr': 'WHL',
+  'comp.tankAbbr': 'TNK',
+  'comp.turretAbbr': 'TUR',
   'hud.armorStat': '🛡 −{p}%',
 
   'region.city': 'Ruined City',
@@ -180,6 +184,21 @@ const en: Record<string, string> = {
   'route.minefield.desc': 'Wrecks, oil and mines everywhere. Clean driving = extra loot.',
   'route.rest.label': 'Quiet Stretch',
   'route.rest.desc': 'Few enemies, few hazards — a breather. But little money.',
+
+  // ── Stops / end-of-mission locations (Idea 1 · Track B3) ──
+  'shop.titleAt': '{place}  —  Mission {n} Complete',
+  'shop.supplies': 'SUPPLIES',
+  'loc.garage.name': 'GARAGE',
+  'loc.garage.flavor': 'A garage still standing: light, tools, a moment to breathe.',
+  'loc.depot.name': 'DEPOT',
+  'loc.depot.flavor': 'A half-looted depot. Fuel and ammo, then move on.',
+  'loc.camp.name': 'CAMP',
+  'loc.camp.flavor': 'A handful of wary survivors around a fire. Recruit and patch up.',
+  'loc.checkpoint.name': 'CHECKPOINT',
+  'loc.checkpoint.flavor': 'A military checkpoint. Guns and lead, if you can pay.',
+  'loc.market.name': 'BLACK MARKET',
+  'loc.market.flavor': 'A caravan of scavengers. They sell everything — their way.',
+  'game.arrivingAt': '→ Arriving at: {place}',
 
   // ── In-run events (Track B2) ──
   'event.night': 'NIGHT HORDE',
@@ -237,7 +256,7 @@ const en: Record<string, string> = {
   'survivor.soldier.name': 'Soldier',
   'survivor.soldier.ability': 'Auto turret every {s} seconds',
   'survivor.explorer.name': 'Explorer',
-  'survivor.explorer.ability': 'Fuel cans appear every {s}s (vs {base}s)',
+  'survivor.explorer.ability': 'Fuel consumption −{p}%',
   'survivor.mechanic.bio': 'Ran a backstreet garage — no engine ever told him no.',
   'survivor.medic.bio': "An ER nurse; when the first bites came in, she didn't run.",
   'survivor.soldier.bio': 'An assault-unit corporal, discharged a month before the collapse.',
@@ -287,6 +306,20 @@ const en: Record<string, string> = {
   'obj.fuel_can': 'Fuel can',
   'obj.particle': 'Particle',
   'obj.toxic_cloud': 'Toxic cloud',
+
+  // ── Onboarding tutorial (see docs/TUTORIAL.md) ─────────────────────────────────
+  'settings.tutorial': 'TUTORIAL',
+  'settings.tutorialDesc': 'Show the controls intro at the start of a game',
+  'tutorial.move': 'Use  ↑ ↓  to change lane',
+  'tutorial.movePad': 'Left stick to change lane',
+  'tutorial.throttle': '→  accelerate  ·  ←  brake',
+  'tutorial.throttlePad': 'LT to accelerate  ·  LB to brake',
+  'tutorial.aim': 'Move the mouse to aim  ·  click to shoot',
+  'tutorial.aimPad': 'Right stick to aim  ·  RT to shoot',
+  'tutorial.aimProgress': 'Killed  {n}/{total}',
+  'tutorial.skip': 'ESC to skip',
+  'tutorial.skipPad': 'START to skip',
+  'tutorial.done': 'Ready. Good luck out there.',
 };
 
 export default en;

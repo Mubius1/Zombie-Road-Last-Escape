@@ -136,6 +136,10 @@ const de: Record<string, string> = {
   'comp.tank': 'TANK',
   'comp.turret': 'TURM',
   'comp.armor': 'PANZER',
+  'comp.engineAbbr': 'MOT',
+  'comp.wheelsAbbr': 'RÄD',
+  'comp.tankAbbr': 'TNK',
+  'comp.turretAbbr': 'TRM',
   'hud.armorStat': '🛡 −{p}%',
 
   'region.city': 'Zerstörte Stadt',
@@ -180,6 +184,21 @@ const de: Record<string, string> = {
   'route.minefield.desc': 'Wracks, Öl und Minen überall. Sauberes Fahren = mehr Beute.',
   'route.rest.label': 'Ruhige Etappe',
   'route.rest.desc': 'Wenige Gegner, wenige Hindernisse — zum Durchatmen. Aber wenig Geld.',
+
+  // ── Halte / Orte am Missionsende (Idea 1 · Track B3) ──
+  'shop.titleAt': '{place}  —  Mission {n} abgeschlossen',
+  'shop.supplies': 'NACHSCHUB',
+  'loc.garage.name': 'WERKSTATT',
+  'loc.garage.flavor': 'Eine Werkstatt, die noch steht: Licht, Werkzeug, ein Moment zum Atmen.',
+  'loc.depot.name': 'DEPOT',
+  'loc.depot.flavor': 'Ein halb geplündertes Depot. Treibstoff und Munition, dann weiter.',
+  'loc.camp.name': 'LAGER',
+  'loc.camp.flavor': 'Eine Handvoll misstrauischer Überlebender am Feuer. Anwerben und verarzten.',
+  'loc.checkpoint.name': 'KONTROLLPUNKT',
+  'loc.checkpoint.flavor': 'Ein militärischer Kontrollpunkt. Waffen und Blei, wenn du zahlen kannst.',
+  'loc.market.name': 'SCHWARZMARKT',
+  'loc.market.flavor': 'Eine Karawane von Aasgeiern. Sie verkaufen alles — auf ihre Art.',
+  'game.arrivingAt': '→ Ankunft bei: {place}',
 
   // ── Missions-Events (Track B2) ──
   'event.night': 'NACHTHORDE',
@@ -237,7 +256,7 @@ const de: Record<string, string> = {
   'survivor.soldier.name': 'Soldat',
   'survivor.soldier.ability': 'Auto-Turm alle {s} Sekunden',
   'survivor.explorer.name': 'Kundschafter',
-  'survivor.explorer.ability': 'Kanister alle {s}s (statt {base}s)',
+  'survivor.explorer.ability': 'Kraftstoffverbrauch −{p}%',
   'survivor.mechanic.bio': 'Führte eine Hinterhof-Werkstatt — kein Motor sagte je nein zu ihm.',
   'survivor.medic.bio': 'Notaufnahme-Schwester; als die ersten Bisse kamen, floh sie nicht.',
   'survivor.soldier.bio': 'Korporal einer Sturmeinheit, einen Monat vor dem Kollaps entlassen.',
@@ -287,6 +306,20 @@ const de: Record<string, string> = {
   'obj.fuel_can': 'Kanister',
   'obj.particle': 'Partikel',
   'obj.toxic_cloud': 'Giftwolke',
+
+  // ── Einführungs-Tutorial (siehe docs/TUTORIAL.md) ──────────────────────────────
+  'settings.tutorial': 'TUTORIAL',
+  'settings.tutorialDesc': 'Zeigt die Steuerungs-Einführung beim Start',
+  'tutorial.move': 'Mit  ↑ ↓  die Spur wechseln',
+  'tutorial.movePad': 'Linker Stick zum Spurwechsel',
+  'tutorial.throttle': '→  Gas  ·  ←  Bremse',
+  'tutorial.throttlePad': 'LT Gas  ·  LB Bremse',
+  'tutorial.aim': 'Maus bewegen zum Zielen  ·  Klick zum Schießen',
+  'tutorial.aimPad': 'Rechter Stick zum Zielen  ·  RT zum Schießen',
+  'tutorial.aimProgress': 'Erledigt  {n}/{total}',
+  'tutorial.skip': 'ESC zum Überspringen',
+  'tutorial.skipPad': 'START zum Überspringen',
+  'tutorial.done': 'Bereit. Viel Glück da draußen.',
 };
 
 export default de;

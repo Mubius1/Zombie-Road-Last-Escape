@@ -136,6 +136,10 @@ const fr: Record<string, string> = {
   'comp.tank': 'RÉSERV.',
   'comp.turret': 'TOUR.',
   'comp.armor': 'BLINDAGE',
+  'comp.engineAbbr': 'MOT',
+  'comp.wheelsAbbr': 'ROU',
+  'comp.tankAbbr': 'RÉS',
+  'comp.turretAbbr': 'TOU',
   'hud.armorStat': '🛡 −{p}%',
 
   'region.city': 'Ville en Ruines',
@@ -180,6 +184,21 @@ const fr: Record<string, string> = {
   'route.minefield.desc': 'Épaves, huile et mines partout. Conduite propre = butin en plus.',
   'route.rest.label': 'Tronçon Calme',
   'route.rest.desc': "Peu d'ennemis, peu d'obstacles — une pause. Mais peu d'argent.",
+
+  // ── Haltes / lieux de fin de mission (Idea 1 · Track B3) ──
+  'shop.titleAt': '{place}  —  Mission {n} terminée',
+  'shop.supplies': 'RAVITAILLEMENT',
+  'loc.garage.name': 'GARAGE',
+  'loc.garage.flavor': "Un garage encore debout : lumière, outils, un instant de répit.",
+  'loc.depot.name': 'DÉPÔT',
+  'loc.depot.flavor': "Un dépôt à moitié pillé. Carburant et munitions, puis on repart.",
+  'loc.camp.name': 'CAMPEMENT',
+  'loc.camp.flavor': "Une poignée de survivants méfiants autour d'un feu. On recrute et on soigne.",
+  'loc.checkpoint.name': 'POSTE DE CONTRÔLE',
+  'loc.checkpoint.flavor': "Un poste de contrôle militaire. Armes et plomb, si tu peux payer.",
+  'loc.market.name': 'MARCHÉ NOIR',
+  'loc.market.flavor': "Une caravane de charognards. Ils vendent de tout — à leur façon.",
+  'game.arrivingAt': '→ Arrivée à : {place}',
 
   // ── Événements en mission (Track B2) ──
   'event.night': 'HORDE NOCTURNE',
@@ -237,7 +256,7 @@ const fr: Record<string, string> = {
   'survivor.soldier.name': 'Soldat',
   'survivor.soldier.ability': 'Tourelle auto toutes les {s} secondes',
   'survivor.explorer.name': 'Explorateur',
-  'survivor.explorer.ability': 'Bidons toutes les {s}s (au lieu de {base}s)',
+  'survivor.explorer.ability': 'Consommation de carburant −{p}%',
   'survivor.mechanic.bio': 'Tenait un garage de quartier : aucun moteur ne lui a résisté.',
   'survivor.medic.bio': "Infirmière aux urgences ; aux premières morsures, elle n'a pas fui.",
   'survivor.soldier.bio': "Caporal des unités d'assaut, réformé un mois avant l'effondrement.",
@@ -287,6 +306,20 @@ const fr: Record<string, string> = {
   'obj.fuel_can': 'Bidon',
   'obj.particle': 'Particule',
   'obj.toxic_cloud': 'Nuage tox.',
+
+  // ── Tutoriel d'initiation (voir docs/TUTORIAL.md) ──────────────────────────────
+  'settings.tutorial': 'TUTORIEL',
+  'settings.tutorialDesc': "Affiche l'intro des commandes en début de partie",
+  'tutorial.move': 'Utilise  ↑ ↓  pour changer de voie',
+  'tutorial.movePad': 'Stick gauche pour changer de voie',
+  'tutorial.throttle': '→  accélère  ·  ←  freine',
+  'tutorial.throttlePad': 'LT pour accélérer  ·  LB pour freiner',
+  'tutorial.aim': 'Bouge la souris pour viser  ·  clic pour tirer',
+  'tutorial.aimPad': 'Stick droit pour viser  ·  RT pour tirer',
+  'tutorial.aimProgress': 'Éliminés  {n}/{total}',
+  'tutorial.skip': 'ESC pour passer',
+  'tutorial.skipPad': 'START pour passer',
+  'tutorial.done': 'Prêt. Bonne chance dehors.',
 };
 
 export default fr;

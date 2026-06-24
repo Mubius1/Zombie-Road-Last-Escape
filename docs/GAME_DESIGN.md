@@ -55,7 +55,7 @@ Questo documento è la **fonte di verità** del *design del gioco*: cosa fa il g
 1. **Missione** (`GameScene`): il veicolo è ancorato a sinistra (`VEHICLE_X = 150`) e si muove solo in verticale dentro la strada. Il mondo scorre, gli zombi arrivano da destra. **Miri col mouse** (la torretta segue il puntatore nell'arco frontale) e spari verso il mirino tenendo premuto. Avanzi accumulando **distanza**.
 2. **Boss** all'**82%** della distanza di missione: mentre il boss è vivo l'avanzamento si congela e gli spawn ordinari si fermano — è un duello. *(Disattivato: con `BOSSES_ENABLED = false` non appare e l'avanzamento prosegue.)*
 3. **Missione completata** (a flag attivo: boss sconfitto → completamento; **a flag spento: al raggiungimento di `MISSION_DIST`**): converti il punteggio in **monete**, salvi lo stato dei componenti, passi al **Negozio**.
-4. **Negozio** (`ShopScene` — "GARAGE"): spendi le monete in riparazioni, potenziamenti, armi, veicoli; recluti **un** sopravvissuto (max 1 a sosta) tra 3 offerti, compri **razioni** e **curi** i feriti. Poi parte la missione successiva.
+4. **Sosta** (`ShopScene`): al termine degli x km non si arriva **sempre** al garage — si approda a **uno di più luoghi** (Idea 1 · Track B3), ognuno con un'identità e un sottoinsieme di servizi diverso (vedi §9). I **rifornimenti essenziali** (riparazione, carburante, munizioni) sono disponibili **ovunque**; variano gli extra (potenziamenti, armi, sopravvissuti, veicoli). Al **GARAGE** (la sosta completa) spendi le monete in riparazioni, potenziamenti, armi, veicoli; recluti **un** sopravvissuto (max 1 a sosta) tra 3 offerti, compri **razioni** e **curi** i feriti. Poi parte la missione successiva.
 5. **Loop a cicli**: regioni e boss ciclano (§3). Completare il ciclo delle **7 regioni** dà una **vittoria di ciclo** (schermata dedicata), poi si prosegue in **endless+** con difficoltà crescente (§10). L'obiettivo di lungo termine resta il **record** di missione/punteggio (salvato, §11).
 
 ---
@@ -205,7 +205,7 @@ Il veicolo è definito da `VEHICLES[key]` (salute/armatura/velocità/cadenza bas
 ## §7 · Risorse del giocatore
 
 - **Salute** (`100 + bonus veicolo`): a 0 → *"Veicolo distrutto!"* (game over).
-- **Carburante** (`100`, +30 con upgrade serbatoio): cala di continuo (`BASE_FUEL_DRAIN`), più in fretta se il serbatoio è danneggiato; a 0 → *"Carburante esaurito!"* (game over). Si ricarica con le **taniche** (+30) che appaiono ogni 7,5 s (ogni 5 s con l'Esploratore).
+- **Carburante** (`100`, +30 con upgrade serbatoio): cala di continuo (`BASE_FUEL_DRAIN`), più in fretta se il serbatoio è danneggiato; a 0 → *"Carburante esaurito!"* (game over). **Non si ricarica su strada** (niente taniche): il pieno si fa **solo al garage** (item *Rifornimento*), più qualche extra dagli eventi (convoglio/salvataggio). L'**Esploratore** riduce il consumo del 20%.
 - **Punteggio / Combo**: ogni uccisione dà punti × moltiplicatore combo. La **combo** sale a ogni kill entro 2,5 s dal precedente e moltiplica fino a **×5** (cap a 13 kill di fila, vedi [BALANCE §2](BALANCE.md#2--economia--flusso-delle-monete)). Il punteggio è la valuta-sorgente: a fine missione diventa **monete** (= ⌊punteggio/8⌋). Il **boss** dà inoltre una **ricompensa in monete diretta** (accreditata subito) **più** +500 punteggio — due accrediti distinti a fine missione.
 - **Sovraccarico (Overdrive)** (A3): una barra che si carica dalle uccisioni in combo. A barra piena, **F** scatena ~3 s di cadenza di fuoco ×2, veicolo-ariete (il contatto uccide senza danneggiare i componenti) e un'onda d'urto frontale. È la valvola **attiva** legata alla combo — premia l'aggressività e aggiunge un secondo verbo oltre allo Scatto. Numeri in [BALANCE §1](BALANCE.md#1--costanti-di-missione-).
 - **Monete (★)**: spese solo al Negozio. **Non** sopravvivono al game over.
@@ -231,7 +231,21 @@ Le armi si **comprano** una volta e si **equipaggiano** liberamente (tasti 1–5
 
 ## §9 · Progressione e meta (Negozio)
 
-Tra le missioni, nel **GARAGE** (`ShopScene`):
+### Soste — dove arrivi a fine missione (Idea 1 · Track B3)
+
+La sosta tra una missione e l'altra (`ShopScene`) non è più sempre il garage: si approda a **uno di più luoghi**, scelto in modo **deterministico** dalla regione appena percorsa (learnable, non casuale in questa prima versione; dati in `src/Locations.ts`). Ogni luogo ha un **nome**, un **accento di colore**, una riga d'**atmosfera** e un **sottoinsieme di servizi**. **Regola d'equità:** i **rifornimenti essenziali** — *Ripara tutto*, *Rifornimento carburante*, *Rifornimento munizioni* — sono disponibili in **ogni** luogo (nessun softlock di sopravvivenza); variano solo gli **extra**.
+
+| Luogo | Servizi extra (oltre ai rifornimenti) | Identità |
+|---|---|---|
+| **Garage** | potenziamenti · armi · sopravvissuti · veicoli | la sosta **completa** (= il vecchio negozio) |
+| **Deposito** | — (solo rifornimenti) | pit-stop spiccio: carburante e munizioni |
+| **Accampamento** | sopravvissuti (recluta · cura · razioni) | la gente: si recluta e ci si cura |
+| **Posto di blocco** | armi | l'armeria militare |
+| **Mercato nero** | potenziamenti · armi · veicoli | il bazar dell'attrezzatura (no sopravvissuti) |
+
+> Ciclo per regione (0..6): `garage · deposito · mercato · accampamento · garage · posto-di-blocco · mercato` → il **garage ricorre ~ogni 3-4 soste**, mai più di 3 soste-specialiste di distanza. Una selezione **seedabile/varia** (e i *twist* attivi della speculazione originale — assedio, pedaggio, saccheggio sotto minaccia) restano estensioni possibili sopra questa base.
+
+Al **GARAGE** (e in generale, secondo i servizi del luogo):
 
 - **Potenziamenti** (una tantum): Corazza rinforzata (−20% danno), Motore potenziato (+15% velocità), Torretta migliorata (+25% cadenza), Serbatoio extra (+30 carburante max). Più **Ripara tutto** (ripetibile): componenti → 100%, e **Rifornimento munizioni** (ripetibile, pivot horror): ricarica al massimo le armi finite (compare solo se ne possiedi una).
 - **Armi**: acquisto + equipaggiamento.
@@ -243,7 +257,7 @@ Tra le missioni, nel **GARAGE** (`ShopScene`):
 | **Meccanico** | +8 salute al componente messo peggio, ogni 5 s |
 | **Medico** | rigenera 0,3 salute/s (e dimezza il costo di cura dei feriti) |
 | **Soldato** | colpo automatico verso lo zombi più vicino, ogni 1,6 s |
-| **Esploratore** | taniche di carburante ogni 5 s (anziché 7,5 s) |
+| **Esploratore** | consumo carburante −20% |
 | **Saccheggiatore** | +12% monete a fine missione |
 | **Cecchino** | colpo forte allo zombi più resistente davanti, ogni 2,2 s |
 | **Artificiere** | tasto **C**: lancia una granata ad area a ricarica |

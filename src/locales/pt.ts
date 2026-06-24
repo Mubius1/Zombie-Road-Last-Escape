@@ -136,6 +136,10 @@ const pt: Record<string, string> = {
   'comp.tank': 'TANQUE',
   'comp.turret': 'TORRE',
   'comp.armor': 'BLINDAGEM',
+  'comp.engineAbbr': 'MOT',
+  'comp.wheelsAbbr': 'ROD',
+  'comp.tankAbbr': 'TNQ',
+  'comp.turretAbbr': 'TOR',
   'hud.armorStat': '🛡 −{p}%',
 
   'region.city': 'Cidade em Ruínas',
@@ -180,6 +184,21 @@ const pt: Record<string, string> = {
   'route.minefield.desc': 'Destroços, óleo e minas por toda parte. Condução limpa = mais espólio.',
   'route.rest.label': 'Trecho Calmo',
   'route.rest.desc': 'Poucos inimigos, poucos perigos — um respiro. Mas pouco dinheiro.',
+
+  // ── Paragens / locais de fim de missão (Idea 1 · Track B3) ──
+  'shop.titleAt': '{place}  —  Missão {n} Concluída',
+  'shop.supplies': 'SUPRIMENTOS',
+  'loc.garage.name': 'OFICINA',
+  'loc.garage.flavor': 'Uma oficina ainda de pé: luz, ferramentas, um instante para respirar.',
+  'loc.depot.name': 'DEPÓSITO',
+  'loc.depot.flavor': 'Um depósito meio saqueado. Combustível e munição, depois segue.',
+  'loc.camp.name': 'ACAMPAMENTO',
+  'loc.camp.flavor': 'Um punhado de sobreviventes desconfiados à volta do fogo. Recruta e trata.',
+  'loc.checkpoint.name': 'POSTO DE CONTROLO',
+  'loc.checkpoint.flavor': 'Um posto de controlo militar. Armas e chumbo, se tiveres com que pagar.',
+  'loc.market.name': 'MERCADO NEGRO',
+  'loc.market.flavor': 'Uma caravana de saqueadores. Vendem de tudo — à maneira deles.',
+  'game.arrivingAt': '→ Chegas a: {place}',
 
   // ── Eventos na missão (Track B2) ──
   'event.night': 'HORDA NOTURNA',
@@ -237,7 +256,7 @@ const pt: Record<string, string> = {
   'survivor.soldier.name': 'Soldado',
   'survivor.soldier.ability': 'Torre automática a cada {s} segundos',
   'survivor.explorer.name': 'Explorador',
-  'survivor.explorer.ability': 'Galões aparecem a cada {s}s (vs {base}s)',
+  'survivor.explorer.ability': 'Consumo de combustível −{p}%',
   'survivor.mechanic.bio': 'Tinha uma oficina de bairro: nenhum motor jamais lhe disse não.',
   'survivor.medic.bio': 'Enfermeira da emergência; às primeiras mordidas, não fugiu.',
   'survivor.soldier.bio': 'Cabo das unidades de assalto, dispensado um mês antes do colapso.',
@@ -287,6 +306,20 @@ const pt: Record<string, string> = {
   'obj.fuel_can': 'Galão',
   'obj.particle': 'Partícula',
   'obj.toxic_cloud': 'Nuvem tóx.',
+
+  // ── Tutorial de iniciação (ver docs/TUTORIAL.md) ───────────────────────────────
+  'settings.tutorial': 'TUTORIAL',
+  'settings.tutorialDesc': 'Mostra a introdução aos controlos no início',
+  'tutorial.move': 'Usa  ↑ ↓  para mudar de faixa',
+  'tutorial.movePad': 'Stick esquerdo para mudar de faixa',
+  'tutorial.throttle': '→  acelera  ·  ←  freia',
+  'tutorial.throttlePad': 'LT acelera  ·  LB freia',
+  'tutorial.aim': 'Move o mouse para mirar  ·  clique para disparar',
+  'tutorial.aimPad': 'Stick direito para mirar  ·  RT para disparar',
+  'tutorial.aimProgress': 'Abatidos  {n}/{total}',
+  'tutorial.skip': 'ESC para saltar',
+  'tutorial.skipPad': 'START para saltar',
+  'tutorial.done': 'Pronto. Boa sorte lá fora.',
 };
 
 export default pt;
