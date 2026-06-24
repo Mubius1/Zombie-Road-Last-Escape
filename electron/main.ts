@@ -7,8 +7,16 @@
 // in `dist-electron/` che contiene un `package.json` con `{"type":"commonjs"}` (scritto dallo script
 // `build:electron`), così Node/Electron interpreta i `.js` lì come CommonJS NONOSTANTE il package
 // root sia `"type":"module"` → `require`/`__dirname` disponibili, nessun attrito con electron-builder.
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, Menu, shell } from 'electron';
+import { existsSync } from 'node:fs';
 import * as path from 'node:path';
+
+// Icona della finestra. In DEV l'eseguibile è il binario generico di Electron (icona di default):
+// la impostiamo esplicitamente leggendola da `build/icon.ico` (generata da `npm run icon`, 100%
+// procedurale — vedi scripts/generate-icon.mjs). In PROD l'icona è già "cotta" nell'.exe da
+// electron-builder (electron-builder.yml → win.icon), quindi qui il file `../build` non esiste e
+// la guard `existsSync` semplicemente non imposta nulla. `__dirname` in dev = `dist-electron/`.
+const ICON_PATH = path.join(__dirname, '..', 'build', 'icon.ico');
 
 // In dev il launcher (electron/dev.mjs) imposta queste env prima di avviarci.
 // In produzione non sono settate → carichiamo i file statici da `file://`.
@@ -27,6 +35,8 @@ function createWindow(): void {
     fullscreenable: true,
     // Sfondo nero: il gioco è scuro → evita il flash bianco prima del primo paint.
     backgroundColor: '#000000',
+    // Icona finestra/taskbar in dev (in prod l'.exe ha già la sua, vedi ICON_PATH sopra).
+    ...(existsSync(ICON_PATH) ? { icon: ICON_PATH } : {}),
     // Non mostrare finché il contenuto non è pronto (vedi 'ready-to-show').
     show: false,
     autoHideMenuBar: true,
@@ -80,6 +90,11 @@ if (!gotLock) {
   });
 
   void app.whenReady().then(() => {
+    // Niente menu applicazione: il gioco usa il proprio HUD/pausa e `Alt` non deve
+    // richiamare alcuna barra nativa. `autoHideMenuBar` da solo la nasconde ma la lascia
+    // evocabile con Alt → la rimuoviamo del tutto a livello globale.
+    Menu.setApplicationMenu(null);
+
     createWindow();
 
     // macOS è fuori scopo, ma il pattern è innocuo su Windows: ricrea la finestra se serve.

@@ -17,9 +17,10 @@
     "build": "npm run validate:art && npm run validate:balance && npm run validate:audio && npm run validate:i18n && tsc && vite build",
     "preview": "vite preview",
     "dev:desktop": "node electron/dev.mjs",
+    "icon": "node scripts/generate-icon.mjs",
     "build:electron": "tsc -p tsconfig.electron.json && node electron/finalize-cjs.mjs",
     "build:desktop": "npm run build && npm run build:electron",
-    "dist": "npm run build:desktop && electron-builder --win --config electron-builder.yml"
+    "dist": "npm run icon && npm run build:desktop && electron-builder --win --config electron-builder.yml"
   },
   "dependencies": {
     "phaser": "^3.90.0"

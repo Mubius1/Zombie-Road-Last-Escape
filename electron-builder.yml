@@ -26,11 +26,10 @@ files:
 win:
   target:
     - nsis
-  # ICONA: placeholder/default per ora. La regola "niente PNG" del progetto riguarda la
-  # GRAFICA DI GIOCO, non il packaging. Se non si fornisce un'icona, electron-builder usa
-  # quella di default di Electron. DECISIONE DA CONFERMARE: fornire un build/icon.ico
-  # dedicato (256x256) prima della distribuzione. Per abilitarlo, decommenta:
-  # icon: build/icon.ico
+  # ICONA: procedurale, generata da `npm run icon` (scripts/generate-icon.mjs) → build/icon.ico
+  # (multi-size 16..256, geometria calcolata da codice, niente asset esterni disegnati a mano).
+  # La regola "niente PNG" del progetto riguarda la GRAFICA DI GIOCO, non il packaging desktop.
+  icon: build/icon.ico
 
 nsis:
   oneClick: false
