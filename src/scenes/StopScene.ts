@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { getRun, setRun, snapshotRun } from '../RunState';
-import { locationForMission, accentCss, STOP_LOCATIONS, StopLocation } from '../Locations';
-import { renderHub, buildHubTextures, buildHubCar, dropShadow, HUB_WALK, CAR_GY, CAR_FH } from '../HubEnvironment';
+import { locationForLeg, accentCss, STOP_LOCATIONS, StopLocation } from '../Locations';
+import { MORALE, FOOD, SURVIVORS } from '../GameData';
+import { SURVIVOR_ARCS } from '../Convoy';
+import { renderHub, buildHubTextures, buildHubCar, buildCrewFigure, dropShadow, HUB_WALK, CAR_GY, CAR_FH } from '../HubEnvironment';
 import { buildEntityTextures } from '../EntityTextures';
 import Shadows from '../Shadows';
 import SaveData from '../SaveData';
@@ -17,7 +19,13 @@ const PAD_DEADZONE = 0.28;
 const WALK_SPEED = 150;          // px/s (spazio di design)
 const INTERACT_RADIUS = 80;      // distanza per attivare una stazione
 
-interface Station { x: number; y: number; kind: 'service' | 'depart' | 'refuel'; label: string }
+interface Station { x: number; y: number; kind: 'service' | 'depart' | 'refuel' | 'talk'; label: string; survivor?: string }
+
+// Modale di scelta riusato per: incontri Tier C (decisioni morali, docs/CAMPAGNA_CONVOGLIO.md §5) E dialoghi
+// coi sopravvissuti ("This War of Mine su ruote": parli con i tuoi). `bodyKey` = ciò che il personaggio DICE
+// (assente negli incontri); ogni opzione muta lo stato e ritorna il messaggio-esito (la replica) già tradotto.
+interface EncOption { labelKey: string; flag: string; apply: () => string }
+interface Encounter { titleKey?: string; titleRaw?: string; bodyKey?: string; options: EncOption[] }
 
 /**
  * Soste diegetiche (docs/SOSTE_DIEGETICHE.md) — l'hub a piedi che sostituisce il menu come destinazione
@@ -34,6 +42,13 @@ export default class StopScene extends Phaser.Scene {
   private nearStation: Station | null = null;
   private busy = false;            // true durante una transizione (evita doppi trigger)
   private usingPad = false;
+
+  // Modale (incontro Tier C o dialogo) in corso: blocca il cammino finché non scegli.
+  private encActive = false;
+  private encOptions: EncOption[] = [];
+  private encObjs: Array<{ destroy(): void }> = [];
+  private encLeg = -1;
+  private encIsAuto = false; // true = incontro Tier C automatico (segna encounterDoneLeg); false = dialogo
 
   // Modalità galleria (solo debug): mostra/ispeziona ogni luogo senza giocare.
   private gallery = false;
@@ -67,7 +82,7 @@ export default class StopScene extends Phaser.Scene {
       this.galleryIndex = (this.registry.get('hubGalleryIndex') as number | undefined) ?? 0;
       this.location = STOP_LOCATIONS[this.galleryIndex] ?? STOP_LOCATIONS[0]!;
     } else {
-      this.location = locationForMission(getRun(this.registry, 'missionNumber') ?? 2);
+      this.location = locationForLeg((getRun(this.registry, 'legIndex') ?? 1) - 1); // tratta appena conclusa (F1)
     }
 
     // Texture (guardia `exists` interna a ciascun builder).
@@ -88,9 +103,34 @@ export default class StopScene extends Phaser.Scene {
 
     this.stations = [
       { x: layout.service.x, y: layout.service.y, kind: 'service', label: t(this.location.stationKey) },
-      { x: vx, y: vy + 30,   kind: 'depart',  label: t('hub.depart') },
+      { x: vx, y: vy + 8,    kind: 'depart',  label: t('hub.depart') }, // anello sotto le ruote (veicolo dentro il cerchio)
     ];
     if (layout.pump) this.stations.push({ x: layout.pump.x, y: layout.pump.y, kind: 'refuel', label: t('hub.refuel') }); // pompa diegetica
+
+    // ── Equipaggio a bordo: figure con cui PARLARE (il cuore "This War of Mine su ruote") ──
+    if (!this.gallery) {
+      const crew = getRun(this.registry, 'survivors') ?? [];
+      const hungry = getRun(this.registry, 'hungry') ?? [];
+      const injured = getRun(this.registry, 'injured') ?? [];
+      const morale = getRun(this.registry, 'morale') ?? MORALE.start;
+      crew.slice(0, 5).forEach((key, i) => {
+        const sv = SURVIVORS.find(x => x.key === key);
+        const tx = Math.round(this.designW * 0.40) + i * 56, ty = 470;
+        const texKey = buildCrewFigure(this, key, sv ? sv.color : '#556070');
+        const fig = this.add.image(tx, ty, texKey).setOrigin(0.5, 0.96).setScale(1 / OVERSAMPLE).setDepth(ty); // full-body in scala col mondo (= driver)
+        // Stato emotivo (derivato): affamato / ferito / morale a terra → figura spenta e fredda.
+        const distressed = hungry.includes(key) || injured.includes(key) || morale < MORALE.break;
+        if (distressed) fig.setTint(0x8a93a0).setAlpha(0.85);
+        // Idle minimo: respiro (scaleY) sfasato per figura → sembrano vivi, non manichini. Più fiacco se a pezzi.
+        this.tweens.add({ targets: fig, scaleY: (1 / OVERSAMPLE) * (distressed ? 1.02 : 1.035), duration: (distressed ? 2000 : 1500) + i * 150, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: i * 180 });
+        // Pastiglia di stato sopra la testa: verde in forze · ambra affamato · rosso ferito (mappa stato↔persona, leggibile a colpo d'occhio).
+        const dotY = ty - fig.displayHeight * 0.96 - 6;
+        const dotCol = injured.includes(key) ? 0xff5555 : hungry.includes(key) ? 0xffaa44 : 0x44cc66;
+        this.add.circle(tx, dotY, 5, 0x000000, 0.55).setDepth(ty + 1);
+        this.add.circle(tx, dotY, 3.4, dotCol).setDepth(ty + 2);
+        this.stations.push({ x: tx, y: ty, kind: 'talk', label: t('hub.talk', { name: sv ? sv.properName : key }), survivor: key });
+      });
+    }
     for (const s of this.stations) this.drawStationMarker(s);
 
     // Collisione: ostacoli del renderer (stazione/prop/NPC) + il veicolo. Il personaggio non li attraversa.
@@ -106,9 +146,52 @@ export default class StopScene extends Phaser.Scene {
     if (Settings.vignetteFx) this.grain = Juice.addOverlay(this, 950, 0.85);
 
     Juice.fadeIn(this);
+    if (!this.gallery) this.maybeShowEncounter(); // incontro Tier C (decisione morale) all'arrivo
   }
 
   // ─── Overlay (card del luogo, hint, barra galleria) ──────────────────────────
+
+  /**
+   * Pannello-stato del convoglio (i BISOGNI, leggibili alla sosta): scorta di cibo + quanti resterebbero a
+   * digiuno alla ripartenza, morale con la sua "parola" (saldo/fragile/a terra/alla rotta) e l'elenco di chi
+   * è affamato/ferito (o "in forze"). Colori = urgenza. In alto a sinistra, sotto il titolo del luogo.
+   */
+  private drawConvoyStatus() {
+    const crew = getRun(this.registry, 'survivors') ?? [];
+    if (crew.length === 0) return;
+    const food = getRun(this.registry, 'food') ?? FOOD.start;
+    const morale = getRun(this.registry, 'morale') ?? MORALE.start;
+    const hungry = getRun(this.registry, 'hungry') ?? [];
+    const injured = getRun(this.registry, 'injured') ?? [];
+    const nameOf = (k: string) => SURVIVORS.find(s => s.key === k)?.properName ?? k;
+
+    const fed = Math.min(crew.length, Math.floor(food / FOOD.perSurvivor)); // sfamati alla prossima tratta
+    const hungryNext = crew.length - fed;
+    const mState = morale >= 60 ? { k: 'hub.moraleHigh', c: UI.greenOk }
+      : morale >= MORALE.break ? { k: 'hub.moraleMid', c: UI.amberSoft }
+        : morale >= MORALE.rout ? { k: 'hub.moraleLow', c: UI.red }
+          : { k: 'hub.moraleRout', c: UI.red };
+
+    const lines: Array<{ t: string; c: string; s: number; b?: boolean }> = [];
+    lines.push({ t: t('hub.statusTitle'), c: UI.faint, s: 9, b: true });
+    lines.push({ t: t('shop.food', { n: food, max: FOOD.max }), c: hungryNext > 0 ? UI.amberSoft : UI.text, s: 12 });
+    if (hungryNext > 0) lines.push({ t: t('hub.foodShort', { n: hungryNext }), c: UI.amberSoft, s: 10 });
+    lines.push({ t: `${t('hub.morale', { n: morale, max: MORALE.max })}  ·  ${t(mState.k)}`, c: mState.c, s: 12 });
+    if (injured.length) lines.push({ t: t('hub.statusInjured', { names: injured.map(nameOf).join(', ') }), c: UI.red, s: 10 });
+    if (hungry.length) lines.push({ t: t('hub.statusHungry', { names: hungry.map(nameOf).join(', ') }), c: UI.amberSoft, s: 10 });
+    if (!injured.length && !hungry.length) lines.push({ t: t('hub.statusWell'), c: UI.greenOk, s: 10 });
+
+    const left = 12, top = 62, W = 246, padX = 10; // sotto il titolo+sottotitolo centrati del luogo (niente sovrapposizione)
+    let y = top + 8;
+    for (const ln of lines) {
+      const txt = Ui.text(this, left + padX, y, ln.t,
+        { fontSize: `${ln.s}px`, color: ln.c, fontStyle: ln.b ? 'bold' : 'normal', wordWrap: { width: W - padX * 2 } })
+        .setOrigin(0, 0).setScrollFactor(0).setDepth(1001);
+      y += txt.height + 4;
+    }
+    this.add.rectangle(left, top, W, (y - top) + 4, UI.black, 0.5).setOrigin(0, 0)
+      .setStrokeStyle(1, this.location.accent, 0.55).setScrollFactor(0).setDepth(1000);
+  }
 
   private buildOverlays() {
     const accent = accentCss(this.location.accent);
@@ -118,6 +201,8 @@ export default class StopScene extends Phaser.Scene {
     Ui.text(this, this.designW / 2, 40, t(this.location.flavorKey), {
       fontSize: '11px', color: UI.faint, fontStyle: 'italic',
     }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1000);
+
+    if (!this.gallery) this.drawConvoyStatus(); // pannello-stato: cibo · morale · affamati/feriti (i BISOGNI, leggibili)
 
     this.prompt = Ui.text(this, 0, 0, '', {
       fontSize: '13px', color: UI.white, fontStyle: 'bold',
@@ -156,6 +241,7 @@ export default class StopScene extends Phaser.Scene {
     this.input.on('pointermove', () => { this.usingPad = false; });
     this.input.gamepad?.on('down', (_p: Phaser.Input.Gamepad.Gamepad, btn: Phaser.Input.Gamepad.Button) => {
       this.usingPad = true;
+      if (this.encActive) { this.pickEncounter(this.encOptions.length - 1); return; } // pad: sceglie l'opzione neutra (ultima)
       if (btn.index === 0) this.tryInteract();   // A = interagisci
       if (btn.index === 1 && this.gallery) this.exitGallery(); // B = esci dalla galleria
     });
@@ -175,6 +261,7 @@ export default class StopScene extends Phaser.Scene {
       const f = 0.82 + 0.10 * Math.sin(s * 11.3) + 0.06 * Math.sin(s * 23.7) + 0.04 * Math.sin(s * 37.1);
       this.hubGlow.setScale(this.glowScale * f).setAlpha(this.glowAlpha * f);
     }
+    if (this.encActive) { this.handleEncInput(); return; } // modale incontro Tier C: solo la scelta
     if (this.busy) return;
 
     if (this.gallery) {
@@ -191,6 +278,7 @@ export default class StopScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.eKey)) this.tryInteract();
   }
 
+  private walkPhase = 0;
   private movePlayer(dt: number) {
     let vx = 0, vy = 0;
     if (this.cursors.left?.isDown  || this.aKey.isDown) vx -= 1;
@@ -201,6 +289,7 @@ export default class StopScene extends Phaser.Scene {
     if (ls && ls.length() > PAD_DEADZONE) { vx += ls.x; vy += ls.y; this.usingPad = true; }
 
     const len = Math.hypot(vx, vy);
+    const base = 1 / OVERSAMPLE;
     if (len > 0.001) {
       vx /= len; vy /= len;
       const nx = Phaser.Math.Clamp(this.player.x + vx * WALK_SPEED * dt, HUB_WALK.minX, this.designW - HUB_WALK.minX);
@@ -208,6 +297,16 @@ export default class StopScene extends Phaser.Scene {
       const p = this.resolveCollisions(nx, ny);
       this.player.setPosition(p.x, p.y);
       if (vx < -0.01) this.player.setFlipX(true); else if (vx > 0.01) this.player.setFlipX(false);
+      // Animazione del passo: molleggio (squash/stretch coi piedi piantati) + leggero dondolio.
+      this.walkPhase += dt * 11;
+      const b = Math.abs(Math.sin(this.walkPhase));
+      this.player.setScale(base * (1 + 0.05 * b), base * (1 - 0.06 * b));
+      this.player.setRotation(Math.sin(this.walkPhase * 0.5) * 0.05);
+    } else {
+      // ritorno morbido alla posa di riposo
+      this.player.setScale(Phaser.Math.Linear(this.player.scaleX, base, 0.2), Phaser.Math.Linear(this.player.scaleY, base, 0.2));
+      this.player.setRotation(Phaser.Math.Linear(this.player.rotation, 0, 0.2));
+      this.walkPhase = 0;
     }
     this.player.setDepth(this.player.y);
   }
@@ -241,10 +340,11 @@ export default class StopScene extends Phaser.Scene {
   }
 
   private tryInteract() {
-    if (this.busy || !this.nearStation) return;
+    if (this.busy || this.encActive || !this.nearStation) return;
     const s = this.nearStation;
     if (s.kind === 'service') { this.busy = true; Juice.go(this, 'ShopScene'); return; } // servizi → negozio (filtrato per luogo)
     if (s.kind === 'refuel')  { this.refuelAtPump(); return; }                            // pompa: fai benzina sul posto
+    if (s.kind === 'talk')    { if (s.survivor) this.talkTo(s.survivor); return; }        // parla con un sopravvissuto
     if (this.gallery) { this.exitGallery(); return; }                                     // in galleria il veicolo = torna al debug
     this.busy = true; Juice.go(this, 'RouteScene');                                       // sosta reale: riparti → percorso
   }
@@ -272,6 +372,173 @@ export default class StopScene extends Phaser.Scene {
       fontSize: '12px', color, fontStyle: 'bold', backgroundColor: '#000000cc', padding: { x: 6, y: 3 },
     }).setOrigin(0.5, 1).setDepth(1002);
     this.tweens.add({ targets: txt, y: txt.y - 22, alpha: 0, duration: 1100, ease: 'Quad.easeOut', onComplete: () => txt.destroy() });
+  }
+
+  // ─── Incontri Tier C (decisioni morali del convoglio — docs/CAMPAGNA_CONVOGLIO.md §5) ─────────
+
+  /** Incontro del luogo corrente (null = nessuno). Le `apply` mutano il registry e ritornano il
+   *  messaggio-esito già tradotto; il `flag` finisce in `RunData.choices`, letto dall'epilogo. */
+  private encounterFor(key: string): Encounter | null {
+    const reg = this.registry;
+    const money  = () => getRun(reg, 'money') ?? 0;
+    const food   = () => getRun(reg, 'food') ?? FOOD.start;
+    const morale = () => getRun(reg, 'morale') ?? MORALE.start;
+    const adjMoney  = (d: number) => setRun(reg, 'money',  Math.max(0, money() + d));
+    const adjFood   = (d: number) => setRun(reg, 'food',   Phaser.Math.Clamp(food() + d, 0, FOOD.max));
+    const adjMorale = (d: number) => setRun(reg, 'morale', Phaser.Math.Clamp(morale() + d, 0, MORALE.max));
+
+    if (key === 'camp') return { titleKey: 'enc.camp.title', options: [
+      { labelKey: 'enc.camp.share',  flag: 'shared',   apply: () => { adjFood(-20); adjMorale(10); return t('enc.result.shared'); } },
+      { labelKey: 'enc.camp.ration', flag: 'rationed', apply: () => { adjMorale(-8); return t('enc.result.rationed'); } },
+    ] };
+    if (key === 'depot') return { titleKey: 'enc.depot.title', options: [
+      { labelKey: 'enc.depot.loot', flag: 'looted',  apply: () => { adjMoney(80); adjMorale(-6); return t('enc.result.looted'); } },
+      { labelKey: 'enc.depot.grab', flag: 'grabbed', apply: () => { adjMoney(20); return t('enc.result.grabbed'); } },
+    ] };
+    if (key === 'checkpoint') return { titleKey: 'enc.checkpoint.title', options: [
+      { labelKey: 'enc.checkpoint.pay',   flag: 'paid',   apply: () => { if (money() < 60) return t('hub.noMoney'); adjMoney(-60); return t('enc.result.paid'); } },
+      { labelKey: 'enc.checkpoint.force', flag: 'forced', apply: () => { adjMorale(-5); return t('enc.result.forced'); } },
+    ] };
+    if (key === 'market') {
+      const survivors = getRun(reg, 'survivors') ?? [];
+      const opts: EncOption[] = [
+        { labelKey: 'enc.market.buy', flag: 'bought', apply: () => { if (money() < 120) return t('hub.noMoney'); adjMoney(-120); adjFood(50); return t('enc.result.bought'); } },
+      ];
+      if (survivors.length > 0) opts.push(
+        { labelKey: 'enc.market.sell', flag: 'sold', apply: () => {
+          const list = [...survivors];
+          const k = list.splice(Math.floor(Math.random() * list.length), 1)[0]!;
+          setRun(reg, 'survivors', list);
+          adjMoney(150); adjMorale(-18);
+          const s = SURVIVORS.find(x => x.key === k);
+          return t('enc.result.sold', { name: s ? `${s.properName} ${s.surname}` : k });
+        } });
+      opts.push({ labelKey: 'enc.market.refuse', flag: '', apply: () => t('enc.result.refused') });
+      return { titleKey: 'enc.market.title', options: opts };
+    }
+    return null; // garage: nessun incontro morale (triage gestionale fuori scope)
+  }
+
+  private maybeShowEncounter() {
+    const leg = (getRun(this.registry, 'legIndex') ?? 1) - 1; // tratta appena conclusa (come la sosta)
+    if (this.registry.get('encounterDoneLeg') === leg) return; // già risolto in questa visita
+    const enc = this.encounterFor(this.location.key);
+    if (!enc) return;
+    this.encLeg = leg;
+    this.showEncounter(enc, true);
+  }
+
+  private showEncounter(enc: Encounter, isAuto: boolean) {
+    this.encActive = true;
+    this.encIsAuto = isAuto;
+    this.encOptions = enc.options;
+    this.encObjs = [];
+    // Modale in spazio di DESIGN con scrollFactor(0) — come gli overlay del luogo (titolo/flavor): resta
+    // SEMPRE centrata su schermo, indipendente da dove la camera segue il personaggio. (Rettangoli Phaser
+    // supportano setScrollFactor; Ui.box/RoundRect no → uso this.add.rectangle.)
+    const cx = this.designW / 2, cyc = 300, n = enc.options.length;
+    const bodyH = enc.bodyKey ? 58 : 0;
+    const ph = 86 + bodyH + n * 56;
+    this.encObjs.push(this.add.rectangle(cx, cyc, this.designW + 400, 760, 0x000000, 0.72).setScrollFactor(0).setDepth(1100).setInteractive());
+    this.encObjs.push(this.add.rectangle(cx, cyc, 560, ph, UI.black, 0.96).setStrokeStyle(2, this.location.accent, 0.8).setScrollFactor(0).setDepth(1101));
+    const top = cyc - ph / 2;
+    this.encObjs.push(Ui.text(this, cx, top + 20, enc.titleRaw ?? (enc.titleKey ? t(enc.titleKey) : ''), {
+      fontSize: '20px', color: accentCss(this.location.accent), fontStyle: 'bold', align: 'center', wordWrap: { width: 520 },
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1102));
+    if (enc.bodyKey) {
+      this.encObjs.push(Ui.text(this, cx, top + 48, t(enc.bodyKey), {
+        fontSize: '14px', color: UI.greenSoft, fontStyle: 'italic', align: 'center', wordWrap: { width: 510 },
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1102));
+    }
+    const optTop = top + 56 + bodyH;
+    enc.options.forEach((opt, i) => {
+      const by = optTop + i * 56;
+      const btn = this.add.rectangle(cx, by, 520, 46, 0x1c1c2a).setStrokeStyle(1, this.location.accent, 0.4).setScrollFactor(0).setDepth(1102).setInteractive();
+      this.encObjs.push(btn);
+      this.encObjs.push(Ui.text(this, cx - 244, by, `${i + 1}.  ${t(opt.labelKey)}`, {
+        fontSize: '14px', color: UI.white, align: 'left', wordWrap: { width: 500 },
+      }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1103));
+      btn.on('pointerover', () => btn.setFillStyle(0x26263a));
+      btn.on('pointerout',  () => btn.setFillStyle(0x1c1c2a));
+      btn.on('pointerdown', () => this.pickEncounter(i));
+    });
+  }
+
+  /** Tastiera: i tasti numerici 1..N scelgono l'opzione (mouse: clic sulla carta; pad: A = neutra). */
+  private handleEncInput() {
+    for (let i = 0; i < this.encOptions.length && i < this.numKeys.length; i++) {
+      if (Phaser.Input.Keyboard.JustDown(this.numKeys[i]!)) { this.pickEncounter(i); return; }
+    }
+  }
+
+  private pickEncounter(i: number) {
+    if (!this.encActive) return;
+    const opt = this.encOptions[i];
+    if (!opt) return;
+    this.encActive = false;
+    const msg = opt.apply();
+    if (opt.flag) setRun(this.registry, 'choices', [...(getRun(this.registry, 'choices') ?? []), opt.flag]);
+    if (this.encIsAuto) this.registry.set('encounterDoneLeg', this.encLeg); // solo l'incontro AUTO non si ri-mostra
+    if (this.registry.get('debugRun') !== true) SaveData.saveRun(snapshotRun(this.registry));
+    for (const o of this.encObjs) o.destroy();
+    this.encObjs = [];
+    if (!msg) return; // dialogo "chiudi": nessuna replica da mostrare
+    // Esito/replica al centro, in evidenza (design + scrollFactor(0), come il modale).
+    const txt = Ui.text(this, this.designW / 2, 300, msg, {
+      fontSize: '15px', color: UI.greenSoft, fontStyle: 'italic', stroke: '#000000', strokeThickness: 3,
+      align: 'center', wordWrap: { width: 480 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(1102);
+    this.tweens.add({ targets: txt, alpha: 0, y: 270, delay: 1600, duration: 1400, onComplete: () => txt.destroy() });
+  }
+
+  // ─── Dialoghi coi sopravvissuti ("This War of Mine su ruote": parli con i tuoi) ───────────────
+
+  /** Conversazione con un sopravvissuto a bordo. SARA (medico) ha un ARCO (la figlia Lena) con una scelta
+   *  che pesa sull'epilogo; gli altri sei hanno una battuta in voce. Riusa il modale (bodyKey = ciò che dice). */
+  /** Stato emotivo (derivato): affamato, ferito, o morale del convoglio sotto soglia → "in difficoltà". */
+  private isDistressed(key: string): boolean {
+    const hungry = getRun(this.registry, 'hungry') ?? [];
+    const injured = getRun(this.registry, 'injured') ?? [];
+    const morale = getRun(this.registry, 'morale') ?? MORALE.start;
+    return hungry.includes(key) || injured.includes(key) || morale < MORALE.break;
+  }
+
+  private talkTo(key: string) {
+    if (this.encActive) return;
+    const s = SURVIVORS.find(x => x.key === key);
+    const name = s ? `${s.properName} ${s.surname}` : key;
+    const reg = this.registry;
+    const choices = getRun(reg, 'choices') ?? [];
+    const arc = SURVIVOR_ARCS[key];
+
+    // Nessun arco (autoriato non ancora caricato per questo personaggio): battuta semplice di ripiego.
+    if (!arc) {
+      this.showEncounter({ titleRaw: name, bodyKey: `dlg.${key}.line`, options: [{ labelKey: 'dlg.close', flag: '', apply: () => '' }] }, false);
+      return;
+    }
+
+    const adjMorale = (d: number) => setRun(reg, 'morale', Phaser.Math.Clamp((getRun(reg, 'morale') ?? MORALE.start) + d, 0, MORALE.max));
+    const adjFood   = (d: number) => setRun(reg, 'food',   Phaser.Math.Clamp((getRun(reg, 'food') ?? FOOD.start) + d, 0, FOOD.max));
+    const adjMoney  = (d: number) => setRun(reg, 'money',  Math.max(0, (getRun(reg, 'money') ?? 0) + d));
+    const actIndex = getRun(reg, 'actIndex') ?? 0;
+    const chosen = arc.options.find(o => choices.includes(o.flag));
+
+    if (chosen) {
+      // Dopo la scelta: la sua eco (o, in mancanza, la battuta di stato).
+      const after = arc.after.find(a => a.flag === chosen.flag);
+      const body = after ? after.key : (this.isDistressed(key) ? arc.talk.distressed : arc.talk.calm);
+      this.showEncounter({ titleRaw: name, bodyKey: body, options: [{ labelKey: 'dlg.close', flag: '', apply: () => '' }] }, false);
+      return;
+    }
+    if (actIndex >= arc.unlockAct) {
+      // Il BEAT: la scelta che pesa (effetti + flag dal dato).
+      this.showEncounter({ titleRaw: name, bodyKey: arc.beatKey, options: arc.options.map(o => ({
+        labelKey: o.labelKey, flag: o.flag, apply: () => { adjMorale(o.morale); adjFood(o.food); adjMoney(o.money); return t(o.replyKey); },
+      })) }, false);
+      return;
+    }
+    // Prima dello sblocco: battuta in voce per lo stato emotivo (costruisci rapporto; il beat arriverà).
+    this.showEncounter({ titleRaw: name, bodyKey: this.isDistressed(key) ? arc.talk.distressed : arc.talk.calm, options: [{ labelKey: 'dlg.close', flag: '', apply: () => '' }] }, false);
   }
 
   // ─── Galleria (debug) ────────────────────────────────────────────────────────

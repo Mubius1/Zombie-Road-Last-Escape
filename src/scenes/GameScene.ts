@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { VEHICLES, vehicleFuelEff, Upgrades, WeaponType, WEAPONS, WEAPON_KEYS, WEAPON_AMMO, weaponInfiniteAmmo, FOOD, SURVIVORS } from '../GameData';
+import { VEHICLES, vehicleFuelEff, Upgrades, WeaponType, WEAPONS, WEAPON_KEYS, WEAPON_AMMO, weaponInfiniteAmmo, FOOD, MORALE, SURVIVORS } from '../GameData';
 import SoundManager from '../SoundManager';
 import Juice from '../Juice';
 import { enterScreen, pulse, rampSpeed, resetKinetics } from '../PostFx';
@@ -11,7 +11,8 @@ import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { resetRunState, getRun, setRun, snapshotRun, restoreRun } from '../RunState';
 import SaveData from '../SaveData';
 import { routeNode } from '../Routes';
-import { locationForMission, accentCss } from '../Locations';
+import { SURVIVOR_ARCS, RADIO_ACTS } from '../Convoy';
+import { locationForLeg, accentCss } from '../Locations';
 import { buildEntityTextures, buildSurvivorTextures } from '../EntityTextures';
 import { buildIcons } from '../IconTextures';
 import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
@@ -20,8 +21,10 @@ import BossController, { BossHost } from '../BossController';
 import { t } from '../i18n';
 import {
   ROAD_TOP, ROAD_BOTTOM, ROAD_CENTER, distanceKm,
+  stageAt, stageForRun, envIndexForBiome, isTerminalLeg, ACT_NAME_KEYS,
+  odometerKm, CAMPAIGN_TOTAL_KM,
 } from '../World';
-import type { ZombieType, ComponentKey } from '../World';
+import type { ZombieType, ComponentKey, SetPieceKey } from '../World';
 
 // Spazio di design: l'altezza è fissa (H), la larghezza varia col formato (designW,
 // più ampia in 16:9). La camera in zoom adatta tutto alla risoluzione nativa — vedi Config.ts.
@@ -50,7 +53,7 @@ const STRIPE_W = 48, STRIPE_GAP = 82;
 const ATTACH_DAMAGE_INTERVAL = 1600;
 const ATTACH_DAMAGE_AMOUNT = 14;
 const RAM_DMG = 6; // potenziamento 'ariete': danno da speronamento a chi tenta l'aggancio (per-veicolo)
-const MISSION_DIST = 18000;
+const MISSION_DIST = 6000; // pivot "This War of Mine su ruote": la TRATTA è un transito BREVE e teso (~60 km, ~25 s base), non il cuore del gioco — il cuore è la SOSTA (persone/scelte). Vedi docs/CAMPAGNA_CONVOGLIO.md.
 const GIANT_SPAWN_INTERVAL = 22000;
 const BOSS_TRIGGER = 0.82; // % missione a cui appare il boss (quando i boss sono attivi)
 // Boss di fine regione DISATTIVATI (scelta di design). Il codice boss resta TUTTO intatto
@@ -283,6 +286,11 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private pendingSurvivorLeft = '';      // M3: nome di chi se n'è andato per fame (toast differito in create)
   private activeSurvivors: string[] = [];
 
+  // Voce dell'equipaggio durante la guida: box lower-third (ritratto + nome + battuta), in coda per non sovrapporsi.
+  private nextChatterAt = 0;
+  private speakerActive = false;
+  private speakerQueue: Array<{ key: string; line: string }> = [];
+
   private mechanicTimer = 0;
   private soldierTimer = 0;
   private sniperTimer = 0;       // Cecchino: timer del colpo anti-tank
@@ -290,11 +298,25 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private lowFuelWarned = false; // evita di ripetere l'allarme carburante ogni frame (AU5)
   private giantTimer = 0;
   private envIndex = 0;
+  private legIndex = 0;  // campagna "IL CONVOGLIO": posizione sul manifest finito (F1)
+  private actIndex = 0;  // atto corrente 0-based (cacheato per la curva di difficoltà + banner)
   private missionNumber = 1; // numero di missione corrente (per scaling NG+ e vittoria di ciclo)
   private deathToll = 0;     // monete perse al pedaggio dell'ultima morte (per l'overlay)
   private debugRun = false;  // run di Debug (prova veicolo/arma): NON persiste il checkpoint reale
   private debugEventIdx = 0; // debug: ciclo deterministico degli eventi B2 (tasto E)
   private routeSpawnMult = 1; // Track B1: modificatore densità nemici dal nodo di percorso
+  // Campagna "IL CONVOGLIO" (F2): assi numerici del descrittore di tappa, letti nei punti già parametrici.
+  private missionDist = MISSION_DIST;                              // MISSION_DIST × lengthMult (durata percepita)
+  private stageSpawnMult = 1;                                      // ×intervalli director (densità ondata)
+  private stageBurstMult = 1;                                      // ×durata ondata
+  private stageFuelMult = 1;                                       // ×consumo carburante (This War of Mine)
+  private stagePoolBias: Partial<Record<ZombieType, number>> = {}; // pesi-moltiplicatore sul SPAWN_POOL
+  private stageSetPiece: SetPieceKey = 'none'; // F4: evento di set-piece forzato della tratta-climax
+  private setPieceFired = false;               // F4: il set-piece forzato è già scattato in questa missione
+  private morale: number = MORALE.start;       // F5: morale del convoglio (0..MORALE.max); gate hasActiveSurvivor
+  private nemesisActive = false; // F6: la Nemesi bracca il convoglio in questa tratta (atti centrali/finali)
+  private nemesisHeat = 0;       // F6: memoria della Nemesi 0..100 (cresce mentre sei braccato, cala alle soste sicure)
+  // ammoCrateMult / hazardMult sono letti direttamente da `stage` ai loro addEvent (create) → niente field.
   private routeMoneyMult = 1; // Track B1: modificatore monete fine missione dal nodo di percorso
 
   private hud!: HudController;
@@ -383,6 +405,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // M2 cibo: i sopravvissuti a bordo "mangiano" a inizio missione. Consumo UNA volta per numero di
     // missione (foodMission) → il retry dopo la morte non ri-addebita. Chi resta senza → affamato.
     this.injured = getRun(this.registry, 'injured') ?? []; // M3: feriti tramandati (abilità spenta)
+    this.morale = getRun(this.registry, 'morale') ?? MORALE.start; // F5: morale del convoglio
     let food = getRun(this.registry, 'food') ?? FOOD.start;
     this.hungry = getRun(this.registry, 'hungry') ?? [];
     if (getRun(this.registry, 'foodMission') !== this.missionNumber) {
@@ -401,12 +424,18 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         setRun(this.registry, 'injured', this.injured);
         const s = SURVIVORS.find(sv => sv.key === leaver);
         this.pendingSurvivorLeft = s ? `${s.properName} ${s.surname}` : leaver;
+        // F5: l'abbandono è una perdita → caduto registrato + crollo morale.
+        setRun(this.registry, 'fallen', [...(getRun(this.registry, 'fallen') ?? []), leaver]);
+        this.morale = Math.max(0, this.morale + MORALE.dLoss);
         streak = 0;
       }
+      // F5: almeno un affamato a fine consumo → morale giù (una volta per missione, dentro la guardia foodMission).
+      if (this.hungry.length > 0) this.morale = Math.max(0, this.morale + MORALE.dHungry);
       setRun(this.registry, 'starveStreak', streak);
       setRun(this.registry, 'food', food);
       setRun(this.registry, 'hungry', this.hungry);
       setRun(this.registry, 'foodMission', this.missionNumber);
+      setRun(this.registry, 'morale', this.morale);
     }
 
     const vData = VEHICLES[this.vehicleKey]!;
@@ -448,7 +477,31 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.sniperTimer = 0; this.grenadeReadyAt = 0;
     this.giantTimer = GIANT_SPAWN_INTERVAL;
     this.lowFuelWarned = false;
-    this.envIndex = (missionNum - 1) % ENVIRONMENTS.length;
+    // Campagna "IL CONVOGLIO" (F1): la posizione è `legIndex` sul manifest finito, NON più mod-7 su
+    // missionNumber. Bioma e atto vengono dal descrittore della tratta corrente.
+    this.legIndex = getRun(this.registry, 'legIndex') ?? 0;
+    const stage = stageForRun(this.legIndex, getRun(this.registry, 'branchTaken') ?? {}); // F3: ramo scelto al bivio
+    this.actIndex = stage.act - 1;
+    setRun(this.registry, 'actIndex', this.actIndex);
+    this.envIndex = envIndexForBiome(stage.biome);
+    // F2: assi numerici del descrittore. lengthMult NON tocca MISSION_DIST 🔒 (scala la distanza-obiettivo).
+    this.missionDist     = MISSION_DIST * stage.lengthMult;
+    this.stageSpawnMult  = stage.spawnMult;
+    this.stageBurstMult  = stage.burstMult;
+    this.stageFuelMult   = stage.fuelDrainMult;
+    this.stagePoolBias   = stage.poolBias;
+    this.stageSetPiece   = stage.setPiece; // F4
+    this.setPieceFired   = false;
+    // F6: Nemesi-con-memoria — stato per atto (0=presagio Atto 1 → attiva dagli atti centrali → resa dei
+    // conti all'Atto 6) + heat persistente. Si "semina" arrivando in fondo, non si batte: riusa il Gigante.
+    this.nemesisHeat = getRun(this.registry, 'nemesisHeat') ?? 0;
+    const nemState = this.actIndex === 0 ? 0 : this.actIndex <= 2 ? 1 : this.actIndex <= 4 ? 2 : 3;
+    this.nemesisActive = nemState >= 1;
+    setRun(this.registry, 'nemesisState', nemState);
+    // Radio (This War of Mine): bollettino del mondo all'INIZIO di ogni atto. Tace se il testo non c'è ancora.
+    if (this.legIndex === 0 || stageAt(this.legIndex - 1).act !== stage.act) {
+      this.time.delayedCall(900, () => this.showRadio(RADIO_ACTS[this.actIndex] ?? ''));
+    }
     this.currentWeapon = getRun(this.registry, 'currentWeapon') ?? 'mg';
     this.ownedWeapons  = getRun(this.registry, 'ownedWeapons')  ?? ['mg'];
     if (!this.ownedWeapons.includes(this.currentWeapon)) this.currentWeapon = this.ownedWeapons[0] ?? 'mg';
@@ -470,7 +523,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.oilUntil = 0;
     this.stormUntil = 0; this.nextEventIdx = 0; this.lastEvent = '';
     this.eventOverlay?.destroy(); this.eventOverlay = null;
-    this.eventThresholds = EVENT_FRACTIONS.map(f => f * MISSION_DIST); // Track B2: soglie eventi della missione
+    this.eventThresholds = EVENT_FRACTIONS.map(f => f * this.missionDist); // Track B2: soglie eventi (× lengthMult, F2)
     this.convoyVan?.destroy(); this.convoyVan = null;
     this.convoyHpBar?.destroy(); this.convoyHpBar = null; this.convoyHpBarBg?.destroy(); this.convoyHpBarBg = null;
     this.convoyHp = 0; this.convoyUntil = 0;
@@ -501,8 +554,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.buildInput();
 
     // Niente taniche su strada (scelta di design): il carburante si ricarica SOLO al garage (+ eventi convoglio/salvataggio).
-    this.time.addEvent({ delay: Math.round(HAZARD_SPAWN_INTERVAL / route.hazardMult), callback: this.spawnHazard, callbackScope: this, loop: true }); // Track B1: frequenza × nodo
-    this.time.addEvent({ delay: 13000, callback: this.spawnAmmoCrate, callbackScope: this, loop: true }); // munizioni: casse rade (scarsità)
+    this.time.addEvent({ delay: Math.round(HAZARD_SPAWN_INTERVAL / (route.hazardMult * stage.hazardMult)), callback: this.spawnHazard, callbackScope: this, loop: true }); // B1 nodo × C2 tappa (F2)
+    this.time.addEvent({ delay: Math.round(13000 / stage.ammoCrateMult), callback: this.spawnAmmoCrate, callbackScope: this, loop: true }); // munizioni: casse rade (scarsità) × ammoCrateMult (F2)
 
     this.initTutorial(); // onboarding contestuale alla prima Missione 1 (docs/TUTORIAL.md)
 
@@ -605,6 +658,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.checkBulletsVsAttached();
     this.updateToxicClouds(delta);
     this.updateSurvivorEffects(delta, time);
+    this.updateCrewChatter(time);      // voce dell'equipaggio: battute ambientali nel box in basso, col ritratto
     this.updateStripes(dt, this.throttleScroll()); // throttle: strisce di corsia col gas/freno
     this.environment?.update(dt * this.throttle, this.vehicle.x, this.vehicle.y); // throttle: asfalto/parallasse/decal
     this.cleanOffScreen();
@@ -635,6 +689,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private buildTextures() {
     buildVehicleTexture(this, this.vehicleKey);
     buildEntityTextures(this);
+    buildSurvivorTextures(this); // ritratti equipaggio per il pannello-crew dell'HUD (presenza visibile)
     buildIcons(this); // icone HUD procedurali (salute/carburante/componenti/percorso/munizioni)
   }
 
@@ -749,20 +804,37 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       const who = this.pendingSurvivorLeft; this.pendingSurvivorLeft = '';
       this.time.delayedCall(700, () => this.flashSurvivorEvent(t('game.survivorLeft', { name: who }), UI.red));
     }
+    // Voce dell'equipaggio: una battuta a inizio tratta dà personalità e SPIEGA lo stato col nome di chi parla
+    // (morale crollato → capisci perché le abilità sono spente; fame → senti la fatica). Vedi CAMPAGNA_CONVOGLIO.
+    if (this.morale < MORALE.break && this.activeSurvivors.length > 0) {
+      const who = this.activeSurvivors[Math.floor(Math.random() * this.activeSurvivors.length)]!;
+      this.time.delayedCall(1100, () => this.showSpeaker(who, t('bark.lowMorale')));
+    } else if (this.hungry.length > 0) {
+      const who = this.hungry[0]!;
+      this.time.delayedCall(1100, () => this.showSpeaker(who, t('bark.hungry')));
+    }
   }
 
   /** Opzioni di costruzione dell'HUD dallo stato corrente (riusate da build e re-build lingua). */
   private hudOpts(missionNum: number) {
     return {
-      missionNum, missionDist: MISSION_DIST,
+      missionNum, missionDist: this.missionDist,
       components: this.components,
       activeSurvivors: this.activeSurvivors,
       hungry: this.hungry,
+      injured: this.injured, // equipaggio: stato ferito per i ritratti del pannello-crew (HUD)
       armorReductionPct: Math.round((1 - Math.max(ARMOR_MULT_FLOOR, 1 - this.vehicleArmorBonus / 100)) * 100),
       ownedWeapons: this.ownedWeapons,
       currentWeapon: this.currentWeapon,
       debugGod: this.debugGod,
       onSelectWeapon: (k: WeaponType) => this.selectWeapon(k), // selettore HUD cliccabile (U3)
+      // Nastro-odometro di campagna (F3): atto + km percorsi/totali verso il rifugio.
+      actName: t(ACT_NAME_KEYS[this.actIndex] ?? ''),
+      campaignKm: odometerKm(this.legIndex),
+      campaignTotalKm: CAMPAIGN_TOTAL_KM,
+      // Morale del convoglio (F5): indicatore + soglia di crollo.
+      morale: this.morale,
+      moraleBreak: MORALE.break,
     };
   }
 
@@ -1269,12 +1341,12 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   }
 
   /**
-   * Moltiplicatore di difficoltà "new game+" (G2/B4): cresce di 0.2 a ogni ciclo completo di 7 regioni
-   * (missioni 1–7 = ×1.0, 8–14 = ×1.2, 15–21 = ×1.4, …). Scala HP **e danno** di nemici e boss così il
-   * late-game non si appiattisce quando il giocatore è ormai forte. Vedi BALANCE §5.
+   * Moltiplicatore di difficoltà della campagna "IL CONVOGLIO" (F1): curva FINITA con TETTO sull'atto
+   * corrente (`actIndex` 0..5) → ×1.0 (Atto 1) … ×1.75 (Atto 6). Scala HP **e danno** di nemici così
+   * l'escalation è leggibile e si ferma (campagna finibile, non rampa NG+ illimitata). Vedi BALANCE §5.
    */
   private difficultyMult(): number {
-    return 1 + 0.2 * Math.floor((this.missionNumber - 1) / 7);
+    return 1 + 0.15 * Math.min(this.actIndex, 5);
   }
 
   /**
@@ -1318,7 +1390,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private updateDistance(dt: number) {
     this.distance += this.getEffectiveScroll() * this.throttle * dt; // M1: motore + throttle del giocatore regolano l'avanzamento
     this.updateEvents(); // Track B2: eventi in-run a soglie di distanza
-    if (BOSSES_ENABLED && !this.boss.spawned && this.distance >= MISSION_DIST * BOSS_TRIGGER) {
+    if (BOSSES_ENABLED && !this.boss.spawned && this.distance >= this.missionDist * BOSS_TRIGGER) {
       this.boss.spawn();
       // Ambient sospeso nel duello (coerente con fuel/spawn): via hazard e proiettili residui, niente malus olio.
       this.hazards.clear(true, true);
@@ -1327,7 +1399,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       this.clearRoadObjects(); // salvataggio/convoglio in corso: via dall'arena, niente completamento nel boss
     }
     if (this.boss.active) return;
-    if (this.distance >= MISSION_DIST) this.triggerMissionComplete();
+    if (this.distance >= this.missionDist) this.triggerMissionComplete();
   }
 
   /**
@@ -1386,10 +1458,10 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private advanceSpawnPhase() {
     if (this.spawnPhase === 'calm') {
       this.spawnPhase = 'burst';
-      this.phaseTimer = BURST_MS_BASE + (this.missionNumber - 1) * 170; // l'ondata dura di più avanti
+      this.phaseTimer = Math.round((BURST_MS_BASE + (this.missionNumber - 1) * 170) * this.stageBurstMult); // durata ondata × burstMult (F2)
       this.burstDreadUntil = this.time.now + this.phaseTimer;            // drone d'angoscia al massimo per tutta l'ondata
       this.sfx?.playWaveStinger();                                       // "sta arrivando"
-      const batch = Math.min(8, 2 + Math.floor((this.missionNumber - 1) / 2)); // colpo d'apertura dell'orda (M1=2, sale)
+      const batch = Math.min(4, 1 + Math.floor((this.missionNumber - 1) / 3)); // pivot TWoM: ondata d'apertura PIÙ LEGGERA (dread, non sciame) — la tratta è transito, non sparatutto
       for (let i = 0; i < batch; i++) this.spawnZombie();
       this.spawnTimer = this.burstInterval();
     } else {
@@ -1399,13 +1471,21 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     }
   }
 
-  /** Quiete: spawn radi (sagome isolate). Più fitti col progredire, ma sempre "vuoti". (× nodo percorso, B1.) */
-  private calmInterval(): number {
-    return Math.round(Math.max(1500, CALM_INTERVAL - (this.missionNumber - 1) * 110) * this.routeSpawnMult);
+  /**
+   * Composizione densità B1×C2 (decisione §9.4-B): il descrittore di tappa (`stageSpawnMult`) definisce
+   * la difficoltà ATTESA; il nodo di percorso (B1 `routeSpawnMult`) la PERTURBA, clampato ±30% attorno a
+   * 1.0 così non spinge mai agli estremi incontrollabili.
+   */
+  private spawnMultCombined(): number {
+    return this.stageSpawnMult * Phaser.Math.Clamp(this.routeSpawnMult, 0.7, 1.3);
   }
-  /** Ondata: spawn serrati (sciami). Più intensi col progredire (densità piena ~M12). (× nodo percorso, B1.) */
+  /** Quiete: spawn radi (sagome isolate). Più fitti col progredire. (× tappa C2 × nodo B1 clampato.) */
+  private calmInterval(): number {
+    return Math.round(Math.max(1500, CALM_INTERVAL - (this.missionNumber - 1) * 110) * this.spawnMultCombined());
+  }
+  /** Ondata: spawn serrati (sciami). Più intensi col progredire. (× tappa C2 × nodo B1 clampato.) */
   private burstInterval(): number {
-    return Math.round(Math.max(300, BURST_INTERVAL - (this.missionNumber - 1) * 40) * this.routeSpawnMult);
+    return Math.round(Math.max(300, BURST_INTERVAL - (this.missionNumber - 1) * 40) * this.spawnMultCombined());
   }
 
   private updateGiantSpawning(delta: number) {
@@ -1472,8 +1552,13 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     }
   }
 
-  /** Sopravvissuto a bordo E non affamato (M2: la fame spegne l'abilità per la missione). */
+  /**
+   * Sopravvissuto a bordo, non affamato (M2) e non ferito (M3). F5: se il MORALE del convoglio è sotto
+   * `MORALE.break`, il gate si spegne GLOBALMENTE (nessuna abilità funziona) — un convoglio demoralizzato
+   * rende meno, senza toccare le 6 abilità singole.
+   */
   private hasActiveSurvivor(key: string): boolean {
+    if (this.morale < MORALE.break) return false;
     return this.activeSurvivors.includes(key) && !this.hungry.includes(key) && !this.injured.includes(key);
   }
 
@@ -1751,8 +1836,22 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     }
   }
 
+  /**
+   * Sceglie un tipo dal SPAWN_POOL applicando i pesi-moltiplicatore `poolBias` della tappa (F2): mantiene
+   * i pesi-base del pool (occorrenze, validate in BALANCE §5) e li perturba per descrittore — nessun nemico
+   * nuovo, solo composizione della minaccia (massa → logoramento → agguato → muri → tutto-insieme).
+   */
+  private pickZombieType(): ZombieType {
+    const bias = this.stagePoolBias;
+    let total = 0;
+    for (const t of SPAWN_POOL) total += (bias[t] ?? 1);
+    let r = Math.random() * total;
+    for (const t of SPAWN_POOL) { r -= (bias[t] ?? 1); if (r <= 0) return t; }
+    return SPAWN_POOL[SPAWN_POOL.length - 1]!;
+  }
+
   private spawnZombie() {
-    const type = SPAWN_POOL[Math.floor(Math.random() * SPAWN_POOL.length)]!;
+    const type = this.pickZombieType();
     const stats = ZOMBIE_STATS[type];
 
     if (type === 'jumper') {
@@ -1785,15 +1884,21 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private spawnGiant() {
     const z = this.zombies.create(this.designW + 60, ROAD_CENTER, 'zombie_giant') as Phaser.Physics.Arcade.Sprite;
-    z.setScale(ZOMBIE_STATS.giant.scale / OVERSAMPLE).setData('hp', this.scaledHp(ZOMBIE_STATS.giant.hp)).setData('type', 'giant');
+    // F6: durante gli atti in cui la Nemesi è attiva, il Gigante temporizzato È la Nemesi — più tenace col
+    // `nemesisHeat` (memoria) e con una firma viola. Riusa lo scheletro esistente: zero entità nuova.
+    const baseHp = this.scaledHp(ZOMBIE_STATS.giant.hp);
+    const hp = this.nemesisActive ? Math.ceil(baseHp * (1 + this.nemesisHeat / 150)) : baseHp;
+    z.setScale(ZOMBIE_STATS.giant.scale / OVERSAMPLE).setData('hp', hp).setData('type', 'giant');
     z.setData('rockPhase', Math.random() * 6.28);
     z.setVelocityX(-(ZOMBIE_STATS.giant.speed + SCROLL_SPEED)).setDepth(9).setBodySize(38,50);
     z.play('walk_giant'); z.anims.setProgress(Math.random());
-    const warn = Ui.text(this, this.designW - 60, H/2, t('game.giantWarn'), {
-      fontSize: '22px', color: '#ff4400', fontStyle: 'bold',
+    if (this.nemesisActive) z.setTint(0x9b59ff); // firma viola della Nemesi
+    const warn = Ui.text(this, this.designW - 60, H/2, this.nemesisActive ? t('game.nemesisWarn') : t('game.giantWarn'), {
+      fontSize: '22px', color: this.nemesisActive ? '#bb66ff' : '#ff4400', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(25);
     this.tweens.add({ targets: warn, alpha: 0, y: H/2 - 50, duration: 1600, onComplete: () => warn.destroy() });
+    if (this.nemesisActive) this.sfx?.playBossWarn(); // stinger della Nemesi
   }
 
   // ─── Eventi in-run (Track B2): picchi situazionali a soglie di distanza ─────────
@@ -1804,7 +1909,14 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         && this.nextEventIdx < this.eventThresholds.length
         && this.distance >= this.eventThresholds[this.nextEventIdx]!) {
       this.nextEventIdx++;
-      if (Math.random() < EVENT_CHANCE) this.triggerRandomEvent();
+      // F4: la tratta-climax FORZA il suo set-piece alla prima soglia, in modo deterministico — scavalca sia
+      // la selezione casuale dal pool sia il tiro EVENT_CHANCE. Le soglie successive tornano al random.
+      if (this.stageSetPiece !== 'none' && !this.setPieceFired) {
+        this.setPieceFired = true;
+        this.triggerEvent(this.stageSetPiece);
+      } else if (Math.random() < EVENT_CHANCE) {
+        this.triggerRandomEvent();
+      }
     }
     if (this.eventOverlay && this.time.now >= this.eventEndsAt) this.endTimedEvent();
     this.updateConvoy();
@@ -1813,7 +1925,11 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
   private triggerRandomEvent() {
     const pool = ['night', 'roadblock', 'storm', 'convoy', 'rescue'].filter(e => e !== this.lastEvent);
-    const ev = pool[Math.floor(Math.random() * pool.length)]!;
+    this.triggerEvent(pool[Math.floor(Math.random() * pool.length)]!);
+  }
+
+  /** Dispatch di un evento B2 per chiave (riusato dal random e dal set-piece forzato F4). */
+  private triggerEvent(ev: string) {
     this.lastEvent = ev;
     if (ev === 'night') this.eventNightHorde();
     else if (ev === 'roadblock') this.eventRoadblock();
@@ -2021,6 +2137,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (this.activeSurvivors.length < cap && food >= FOOD.perSurvivor) { // slot libero E cibo per sostenerlo
       this.activeSurvivors = [...this.activeSurvivors, key];
       setRun(this.registry, 'survivors', this.activeSurvivors);
+      this.morale = Math.min(MORALE.max, this.morale + MORALE.dRescue); // F5: il salvataggio risolleva il morale
       this.announceEvent('event.rescueOk', '#66ff99', { name: s ? `${s.properName} ${s.surname}` : key });
       this.sfx?.playMissionComplete();
     } else {
@@ -2590,12 +2707,95 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.sfx?.playImpact();
   }
 
-  /** Toast breve a centro-alto schermo per gli eventi sopravvissuti (ferito / andato via). */
+  /** Toast breve a centro-alto schermo per le NOTIFICHE sui sopravvissuti (ferito / andato via — 3ª persona). */
   private flashSurvivorEvent(msg: string, color: string) {
     const txt = Ui.text(this, this.scale.width / 2, 122, msg,
       { fontSize: '15px', color, fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 })
       .setOrigin(0.5).setScrollFactor(0).setDepth(50);
     this.tweens.add({ targets: txt, y: 100, alpha: 0, duration: 1900, ease: 'Quad.in', onComplete: () => txt.destroy() });
+  }
+
+  /**
+   * Voce dell'equipaggio DURANTE la guida (pivot This War of Mine: le persone presenti anche al volante).
+   * A intervalli sceglie un sopravvissuto a bordo e una battuta secondo l'umore (calm/uneasy/breaking) — derivato
+   * da morale + fame/ferite di chi parla — mostrata nel box in basso col suo ritratto. Inerte finché i testi
+   * `bark.idle.*` non esistono (build-safe: `t()` ritorna la chiave → si salta).
+   */
+  private updateCrewChatter(time: number) {
+    if (this.nextChatterAt === 0) { this.nextChatterAt = time + 9000; return; } // lascia respirare l'avvio (radio/intro)
+    if (time < this.nextChatterAt) return;
+    this.nextChatterAt = time + Phaser.Math.Between(15000, 26000);
+    if (this.speakerActive || this.activeSurvivors.length === 0) return;
+    const who = this.activeSurvivors[Math.floor(Math.random() * this.activeSurvivors.length)]!;
+    const mood = this.morale < MORALE.break || this.injured.includes(who) ? 'breaking'
+      : this.hungry.includes(who) || this.morale < MORALE.break + 18 ? 'uneasy'
+      : 'calm';
+    const key = `bark.idle.${mood}.${Math.floor(Math.random() * 7)}`;
+    const line = t(key);
+    if (line && line !== key) this.showSpeaker(who, line);
+  }
+
+  /** Mette in coda una battuta DETTA da un personaggio per il box in basso (ritratto + nome). */
+  private showSpeaker(key: string, line: string) {
+    if (!line) return;
+    this.speakerQueue.push({ key, line });
+    if (!this.speakerActive) this.pumpSpeaker();
+  }
+
+  /**
+   * Box "lower-third" dialogico: velo-pannello in basso con RITRATTO del parlante (busto `survivor_<key>`),
+   * nome nel colore del personaggio e battuta in corsivo. Dissolve dentro/fuori (durata ~ lunghezza testo) e
+   * poi serve il prossimo in coda. Pixel nativi + scrollFactor(0) (overlay, non subisce lo zoom camera).
+   */
+  private pumpSpeaker() {
+    const next = this.speakerQueue.shift();
+    if (!next) { this.speakerActive = false; return; }
+    this.speakerActive = true;
+    const sv = SURVIVORS.find(s => s.key === next.key);
+    const accent = sv ? parseInt(sv.color.replace('#', ''), 16) : 0x9ab6ff;
+    const nameCss = sv ? sv.color : UI.text;
+    const W = this.scale.width, screenH = this.scale.height;
+    const boxW = Math.min(620, W - 80), boxH = 92;
+    const cx = W / 2, cy = screenH - boxH / 2 - 22, left = cx - boxW / 2, D = 47;
+    const portraitH = boxH - 22, pcx = left + 14 + portraitH / 2, tx = pcx + portraitH / 2 + 14;
+    const objs: Phaser.GameObjects.GameObject[] = [];
+    const panel = this.add.rectangle(cx, cy, boxW, boxH, UI.panel, 0.94).setStrokeStyle(2, accent, 0.85).setScrollFactor(0).setDepth(D).setAlpha(0);
+    const frame = this.add.rectangle(pcx, cy, portraitH + 6, portraitH + 6, UI.black, 0.5).setStrokeStyle(2, accent, 0.95).setScrollFactor(0).setDepth(D + 1).setAlpha(0);
+    objs.push(panel, frame);
+    if (this.textures.exists(`survivor_${next.key}`)) {
+      const p = this.add.image(pcx, cy, `survivor_${next.key}`).setScrollFactor(0).setDepth(D + 2).setAlpha(0);
+      if (p.height > 0) p.setScale(portraitH / p.height);
+      objs.push(p);
+    }
+    const name = Ui.text(this, tx, cy - boxH / 2 + 14, sv ? `${sv.properName} ${sv.surname}` : next.key,
+      { fontSize: '12px', color: nameCss, fontStyle: 'bold' }).setOrigin(0, 0).setScrollFactor(0).setDepth(D + 2).setAlpha(0);
+    const body = Ui.text(this, tx, cy + 8, next.line,
+      { fontSize: '13px', color: UI.text, fontStyle: 'italic', wordWrap: { width: boxW - (tx - left) - 18 }, stroke: '#000000', strokeThickness: 2 })
+      .setOrigin(0, 0.5).setScrollFactor(0).setDepth(D + 2).setAlpha(0);
+    objs.push(name, body);
+    const hold = Phaser.Math.Clamp(1600 + next.line.length * 55, 2600, 6000);
+    this.tweens.add({ targets: objs, alpha: 1, duration: 320, hold, yoyo: true, onComplete: () => { objs.forEach(o => o.destroy()); this.pumpSpeaker(); } });
+  }
+
+  /**
+   * La PERDITA come BEAT (rifondazione equipaggio): alla morte il volto del caduto compare al centro,
+   * spento (tinta grigia), e sfuma verso l'alto; un superstite resta in silenzio. Non un toast, un momento.
+   * Il game-over (overlay) arriva dopo, a nominarlo. Vedi docs/CAMPAGNA_CONVOGLIO.md (rifondazione equipaggio).
+   */
+  private showLossBeat(key: string, mourners: string[]) {
+    const cx = this.designW / 2, cy = H / 2 - 30;
+    if (this.textures.exists(`survivor_${key}`)) {
+      const p = this.add.image(cx, cy, `survivor_${key}`).setDepth(60).setTint(0x66708a).setScrollFactor(0);
+      if (p.height > 0) p.setScale(64 / p.height);
+      this.tweens.add({ targets: p, alpha: 0, y: cy - 36, duration: 1800, ease: 'Quad.in', onComplete: () => p.destroy() });
+    }
+    if (mourners.length > 0) {
+      const m = SURVIVORS.find(sv => sv.key === mourners[Math.floor(Math.random() * mourners.length)]);
+      const txt = Ui.text(this, cx, cy + 50, t('game.survivorMourn', { name: m ? m.properName : '' }), {
+        fontSize: '13px', color: UI.faint, fontStyle: 'italic', stroke: '#000000', strokeThickness: 2,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(60);
+      this.tweens.add({ targets: txt, alpha: 0, duration: 2000, ease: 'Quad.in', onComplete: () => txt.destroy() });
+    }
   }
 
   /**
@@ -2633,7 +2833,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // fermarsi non è gratis). Fattore 0.5 (freno pieno) · 1.0 (crociera, bilanciamento invariato) · 1.3 (gas).
     // `fuelEff`: consumo REALISTICO per-veicolo (massa+potenza, BALANCE §3 bis) → ogni mezzo ha la sua autonomia.
     const explorerEff = this.hasActiveSurvivor('explorer') ? EXPLORER_FUEL_MULT : 1; // Esploratore: −20% consumo
-    return BASE_FUEL_DRAIN * (1 + (1 - this.components.tank.health / 100) * 2) * (0.5 + 0.5 * this.throttle) * this.fuelEff * explorerEff;
+    // F2: `stageFuelMult` (1.0..1.6) — leva di scarsità This War of Mine (deserto/atti tardi bruciano di più).
+    return BASE_FUEL_DRAIN * (1 + (1 - this.components.tank.health / 100) * 2) * (0.5 + 0.5 * this.throttle) * this.fuelEff * explorerEff * this.stageFuelMult;
   }
 
   /** M1 motore onesto: il motore regola il RITMO DI AVANZAMENTO (accumulo di distance/km). Sano →
@@ -2661,20 +2862,40 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
     const lootMult = this.hasActiveSurvivor('looter') ? LOOTER_MONEY_MULT : 1; // Saccheggiatore: +12% (spento se affamato)
     const earned = Math.floor(this.score / 8 * this.routeMoneyMult * lootMult); // Track B1 (nodo) × Saccheggiatore
-    setRun(this.registry, 'money',         (getRun(this.registry, 'money') ?? 0) + earned);
-    setRun(this.registry, 'missionNumber', (getRun(this.registry, 'missionNumber') ?? 1) + 1);
-    setRun(this.registry, 'lastScore',     this.score);
+    setRun(this.registry, 'money',     (getRun(this.registry, 'money') ?? 0) + earned);
+    setRun(this.registry, 'lastScore', this.score);
     setRun(this.registry, 'components', {
       engine: this.components.engine.health,
       wheels: this.components.wheels.health,
       tank:   this.components.tank.health,
       turret: this.components.turret.health,
     });
-    setRun(this.registry, 'routeModifier', 'none'); // Track B1: il modificatore vale una sola missione → consumato
     setRun(this.registry, 'ammo', this.ammo); // munizioni: il consumo della missione si porta avanti (checkpoint)
     setRun(this.registry, 'fuel', this.fuel); // carburante "viaggio": il livello residuo si porta avanti (checkpoint)
-    // CHECKPOINT: lo stato è avanzato (ricompense + missione successiva) → persisti subito, così
-    // chiudere il browser sull'overlay di fine missione o nel negozio non perde la missione (fix review).
+    // F5: morale — tratta completata (+) e sosta sicura all'accampamento (+); persistito col checkpoint.
+    this.morale = Math.min(MORALE.max, this.morale + MORALE.dTrattaClean + (locationForLeg(this.legIndex).key === 'camp' ? MORALE.dCamp : 0));
+    setRun(this.registry, 'morale', this.morale);
+    // F6: la Nemesi "ricorda" — il heat cresce mentre sei braccato, cala alle soste sicure (camp). Persistito.
+    if (this.nemesisActive) {
+      this.nemesisHeat = Phaser.Math.Clamp(this.nemesisHeat + 8 - (locationForLeg(this.legIndex).key === 'camp' ? 12 : 0), 0, 100);
+      setRun(this.registry, 'nemesisHeat', this.nemesisHeat);
+    }
+
+    // Campagna "IL CONVOGLIO" (F1): la tratta appena conclusa è `this.legIndex`. Se è il RIFUGIO terminale
+    // → epilogo (la corsa chiude, niente missione N+1). Altrimenti avanza legIndex + missionNumber verso la
+    // tratta successiva e prosegui col flusso sosta → negozio → percorso.
+    const completedLeg = this.legIndex;
+    const terminal = isTerminalLeg(completedLeg);
+    const prevAct = stageAt(completedLeg).act;
+    if (!terminal) {
+      setRun(this.registry, 'missionNumber', (getRun(this.registry, 'missionNumber') ?? 1) + 1);
+      setRun(this.registry, 'legIndex',      completedLeg + 1);
+      setRun(this.registry, 'actIndex',      stageAt(completedLeg + 1).act - 1);
+      setRun(this.registry, 'routeModifier', 'none'); // Track B1: il modificatore vale una sola missione → consumato
+    } else {
+      setRun(this.registry, 'reachedRefuge', true);
+    }
+    // CHECKPOINT: lo stato è avanzato → persisti subito, così chiudere il browser sull'overlay non perde nulla.
     if (!this.debugRun) SaveData.saveRun(snapshotRun(this.registry));
 
     this.cleanupEvents(); // B2: via velo/debuff a fine missione
@@ -2689,34 +2910,111 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.hazards.setVelocityX(0);
     this.clearAttachedZombies();
 
-    // Record persistente (G5) + rilevamento fine-ciclo (G6): completare le 7 regioni è una "vittoria",
-    // poi il gioco continua in endless+ con lo scaling NG+ (G2).
-    SaveData.record(this.missionNumber, this.score);
-    const cycleComplete = this.missionNumber % 7 === 0;
-    const cycleNum = this.missionNumber / 7;
-    if (cycleComplete) Juice.flash(this, 0xffee44, 0.35, 220);
+    SaveData.record(this.missionNumber, this.score); // record persistente (G5)
+
+    // Rifugio raggiunto → EPILOGO (chiude la corsa). Vedi showEpilogue.
+    if (terminal) { this.showEpilogue(earned); return; }
+
+    // Banner di transizione d'atto: l'atto cambia entrando nella tratta successiva.
+    const nextAct = stageAt(completedLeg + 1).act;
+    const actChanged = nextAct !== prevAct;
+    if (actChanged) Juice.flash(this, 0xffee44, 0.30, 200);
 
     const cx = this.designW/2, cy = H/2;
-    Ui.box(this, cx,cy,500,260,{ fill:UI.black, fillAlpha:0.9, radius:16, stroke: cycleComplete ? 0xffcc22 : UI.greenSig, strokeAlpha:0.5 }).setDepth(30);
-    Ui.text(this, cx,cy-95, cycleComplete ? t('game.victoryCycle', { n: cycleNum }) : t('game.missionComplete'),{
-      fontSize: cycleComplete ? '28px' : '32px', color: cycleComplete ? UI.gold : UI.green, fontStyle:'bold',
-      stroke: cycleComplete ? '#665500' : '#006600', strokeThickness:4,
+    Ui.box(this, cx,cy,500,260,{ fill:UI.black, fillAlpha:0.9, radius:16, stroke: UI.greenSig, strokeAlpha:0.5 }).setDepth(30);
+    Ui.text(this, cx,cy-95, t('game.missionComplete'),{
+      fontSize:'32px', color: UI.green, fontStyle:'bold', stroke:'#006600', strokeThickness:4,
     }).setOrigin(0.5).setDepth(31);
-    if (cycleComplete) {
-      Ui.text(this, cx,cy-66,t('game.allRegions'),{fontSize:'12px',color:UI.greenSoft}).setOrigin(0.5).setDepth(31);
+    if (actChanged) {
+      Ui.text(this, cx,cy-66, t('campaign.actCleared', { act: t(ACT_NAME_KEYS[prevAct - 1] ?? '') }),{fontSize:'12px',color:UI.greenSoft}).setOrigin(0.5).setDepth(31);
     }
     Ui.text(this, cx,cy-48,t('game.scoreLine', { n: this.score }),{fontSize:'20px',color:UI.white}).setOrigin(0.5).setDepth(31);
     Ui.text(this, cx,cy-14,t('game.distanceLine', { n: distanceKm(this.distance) }),{fontSize:'16px',color:UI.blueInfo}).setOrigin(0.5).setDepth(31);
     Ui.text(this, cx,cy+20,t('game.coinsEarned', { n: earned }),{fontSize:'18px',color:UI.gold}).setOrigin(0.5).setDepth(31);
     Ui.text(this, cx,cy+55,t('game.coinsTotal', { n: (getRun(this.registry, 'money') ?? 0) }),{fontSize:'15px',color:UI.goldDim}).setOrigin(0.5).setDepth(31);
-    // Idea 1 (B3): anticipa DOVE arrivi (garage o luogo specialista). missionNumber è già incrementato.
-    const stop = locationForMission(this.missionNumber);
+    // Idea 1 (B3): anticipa DOVE arrivi (sosta del descrittore della tratta appena conclusa).
+    const stop = locationForLeg(completedLeg);
     Ui.text(this, cx,cy+68,t('game.arrivingAt', { place: t(stop.nameKey) }),{fontSize:'11px',color:accentCss(stop.accent)}).setOrigin(0.5).setDepth(31);
     this.outcomeText(cx, cy+82, 'game.toShop', { fontSize:'13px', color:UI.faint });
     this.addMenuReturn(cx, cy+108);
 
     this.time.delayedCall(600, () => {
       this.input.keyboard?.once('keydown-SPACE', () => Juice.go(this, 'StopScene'));
+      this.input.keyboard?.once('keydown-M', () => Juice.go(this, 'MenuScene'));
+    });
+  }
+
+  /**
+   * Radio d'emergenza (This War of Mine) — bollettino del mondo che crolla, in alto, all'inizio di ogni atto.
+   * Stile "trasmissione" (tag + corpo in corsivo). Tace finché il testo non è tradotto (autoriato in corso).
+   */
+  private showRadio(key: string) {
+    const txt = t(key);
+    if (!txt || txt === key) return; // contenuto radio non ancora disponibile
+    this.sfx?.playRadioStatic();      // brusio della trasmissione che si sintonizza
+    const cx = this.scale.width / 2, topY = Math.round(this.scale.height * 0.17); // un po' più giù dell'orlo superiore
+    const tag  = Ui.text(this, cx, topY, t('radio.tag'), { fontSize: '10px', color: '#66cc88', fontStyle: 'bold' })
+      .setOrigin(0.5).setScrollFactor(0).setDepth(49).setAlpha(0);
+    const body = Ui.text(this, cx, topY + 16, `«${txt}»`, { fontSize: '13px', color: '#9fd8b0', fontStyle: 'italic', align: 'center', wordWrap: { width: this.scale.width * 0.72 }, stroke: '#000000', strokeThickness: 3 })
+      .setOrigin(0.5, 0).setScrollFactor(0).setDepth(49).setAlpha(0);
+    this.tweens.add({ targets: [tag, body], alpha: 1, duration: 500, hold: 4200, yoyo: true, onComplete: () => { tag.destroy(); body.destroy(); } });
+  }
+
+  /**
+   * Epilogo della campagna "IL CONVOGLIO" (F5) — funzione di stato a 4 finali. Raggiunto il rifugio la
+   * corsa CHIUDE (niente missione N+1). Il finale dipende da sopravvissuti vivi × morale finale × integrità
+   * del veicolo; i caduti vengono NOMINATI. Tono This War of Mine, anche amaro. Soglie in BALANCE §11.
+   */
+  private showEpilogue(earned: number) {
+    const survivors = getRun(this.registry, 'survivors') ?? [];
+    const morale = getRun(this.registry, 'morale') ?? MORALE.start;
+    const fallen = getRun(this.registry, 'fallen') ?? [];
+    const c = this.components;
+    const integrity = (c.engine.health + c.wheels.health + c.tank.health + c.turret.health) / 4;
+
+    // Selezione del finale, dal peggiore: rifugio caduto → arrivi solo → pochi ma vivi → il convoglio regge.
+    let endKey: 'fallen' | 'alone' | 'few' | 'convoy';
+    if (morale < MORALE.rout || integrity < 25) endKey = 'fallen';
+    else if (survivors.length === 0 || morale < 25) endKey = 'alone';
+    else if (survivors.length >= 4 && morale >= 50) endKey = 'convoy';
+    else endKey = 'few';
+    // Le SCELTE Tier C pesano: un convoglio "che regge" comprato con baratti/saccheggi/forzature scivola a
+    // "pochi ma vivi" (l'epilogo legge `RunData.choices`).
+    const dark = (getRun(this.registry, 'choices') ?? []).filter(c => c === 'sold' || c === 'looted' || c === 'forced').length;
+    if (endKey === 'convoy' && dark >= 2) endKey = 'few';
+    const gold = endKey === 'convoy' || endKey === 'few';
+
+    Juice.flash(this, gold ? 0xffee44 : 0x882222, 0.40, 280);
+    const cx = this.designW/2, cy = H/2;
+
+    // Carte-epilogo degli ARCHI: il destino di chi ha avuto una storia con te (scelta ingaggiata o caduto).
+    const ch = getRun(this.registry, 'choices') ?? [];
+    const cards: string[] = [];
+    for (const [k, arc] of Object.entries(SURVIVOR_ARCS)) {
+      if (fallen.includes(k)) { const e = arc.endings.find(x => x.flag === 'died'); if (e) cards.push(e.key); continue; }
+      const opt = arc.options.find(o => ch.includes(o.flag));
+      if (opt) { const e = arc.endings.find(x => x.flag === opt.flag); if (e) cards.push(e.key); }
+    }
+    const shown = cards.slice(0, 3);
+
+    const bh = 300 + shown.length * 30;
+    Ui.box(this, cx, cy, 560, bh, { fill: UI.black, fillAlpha: 0.94, radius: 16, stroke: gold ? 0xffcc22 : 0xaa3333, strokeAlpha: 0.6 }).setDepth(30);
+    let y = cy - bh / 2 + 24;
+    Ui.text(this, cx, y, t(`campaign.ending.${endKey}.title`), { fontSize:'26px', color: gold ? UI.gold : UI.redSoft, fontStyle:'bold', stroke:'#000000', strokeThickness:4 }).setOrigin(0.5).setDepth(31); y += 34;
+    Ui.text(this, cx, y, t(`campaign.ending.${endKey}.line`), { fontSize:'13px', color: UI.greenSoft, align:'center', wordWrap:{width:500} }).setOrigin(0.5, 0).setDepth(31); y += 44;
+    Ui.text(this, cx, y, t('campaign.survivorsArrived', { n: survivors.length }), { fontSize:'15px', color:UI.white }).setOrigin(0.5).setDepth(31); y += 22;
+    if (fallen.length > 0) {
+      const names = fallen.map(k => { const s = SURVIVORS.find(sv => sv.key === k); return s ? `${s.properName} ${s.surname}` : k; }).join(' · ');
+      Ui.text(this, cx, y, t('campaign.fallen', { names }), { fontSize:'12px', color:UI.red, align:'center', wordWrap:{width:500} }).setOrigin(0.5, 0).setDepth(31); y += 22;
+    }
+    for (const key of shown) { Ui.text(this, cx, y, t(key), { fontSize:'11px', color:UI.blueInfo, fontStyle:'italic', align:'center', wordWrap:{width:510} }).setOrigin(0.5, 0).setDepth(31); y += 30; }
+    y += 6;
+    Ui.text(this, cx, y, t('game.scoreLine', { n: this.score }), { fontSize:'14px', color:UI.white }).setOrigin(0.5).setDepth(31); y += 22;
+    Ui.text(this, cx, y, t('game.coinsEarned', { n: earned }), { fontSize:'13px', color:UI.gold }).setOrigin(0.5).setDepth(31); y += 26;
+    Ui.text(this, cx, y, t('campaign.epilogueEnd'), { fontSize:'12px', color:UI.faint }).setOrigin(0.5).setDepth(31); y += 26;
+    this.addMenuReturn(cx, y);
+    this.time.delayedCall(700, () => {
+      this.input.keyboard?.once('keydown-SPACE', () => Juice.go(this, 'MenuScene'));
       this.input.keyboard?.once('keydown-M', () => Juice.go(this, 'MenuScene'));
     });
   }
@@ -2761,9 +3059,13 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         this.lostSurvivor = survLeft.length > 0 ? survLeft.splice(Math.floor(Math.random() * survLeft.length), 1)[0]! : '';
         const recovered = { ...cp, money: Math.max(0, cp.money - this.deathToll),
           survivors: survLeft, injured: cp.injured.filter(k => k !== this.lostSurvivor),
-          hungry: cp.hungry.filter(k => k !== this.lostSurvivor) };
+          hungry: cp.hungry.filter(k => k !== this.lostSurvivor),
+          // F5: la morte porta via un membro → caduto registrato + crollo morale (sul checkpoint ripristinato).
+          morale: Math.max(0, (cp.morale ?? MORALE.start) + (this.lostSurvivor ? MORALE.dLoss : 0)),
+          fallen: this.lostSurvivor ? [...(cp.fallen ?? []), this.lostSurvivor] : (cp.fallen ?? []) };
         restoreRun(this.registry, recovered);
         SaveData.saveRun(recovered); // il checkpoint riflette pedaggio + perdita (auto-limitante: monete ≥ 0)
+        if (this.lostSurvivor) this.showLossBeat(this.lostSurvivor, survLeft); // perdita come beat (volto che sfuma)
       } else {
         this.deathToll = 0;
         resetRunState(this.registry);

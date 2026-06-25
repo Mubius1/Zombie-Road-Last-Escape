@@ -12,6 +12,9 @@ import validateOnDev from './scripts/vite-plugin-validate.mjs';
 // In quel caso NON apriamo la scheda del browser (il gioco va mostrato nella finestra Electron).
 // `npm run dev` normale (senza la env) resta IDENTICO: apre il browser come prima.
 const isElectron = process.env.ELECTRON === '1';
+// I test E2E (Playwright) avviano il dev server con PW_TEST=1: in quel caso NON apriamo la scheda del
+// browser (il controllo lo fa Playwright in headless). `npm run dev` normale resta identico.
+const isTest = process.env.PW_TEST === '1';
 
 export default defineConfig({
   root: '.',
@@ -21,12 +24,21 @@ export default defineConfig({
   // è del tutto trasparente e non cambia `npm run dev`.
   base: './',
   plugins: [validateOnDev()],
+  // Pre-bundla Phaser all'avvio del server: evita che Vite lo ri-ottimizzi a metà sessione e forzi un
+  // full-reload della pagina (che sotto Playwright azzererebbe stato/hook a partita in corso). Innocuo e
+  // anche più rapido in `npm run dev` normale (unica dipendenza del gioco).
+  optimizeDeps: { include: ['phaser'] },
   server: {
-    open: !isElectron,
+    open: !isElectron && !isTest,
     port: 5173,
     // Con Electron (dev:desktop) il launcher punta a 5173 fisso: se la porta è occupata Vite DEVE
     // fallire subito (strictPort) invece di slittare su 5174 — altrimenti il launcher caricherebbe
     // una vecchia istanza su 5173. `npm run dev` (browser) resta con l'auto-incremento comodo.
     strictPort: isElectron,
+    // Sotto Playwright (PW_TEST) niente HMR: una ricarica a metà partita azzererebbe lo stato e l'hook
+    // `__ZR` durante un test. In più ignoriamo sempre gli artefatti di test nel watcher, così le scritture
+    // di Playwright (screenshot/tracce/report) non innescano un reload della pagina sotto test.
+    hmr: isTest ? false : undefined,
+    watch: { ignored: ['**/test-results/**', '**/playwright-report/**', '**/tests/**'] },
   },
 });

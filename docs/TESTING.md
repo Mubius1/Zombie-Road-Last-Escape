@@ -2,7 +2,7 @@
 
 > **Stato:** v0.2 · **in revisione** · giugno 2026 (riallineato al pivot horror + hardening del tooling).
 > **Scopo:** definire **cosa** verifichiamo del *comportamento* del gioco e **come**. È la controparte mancante della validazione esistente.
-> **Cosa è implementato OGGI:** solo **§1** (validatori statici + ESLint type-checked + type-check stretto) e **§4** (checklist di playtest manuale). **§2 (test unitari delle formule), §3 (integrazione) e §5 (runner Vitest) restano PROPOSTE non implementate:** non esiste `src/Formulas.ts`, non esiste alcun test runner né script `test` nel `package.json`.
+> **Cosa è implementato OGGI:** **§1** (validatori statici + ESLint type-checked + type-check stretto), **§4** (checklist di playtest manuale) e **§7** (giocatore automatico E2E con Playwright: smoke d'avvio + bounds UI, monkey, bot+invarianti). **§2 (test unitari delle formule), §3 (integrazione) e §5 (runner Vitest per le formule pure) restano PROPOSTE non implementate:** non esiste `src/Formulas.ts` né un runner di *unit*-test (Vitest); il runner **E2E** (Playwright) invece c'è, è un livello diverso e complementare (esegue il gioco vero, non le formule pure).
 > **Relazione con le altre fonti:**
 > - I quattro validatori (`validate:art`, `validate:balance`, `validate:audio`, `validate:i18n`) controllano che i **numeri/dati** nel codice **combacino** con i documenti. Non eseguono il gioco e non sanno se una formula *fa la cosa giusta*.
 > - Questo documento copre il livello che manca: **il comportamento è corretto?** (le formule, le transizioni di stato, il flusso giocabile).
@@ -31,6 +31,7 @@
 | **§2 Unità (formule)** | le formule **calcolano** il valore giusto | basso | ⬜ da fare (serve §2.1) |
 | **§3 Integrazione** | lo **stato** evolve correttamente (acquisti, reset…) | medio | ⬜ da fare |
 | **§4 Playtest manuale** | il gioco **si gioca** end-to-end | manuale, ricorrente | ⬜ checklist pronta |
+| **§7 E2E (giocatore automatico)** | il gioco **gira** headless senza crash · invarianti di stato vive · UI dentro la viewport a ogni risoluzione | medio (Playwright) | ✅ implementato |
 
 > **Regola di priorità.** Parti da **§4** (checklist: utile da subito, niente codice) e **§2** (massimo ritorno per riga di test). **§3** dopo, quando serve. Non inseguire la copertura totale: questo è un arcade procedurale, non una banca.
 
@@ -243,4 +244,64 @@ Regola: si testa **logica deterministica e numerica** (§2) e **transizioni di s
 
 ---
 
-> **Manutenzione.** Quando cambi una **formula** in [`BALANCE.md`](BALANCE.md) (combo, mitigazione, consumo, ricompensa, curva di spawn) aggiorna i casi-oracolo di §2.2 **insieme** al codice: sono il modo in cui il valore *derivato* — che `validate:balance` non controlla — resta onesto. Quando aggiungi una **regola** (acquisti, reset, progressione) valuta un caso in §3 e una voce nella checklist §4.
+## §7 · Giocatore automatico — test E2E (Playwright) · **IMPLEMENTATO**
+
+> Il livello che mancava sopra la checklist manuale: un "giocatore" che **esegue il gioco vero** in un
+> Chromium headless e ne verifica il comportamento. Non sostituisce §4 (non giudica estetica/feel/audio):
+> caccia **crash, eccezioni non gestite, soft-lock, stati incoerenti (NaN/fuori range), reset sbagliati e
+> UI fuori posto**. Sorgenti in [`tests/e2e/`](../tests/e2e/), configurazione in [`playwright.config.ts`](../playwright.config.ts).
+
+### §7.1 · Come è agganciato (wiring)
+
+- **Hook dev-only `window.__ZR`** ([`src/game.ts`](../src/game.ts)): espone l'istanza `Phaser.Game` al contesto
+  pagina, così i test leggono lo stato delle scene (salute/carburante/posizione/registry). È dentro
+  `if (import.meta.env.DEV)` → **rimosso da `vite build`**: nel gioco distribuito non esiste.
+- **RNG seedato**: l'harness rimpiazza `Math.random` (che `Phaser.Math.Between/Clamp` usano sotto) con un
+  Mulberry32 seedato **prima** del boot → spawn/FX riproducibili. *Caveat:* il seme rende deterministico il
+  **caso**, non il **tempo reale**: il frame-rate headless varia, quindi l'istante esatto di morte del bot
+  cambia run-to-run — i test lo tollerano (una morte precoce è lecita).
+- **Settings via `localStorage`**: l'harness pre-imposta risoluzione, `tutorialSeen`, volume 0 (muto) e pulisce
+  lo storage (niente checkpoint stantii → ENTER = Nuova Partita).
+- **Dev server isolato**: Playwright avvia Vite con `PW_TEST=1` su una **porta dedicata (5174)** con HMR
+  **disattivo** e watcher che ignora gli artefatti di test ([`vite.config.ts`](../vite.config.ts)) — altrimenti
+  una ricarica a metà partita azzererebbe stato e hook. Porta ≠ 5173 per non riusare un `npm run dev` aperto.
+
+### §7.2 · I tre livelli
+
+| Livello | File | Cosa fa | Cosa cattura |
+|---|---|---|---|
+| **0 — smoke & bounds** | [`level0.boot.spec.ts`](../tests/e2e/level0.boot.spec.ts) | avvio headless a ogni preset di `Config.RESOLUTIONS`; legge i `getBounds`/hit-area degli elementi **interattivi** | crash all'avvio, shader/texture rotte, **UI fuori dalla viewport** (pulsante non cliccabile) in 4:3 e 16:9 |
+| **1 — monkey** | [`level1.monkey.spec.ts`](../tests/e2e/level1.monkey.spec.ts) | martella input **reali** casuali (tastiera+mouse) per ~20s, RNG seedato | eccezioni non gestite, `console.error`, soft-lock, blocchi |
+| **2 — bot + invarianti** | [`level2.bot.spec.ts`](../tests/e2e/level2.bot.spec.ts) | guida e a ogni campione verifica le invarianti; + morte→reset totale (ramo `debugRun`, deterministico via `fuel=0`) e transizione di fine missione (tasto debug `N`) | NaN/valori fuori range, `money` negativo, posizione fuori dal mondo, score che torna indietro, reset incoerente |
+
+Le **invarianti** vivono in `findInvariantViolations` ([`tests/e2e/harness.ts`](../tests/e2e/harness.ts)) — l'oracolo:
+`health∈[0,max]`, `fuel∈[0,max]`, `score≥0` e non-decrescente, `combo≥0`, `money≥0`, tutti **finiti** (no NaN),
+veicolo entro i bordi del mondo **mentre è controllabile**. È il punto da estendere quando aggiungi stato.
+
+### §7.3 · Comandi
+
+```bash
+npm run test:e2e          # tutti e tre i livelli (avvia da solo il dev server di test)
+npm run test:e2e:level0   # solo smoke + bounds        · :level1 monkey · :level2 bot+invarianti
+npm run test:e2e:headed   # con finestra visibile (debug)
+npm run test:e2e:report   # apre il report HTML dell'ultimo run
+```
+
+> **Decisione di dipendenza** ([CLAUDE.md](../CLAUDE.md): «niente dipendenze nuove senza motivo»). `@playwright/test`
+> è una **devDependency** (non entra nel bundle del gioco); il motivo è esplicito: non esisteva un runner E2E e
+> il rendering Phaser richiede un browser vero (no headless puro in Node). I binari del browser si installano una
+> volta con `npx playwright install chromium`.
+
+### §7.4 · Limiti e reperti noti
+
+- **Cosa NON copre:** estetica delle texture procedurali, "feel", audio, bellezza del layout → restano §4 (occhio
+  umano). Il check di §7.1 sui bounds è **geometrico** ("è dentro la viewport?"), non uno screenshot-diff (escluso da §6).
+- **Reperto aperto:** il bot ha già stanato un bug minore — alla **uscita dal controllo** (morte / freeze del boss /
+  fine missione) la **velocità residua del veicolo non viene azzerata** e `updateVehicle` (che fa `setVelocity(0,0)`
+  + clamp ogni frame) smette di girare → lo sprite può **derivare fuori dal mondo**. Cosmetico (coperto dall'overlay
+  GAME OVER), ma reale: per questo l'invariante di posizione è attiva solo *mentre il veicolo è controllabile*. Fix
+  naturale: azzerare la velocità del veicolo in `endGame`/quando entra in stato non-controllabile.
+
+---
+
+> **Manutenzione.** Quando cambi una **formula** in [`BALANCE.md`](BALANCE.md) (combo, mitigazione, consumo, ricompensa, curva di spawn) aggiorna i casi-oracolo di §2.2 **insieme** al codice: sono il modo in cui il valore *derivato* — che `validate:balance` non controlla — resta onesto. Quando aggiungi una **regola** (acquisti, reset, progressione) valuta un caso in §3 e una voce nella checklist §4. Quando aggiungi **stato di gioco** (un campo, un'invariante che non deve rompersi) aggiungilo a `findInvariantViolations` in [`tests/e2e/harness.ts`](../tests/e2e/harness.ts) (§7).

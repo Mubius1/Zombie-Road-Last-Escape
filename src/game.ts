@@ -50,6 +50,12 @@ export default class Game {
     // è `false` → l'intero blocco (e l'import dinamico di DebugScene) è rimosso dal bundle finale.
     if (import.meta.env.DEV) {
       void import('./scenes/DebugScene').then(m => game.scene.add('DebugScene', m.default));
+      // Hook per i test E2E automatici (tests/e2e/*, vedi docs/TESTING.md §7): espone l'istanza di gioco
+      // al contesto pagina così Playwright può leggere lo stato delle scene (salute/carburante/posizione…)
+      // e verificare invarianti e bounds dell'interfaccia. SOLO in DEV → `vite build` sostituisce
+      // `import.meta.env.DEV` con `false` e rimuove l'intero blocco (dead-code elimination): nel gioco
+      // distribuito NON esiste alcuna superficie `__ZR`.
+      (globalThis as Record<string, unknown>).__ZR = game;
     }
   }
 }

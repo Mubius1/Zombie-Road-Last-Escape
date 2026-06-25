@@ -315,6 +315,37 @@ export default class SoundManager {
     src.start(); src.stop(this.ctx.currentTime + 0.22);
   }
 
+  /**
+   * BRUSIO DI RADIO — fruscio di una trasmissione che si sintonizza, sotto il bollettino (campagna "Il Convoglio").
+   * Soffio portante in bandpass medio-acuto (la radio "respira": attacco morbido, coda lunga) + qualche crepitio
+   * sparso in highpass (la statica che scoppietta). Volume modesto: è una texture, non un evento. Vedi ART_BIBLE_AUDIO §5.
+   */
+  playRadioStatic() {
+    this.resumeIfSuspended();
+    const t0 = this.ctx.currentTime, dur = 2.4;
+    // Soffio portante: rumore in bandpass (firma timbrica 1650 Hz), in loop per coprire l'intera durata.
+    const src = this.noise(); src.loop = true;
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1650; bp.Q.value = 0.7;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.001, t0);
+    g.gain.linearRampToValueAtTime(0.085, t0 + 0.28);     // si sintonizza
+    g.gain.setValueAtTime(0.07, t0 + 1.5);                // tiene basso
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur); // si spegne
+    src.connect(bp); bp.connect(g); g.connect(this.master);
+    src.start(t0); src.stop(t0 + dur + 0.05);
+    // Crepitii: micro-pop in highpass sparsi nel tempo (la radio scoppietta).
+    for (let i = 0; i < 4; i++) {
+      const t = t0 + 0.25 + Math.random() * (dur - 0.7);
+      const cs = this.noise();
+      const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2200;
+      const cg = this.ctx.createGain();
+      cg.gain.setValueAtTime(0.05 + Math.random() * 0.05, t);
+      cg.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+      cs.connect(hp); hp.connect(cg); cg.connect(this.master);
+      cs.start(t); cs.stop(t + 0.08);
+    }
+  }
+
   playGameOver() {
     [280, 240, 190, 140].forEach((freq, i) => {
       const osc = this.ctx.createOscillator();

@@ -265,6 +265,11 @@ Sottoinsieme di numeri verificato automaticamente da `npm run validate:audio` co
 - **Trigger:** un'arma a **munizioni finite** prova a sparare a riserva **0** (`fireWeapon`) → click + ripiego automatico sulla MG.
 - **Intento:** il "click" del caricatore vuoto = "sei a secco". Secco, neutro (nessun gesto su/giù), leggero: dice "vuoto", non "minaccia". Chiude l'anello del pilastro *scarsità* (munizioni finite).
 
+### 5.19 BRUSIO DI RADIO — `playRadioStatic()` 🩸
+- **F/Filtro:** soffio portante = `noise` (loop) + bandpass **1650 Hz** Q0.7 · **Env:** 0.001→**0.085** in 0.28 s (si sintonizza) → 0.07 → 0.001 a 2.4 s (si spegne) + **4 crepitii** = `noise`+highpass **2200 Hz**, micro-pop (picco ~0.05–0.10, 0.05 s) sparsi nel tempo.
+- **Trigger:** apertura di un **bollettino radio** della campagna (`GameScene.showRadio`, inizio atto). Una volta per bollettino.
+- **Intento:** "una **voce dal mondo che crolla**". Texture sommessa (volume modesto, sotto tutto), non un evento: la radio che si sintonizza e scoppietta accompagna il testo del bollettino. Nessun gesto su/giù — è ambiente, non minaccia. Firma timbrica 1650 Hz (descrittiva §5, non validata 🔒).
+
 > **Lifecycle (AU):** il `master` ha un **buffer di rumore condiviso** (`noiseBuffer`, generato una volta) riusato da tutte le voci a rumore; `startEngine()` fa `ctx.resume()` se il contesto è sospeso; `dispose()` (chiamato allo SHUTDOWN di GameScene e SettingsScene) ferma il motore e **scollega il bus riverbero (`shotWet`/`shotVerb`) + master + limiter** da `destination` → nessun nodo orfano sul context condiviso a ogni restart.
 
 ---

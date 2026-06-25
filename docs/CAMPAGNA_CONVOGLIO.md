@@ -24,6 +24,35 @@ Tutto questo è **design-intent**: nulla è ancora implementato. La roadmap (§8
 
 ---
 
+## ✅ Stato di implementazione
+
+Tutte e 6 le fasi della roadmap (§8) sono **implementate** sul branch `dev`, ciascuna con **build verde** (validatori art/balance/audio/i18n + `tsc` stretto + ESLint + `vite build`):
+
+| Fase | Stato | Note |
+|---|---|---|
+| **F1** Manifest finito + `legIndex` + epilogo | ✅ | `STAGE_MANIFEST` (31 tratte, 6 atti) in `World.ts`; mod-7 disaccoppiato; vittoria → rifugio terminale |
+| **F2** Descrittori-tappa (10 assi) | ✅ | length/spawn/burst/fuel/ammo/hazard/poolBias iniettati nei punti già parametrici |
+| **F3** Mappa + odometro + 2 biforcazioni | ✅ | `RouteScene` legge il manifest; nastro-odometro HUD; bivi a `legIndex` 11/22 (`branchTaken`) |
+| **F4** Set-piece forzati | ✅ | l'asse `setPiece` forza l'evento B2 della tratta-climax in modo deterministico |
+| **F5** Morale + epilogo 4 finali | ✅ | `MORALE` (gate `hasActiveSurvivor`), indicatore HUD, caduti nominati (`RunData.fallen`) |
+| **F6** Nemesi-con-memoria (opzionale) | ✅ | il Gigante diventa la Nemesi negli atti centrali/finali; `nemesisState`/`nemesisHeat` persistenti |
+
+**Rifondazione dell'equipaggio (implementata, oltre F1-F6).** I sopravvissuti — la posta in gioco — non sono più astratti: **visibili** (pannello-crew coi ritratti e lo stato sano/affamato/ferito in-missione), **con voce** (bio al reclutamento + battute col nome a fame/morale), oggetto di **incontri Tier C** alle soste (`StopScene`: camp/depot/market/checkpoint → scelte morali con conseguenza in `RunData.choices`, lette dall'epilogo), e la **perdita** è un *beat* (il volto che sfuma + un superstite in silenzio), non un toast. Numeri in [BALANCE §11](BALANCE.md), regole in [GAME_DESIGN §9](GAME_DESIGN.md).
+
+**🩸 Pivot "This War of Mine su ruote" (in corso).** Decisione del designer: il **cuore** del gioco sono le **persone e la storia**, non la guida — la tratta è solo *pressione*. Implementato:
+- **Tratte corte** — `MISSION_DIST` 18000→6000 (~60 km / ~25 s): la guida è un **transito breve e teso**. Ondata d'apertura alleggerita (dread, non sciame).
+- **Dialoghi coi sopravvissuti** — cammini fino a un membro dell'equipaggio nell'hub (figure full-body in scala col mondo, colorate per ruolo) e **parli** (modale riusato, `bodyKey` = ciò che dice).
+- **7 archi personali DATA-DRIVEN** (`src/Convoy.ts` → `SURVIVOR_ARCS`, testi in i18n): ognuno ha un **segreto/destino** che si intreccia in un solo mondo — Sara/Lena, Bruno e le mani che tremano, Marcus e l'ordine, Nadia e il valico, Vince e la scorta nascosta, Eva e il colpo mancato, Karim e i cancelli murati. Cadenza: battuta-in-voce (per **stato emotivo**) → **beat** (la scelta, sbloccato per atto `unlockAct`) → eco → **carta-epilogo** letta dall'epilogo generalizzato.
+- **Stato emotivo** (derivato: affamato/ferito/morale<break) → la figura nell'hub appare **spenta e fredda** e la battuta cambia (calm/distressed). Alla sosta un **pannello-stato** (alto-sx) rende leggibili i *bisogni*: scorta di cibo + quanti resterebbero **a digiuno** alla ripartenza, **morale** con la sua parola (saldo/fragile/a terra/alla rotta), e l'elenco di **affamati/feriti** per nome — più una **pastiglia colorata** sopra ogni testa (verde/ambra/rosso) che mappa lo stato sulla persona.
+- **Radio del mondo** — bollettino per atto (`radio.act0..5`) che **degrada** dal "è tutto sotto controllo" alla statica del "venite, vi prego", mostrato all'inizio di ogni atto (in alto: è una trasmissione).
+- **Voce dell'equipaggio in guida** — finestra **lower-third** in basso con **ritratto (`survivor_<key>`) + nome** del parlante: battute ambientali a mezza voce durante la tratta, scelte per **umore** (`bark.idle.calm/uneasy/breaking`, derivato da morale + fame/ferite di chi parla) + i bark di morale/fame a inizio tratta. Le persone presenti *anche al volante* (This War of Mine). In coda, non si sovrappongono; ~1 per tratta breve.
+
+**Prossimo:** sotto-beat multipli per arco, intrecci fra personaggi (relazioni), audio della radio (`playRadioBlip`), e un pass di **game-feel del combat** (peso, paura) a playtest.
+
+**Resta da fare (taratura a playtest):** ritmo/densità delle tratte (i primi atti possono risultare radi); somma `lengthMult` → ~6000 km esatti; bilancio dei numeri morale/incontri; **parità gamepad** dei pannelli Tier C (oggi: mouse + tasti `1-N`; pad = opzione neutra).
+
+---
+
 ## §1 · Pilastri della campagna
 
 > **Ambito.** Definisce *cosa rende "Il Convoglio" una campagna* — gli assi portanti del viaggio finibile — distinti dai **7 pilastri di game-feel** del [§0 di `GAME_DESIGN.md`](GAME_DESIGN.md#0--visione-e-pilastri) (linee 18-26), che restano la fonte di verità della tensione momento-per-momento. Il §0 dice *com'è teso il singolo istante*; questa sezione dice *perché si guida, verso cosa, e cosa resta quando si arriva*. Ogni pilastro di campagna **eredita** uno o più pilastri horror e li proietta sull'arco lungo (~2-4h). I pilastri sono **5**; ognuno chiude con la destinazione documentale e lo stato di implementazione.

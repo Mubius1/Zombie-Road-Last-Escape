@@ -116,6 +116,32 @@ export function buildHubTextures(scene: Phaser.Scene) {
   if (!scene.textures.exists('hub_driver')) buildFigure(scene, 'hub_driver', 0x2f3d2c, 0xc99a6a, 0x1e1e24);
 }
 
+/**
+ * Figura full-body in stile hub (STESSE proporzioni del driver, non i "busti" survivor_<key> da galleria),
+ * colorata col colore-firma del ruolo → l'equipaggio nell'hub è in scala col mondo. Texture `crew_<key>`.
+ */
+/** Aspetto per ruolo: pelle + capelli/copricapo distinti → si riconoscono come PERSONE, non solo colori. */
+const CREW_LOOK: Record<string, { skin: number; hair: number; gear: string }> = {
+  mechanic:      { skin: 0xc99a6a, hair: 0x3a2a1a, gear: 'cap' },     // Bruno: berretto, capelli scuri
+  medic:         { skin: 0xe0b08a, hair: 0xffffff, gear: 'nurse' },   // Sara: cuffia bianca (crocetta)
+  soldier:       { skin: 0xa87a52, hair: 0x3a4a2a, gear: 'helmet' },  // Marcus: elmetto
+  explorer:      { skin: 0xd8a878, hair: 0x5a3a1a, gear: 'hat' },     // Nadia: cappello a tesa
+  looter:        { skin: 0xb98a5a, hair: 0x1a1a16, gear: 'beanie' },  // Vince: beanie
+  sniper:        { skin: 0xe8c098, hair: 0x4a4a52, gear: 'hood' },    // Eva: cappuccio
+  demolitionist: { skin: 0x8a5a38, hair: 0x14110a, gear: 'bald' },    // Karim: rasato + barba
+};
+
+export function buildCrewFigure(scene: Phaser.Scene, key: string, jacketCss: string): string {
+  const texKey = `crew_${key}`;
+  if (!scene.textures.exists(texKey)) {
+    const parsed = parseInt(jacketCss.replace('#', ''), 16);
+    const jacket = Number.isNaN(parsed) ? 0x556070 : parsed;
+    const look = CREW_LOOK[key] ?? { skin: 0xc99a6a, hair: 0x2a2a22, gear: 'cap' };
+    buildFigure(scene, texKey, jacket, look.skin, mix(jacket, 0xffffff, 0.35), look.gear, look.hair);
+  }
+  return texKey;
+}
+
 /** Frame fisso dell'auto-hub (così l'origine a terra è la stessa per ogni veicolo). */
 export const CAR_FW = 116, CAR_FH = 72, CAR_GY = 60;
 interface CarShape { len: number; bodyH: number; cabX: number; cabW: number; cabH: number; wheel: number; bed?: boolean }
@@ -174,7 +200,7 @@ export function buildHubCar(scene: Phaser.Scene, key: string): string {
   g.generateTexture(tkey, CAR_FW, CAR_FH); g.destroy();
   return tkey;
 }
-function buildFigure(scene: Phaser.Scene, key: string, jacket: number, skin: number, cap: number) {
+function buildFigure(scene: Phaser.Scene, key: string, jacket: number, skin: number, cap: number, gear: string = 'cap', hair: number = cap) {
   if (scene.textures.exists(key)) return;
   const g = osGraphics(scene); const W = 24, H = 38;
   const trouser = mix(jacket, 0x000000, 0.5);
@@ -198,9 +224,34 @@ function buildFigure(scene: Phaser.Scene, key: string, jacket: number, skin: num
   g.fillStyle(skin); g.fillCircle(11, 7, 5.4);                                                         // testa (luce)
   g.fillStyle(mix(skin, 0xffffff, 0.22)); g.fillCircle(9, 5, 2.2);                                     // highlight fronte
   g.fillStyle(0x17110a); g.fillCircle(9.6, 7.4, 0.9); g.fillCircle(12.4, 7.4, 0.9);                    // occhi
-  g.fillStyle(mix(cap, 0x000000, 0.35)); g.fillRoundedRect(6, 4.5, 12, 3, 2);                          // capelli
-  g.fillStyle(cap); g.fillRoundedRect(6, 2, 11, 5, 3); g.fillStyle(mix(cap, 0x000000, 0.4)); g.fillRect(6, 6, 12, 1.6); // berretto + visiera
-  g.fillStyle(mix(cap, 0xffffff, 0.2)); g.fillRect(7, 2.6, 7, 1.4);                                    // luce berretto
+  // Capelli + COPRICAPO per ruolo (distingue le persone, non solo il colore della giacca). `hair` = colore.
+  if (gear === 'helmet') {                                                                             // soldato: elmetto
+    g.fillStyle(hair); g.fillRoundedRect(5, 1, 13, 5, 4);
+    g.fillStyle(mix(hair, 0xffffff, 0.22)); g.fillRect(6.5, 1.8, 7, 1.3);
+    g.fillStyle(mix(hair, 0x000000, 0.4)); g.fillRect(5, 5, 13, 1.3);
+  } else if (gear === 'nurse') {                                                                       // infermiera: cuffia
+    g.fillStyle(mix(hair, 0x000000, 0.15)); g.fillRoundedRect(6, 4, 12, 2.6, 2);
+    g.fillStyle(0xf2f2f2); g.fillRoundedRect(6.5, 1.4, 10, 3.6, 2);
+    g.fillStyle(0xcc2222); g.fillRect(10.3, 2.2, 2.4, 0.9); g.fillRect(11.1, 1.6, 0.9, 2.1);
+  } else if (gear === 'hat') {                                                                         // esploratrice: cappello a tesa
+    g.fillStyle(mix(hair, 0x000000, 0.15)); g.fillRoundedRect(6, 4.2, 12, 2.6, 2);
+    g.fillStyle(hair); g.fillEllipse(11.5, 4.2, 17, 3.2);
+    g.fillStyle(mix(hair, 0x000000, 0.25)); g.fillRoundedRect(7.5, 0.4, 8, 4, 2);
+  } else if (gear === 'beanie') {                                                                      // saccheggiatore: beanie
+    g.fillStyle(hair); g.fillRoundedRect(5.5, 1, 12, 5, 3);
+    g.fillStyle(mix(hair, 0x000000, 0.35)); g.fillRect(5.5, 4.6, 12, 1.5);
+  } else if (gear === 'hood') {                                                                        // cecchina: cappuccio
+    g.fillStyle(hair); g.fillRoundedRect(4.5, 0.6, 14, 7, 5);
+    g.fillStyle(mix(skin, 0x000000, 0.06)); g.fillCircle(11, 7.4, 4.4);
+    g.fillStyle(0x17110a); g.fillCircle(9.7, 7.6, 0.9); g.fillCircle(12.3, 7.6, 0.9);
+  } else if (gear === 'bald') {                                                                        // artificiere: rasato + barba
+    g.fillStyle(mix(hair, 0x000000, 0.08)); g.fillRoundedRect(7, 3, 9, 2, 1);
+    g.fillStyle(mix(skin, 0x000000, 0.4)); g.fillRect(8, 9.4, 7, 2.2);
+  } else {                                                                                             // cap (default/driver): berretto + visiera
+    g.fillStyle(mix(hair, 0x000000, 0.35)); g.fillRoundedRect(6, 4.5, 12, 3, 2);
+    g.fillStyle(hair); g.fillRoundedRect(6, 2, 11, 5, 3); g.fillStyle(mix(hair, 0x000000, 0.4)); g.fillRect(6, 6, 12, 1.6);
+    g.fillStyle(mix(hair, 0xffffff, 0.2)); g.fillRect(7, 2.6, 7, 1.4);
+  }
   g.generateTexture(key, W, H); g.destroy();
 }
 const NPC_PALETTE: Record<string, [number, number, number]> = {

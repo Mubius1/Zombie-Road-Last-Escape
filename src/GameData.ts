@@ -54,6 +54,22 @@ export function vehicleRangeKm(v: VehicleData, tank = 100): number {
  *  per evitare drift tra consumo (gioco) e proiezione "affamato" (negozio). */
 export const FOOD = { max: 120, perSurvivor: 10, start: 40, rationFood: 40, rationCost: 100 } as const;
 
+/**
+ * Campagna "IL CONVOGLIO" (F5) — MORALE del convoglio (0..max), modellato sul pattern FOOD (struct
+ * condivisa anti-drift). Sotto `break` il gate unico `hasActiveSurvivor` si spegne (abilità OFF); sotto
+ * `rout` rischio diserzione (gancio futuro). I delta sono *derivati/in taratura* (BALANCE §11), non 🔒.
+ * Registro This War of Mine: il morale è "non crollare", non un buff — nessun bonus a morale alto.
+ */
+export const MORALE = {
+  start: 60, max: 100, break: 40, rout: 15,
+  dLoss: -25,        // perdita di un sopravvissuto (morte/abbandono)
+  dRescue: 12,       // salvataggio su strada riuscito
+  dCamp: 8,          // sosta sicura all'accampamento
+  dRecruit: 6,       // reclutamento riuscito
+  dHungry: -10,      // almeno un affamato a fine consumo cibo
+  dTrattaClean: 2,   // tratta completata (deriva positiva lenta)
+} as const;
+
 export interface SurvivorData {
   /** Chiave stabile (logica/persistenza). */
   key: string;

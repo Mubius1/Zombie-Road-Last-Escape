@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { VEHICLES, VEHICLE_KEYS, SURVIVORS, SurvivorData, Upgrades, WEAPONS, WEAPON_KEYS, WEAPON_AMMO, weaponInfiniteAmmo, WeaponType, FOOD, vehicleRangeKm } from '../GameData';
+import { VEHICLES, VEHICLE_KEYS, SURVIVORS, SurvivorData, Upgrades, WEAPONS, WEAPON_KEYS, WEAPON_AMMO, weaponInfiniteAmmo, WeaponType, FOOD, MORALE, vehicleRangeKm } from '../GameData';
 import { buildEntityTextures, buildSurvivorTextures } from '../EntityTextures';
 import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import Juice from '../Juice';
@@ -10,7 +10,7 @@ import MenuPad, { Focusable } from '../MenuPad';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
 import { getRun, setRun, snapshotRun } from '../RunState';
 import SaveData from '../SaveData';
-import { locationForMission, accentCss, StopLocation } from '../Locations';
+import { locationForLeg, accentCss, StopLocation } from '../Locations';
 import { t } from '../i18n';
 
 const H = 600;
@@ -95,9 +95,9 @@ export default class ShopScene extends Phaser.Scene {
     this.currentWeapon  = getRun(this.registry, 'currentWeapon')  ?? 'mg';
     this.ownedWeapons   = getRun(this.registry, 'ownedWeapons')   ?? ['mg'];
 
-    // Idea 1 (B3): dove arrivi al termine degli x km. Funzione DETERMINISTICA del numero di missione
-    // (già incrementato) → stabile tra i refresh post-acquisto, niente da cachare.
-    this.location = locationForMission(this.missionNum);
+    // Campagna "IL CONVOGLIO" (F1): la sosta è quella della tratta APPENA COMPLETATA = legIndex−1
+    // (triggerMissionComplete ha già avanzato legIndex). Stabile tra i refresh post-acquisto.
+    this.location = locationForLeg((getRun(this.registry, 'legIndex') ?? 1) - 1);
 
     // Offerta reclute: calcolata UNA volta per SOSTA (non sui refresh post-azione né sul rientro dall'hub,
     // altrimenti uscire/rientrare nel negozio rimescola la terna = reroll gratis). Cache nel registry,
@@ -126,6 +126,10 @@ export default class ShopScene extends Phaser.Scene {
     // Dissolvenza solo al primo ingresso — non a ogni ri-disegno dopo un acquisto. Il negozio è un
     // MENU: nessun effetto schermo (il post-processing filmico vive solo in GameScene), qualunque sia `screenFx`.
     if (!this.replay) Juice.fadeIn(this);
+
+    // Bark di reclutamento sopravvissuto al refresh: mostrato sulla scena ricostruita → leggibile per intero.
+    const pendingBark = this.registry.get('pendingRecruitBark') as string | undefined;
+    if (pendingBark) { this.registry.remove('pendingRecruitBark'); this.bark(pendingBark); }
   }
 
   /** Ri-disegna la scena dopo un acquisto/selezione, senza ripetere la dissolvenza. */
@@ -408,8 +412,9 @@ export default class ShopScene extends Phaser.Scene {
 
       // Anteprima reale: sprite veicolo (sbiadito se non posseduto) + torretta statica (canna mg, in avanti).
       // Scala 0.58 (era 0.7): i mezzi larghi (camion) restavano dentro al bordo della card da 106px.
-      this.add.image(vx + 50, py + 28, `vehicle_${key}`).setScale(0.58 / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
-      this.add.image(vx + 50 + (TURRET_DX[key] ?? 8) * 0.58, py + 28, 'aim_turret_mg')
+      // y a py+32 (era py+28): scende di 4px così il bordo alto del mezzo non tocca il bordo della card.
+      this.add.image(vx + 50, py + 32, `vehicle_${key}`).setScale(0.58 / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
+      this.add.image(vx + 50 + (TURRET_DX[key] ?? 8) * 0.58, py + 32, 'aim_turret_mg')
         .setOrigin(0.11, 0.5).setScale(0.58 / OVERSAMPLE).setAlpha(owned ? 1 : 0.4);
       Ui.text(this, vx + 50, py + 46, t(v.name), {
         fontSize: '10px', color: owned ? UI.text : '#444444', wordWrap: { width: 100 }, align: 'center',
@@ -501,6 +506,15 @@ export default class ShopScene extends Phaser.Scene {
     this.afterPurchase();
   }
 
+  /** Voce dell'equipaggio: toast diegetico (battuta) a centro-alto, per dare personalità ai sopravvissuti. */
+  private bark(msg: string) {
+    const txt = Ui.text(this, this.scale.width / 2, 44, msg, {
+      fontSize: '14px', color: UI.greenSoft, fontStyle: 'italic', stroke: '#000000', strokeThickness: 3,
+      align: 'center', wordWrap: { width: 540 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(80);
+    this.tweens.add({ targets: txt, alpha: 0, y: 30, delay: 2600, duration: 1500, onComplete: () => txt.destroy() }); // ~4.1s: tempo di leggere la bio
+  }
+
   private recruitSurvivor(key: string) {
     if (this.survivors.includes(key)) return;
     // M1: 1 reclutamento a sosta. Il lock è per numero di missione → sopravvive al refresh del negozio.
@@ -509,8 +523,15 @@ export default class ShopScene extends Phaser.Scene {
     if (this.survivors.length >= cap) { ShopScene.sfx?.playImpact(); return; } // veicolo pieno
     setRun(this.registry, 'survivors', [...this.survivors, key]);
     setRun(this.registry, 'recruitLockMission', this.missionNum);
+    // F5: reclutare risolleva il morale del convoglio (il gruppo cresce).
+    setRun(this.registry, 'morale', Math.min(MORALE.max, (getRun(this.registry, 'morale') ?? MORALE.start) + MORALE.dRecruit));
     this.persist();
     ShopScene.sfx?.playFuelPickup();
+    // Voce: chi sale a bordo si presenta leggendo la propria storia (i bio finora "morti" diventano voce).
+    // Il bark è memorizzato nel registry e ri-mostrato dopo il refresh: `scene.restart()` lo cancellerebbe
+    // in 150 ms (lampo illeggibile) → invece lo replichiamo sulla scena ricostruita, dura per intero.
+    const sv = SURVIVORS.find(x => x.key === key);
+    if (sv) this.registry.set('pendingRecruitBark', t('survivor.barkRecruit', { name: `${sv.properName} ${sv.surname}`, bio: t(sv.bio) }));
     this.time.delayedCall(150, () => this.refresh());
   }
 

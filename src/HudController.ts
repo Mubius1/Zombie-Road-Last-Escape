@@ -40,8 +40,10 @@ export interface HudBuildOpts {
   missionDist: number;
   components: Record<ComponentKey, ComponentData>;
   activeSurvivors: string[];
-  /** M2: sopravvissuti affamati (segnalati con "!" e tinta ambra nell'HUD). */
+  /** M2: sopravvissuti affamati (abilità spenta → ritratto smorzato nel pannello-crew). */
   hungry: string[];
+  /** M3: sopravvissuti feriti (abilità spenta → ritratto smorzato + anello rosso nel pannello-crew). */
+  injured: string[];
   /** M2 corazza passiva: riduzione danno % (badge statico, non più una barra componente). */
   armorReductionPct: number;
   ownedWeapons: WeaponType[];
@@ -49,6 +51,13 @@ export interface HudBuildOpts {
   debugGod: boolean;
   /** Callback per il cambio arma da click sul selettore HUD (U3). */
   onSelectWeapon: (key: WeaponType) => void;
+  // Nastro-odometro di campagna "IL CONVOGLIO" (F3): progresso verso il rifugio.
+  actName: string;       // nome atto già risolto (i18n)
+  campaignKm: number;    // km percorsi all'inizio della tratta corrente
+  campaignTotalKm: number; // km totali della campagna (META)
+  // Morale del convoglio (F5): indicatore + soglia sotto cui le abilità si spengono.
+  morale: number;
+  moraleBreak: number;
 }
 
 export interface HudState {
@@ -197,12 +206,23 @@ export default class HudController {
     // label meta (static)
     this.own(Ui.text(s, 408,33,t('hud.kmTarget',{n:DIST_KM}),{fontSize:'10px',color:UI.faint}).setDepth(D+1));
 
-    // Survivors icons
-    if (o.activeSurvivors.length > 0) {
-      const names: Record<string,string> = { mechanic:'[M]', medic:'[+]', soldier:'[S]', explorer:'[E]', looter:'[$]', sniper:'[X]', demolitionist:'[B]' };
-      // M2: l'affamato (abilità spenta) ha un suffisso "!"; tutta la riga vira ambra se almeno uno lo è.
-      const txt = o.activeSurvivors.map(s2 => (names[s2]??s2) + (o.hungry.includes(s2) ? '!' : '')).join(' ');
-      this.own(Ui.text(s, dW-10,8,txt,{fontSize:'11px',color: o.hungry.length > 0 ? UI.amberSoft : '#cccc44'}).setOrigin(1,0).setDepth(D+1));
+    // ── Equipaggio "IL CONVOGLIO" (presenza visibile) ──────────────────────────────
+    // I sopravvissuti a bordo come RITRATTI sul bordo sinistro (riuso `survivor_<key>`), con stato
+    // leggibile: anello verde=sano · ambra=affamato · rosso=ferito (abilità spenta = ritratto smorzato).
+    // Il convoglio diventa qualcosa che VEDI, non tre iniziali in un angolo. Vedi docs/CAMPAGNA_CONVOGLIO.md.
+    const crew = o.activeSurvivors;
+    if (crew.length > 0) {
+      const cwX = 18, cwGap = 30, cwY0 = H / 2 - (crew.length - 1) * cwGap / 2;
+      crew.forEach((key, i) => {
+        const cy = cwY0 + i * cwGap;
+        const injured = o.injured.includes(key), hungry = o.hungry.includes(key);
+        const ring = injured ? 0xff5555 : hungry ? 0xffaa44 : 0x44cc66; // rosso ferito · ambra affamato · verde sano (numerico per box/circle)
+        this.own(Ui.box(s, cwX, cy, 26, 26, { fill: UI.black, fillAlpha: 0.5, radius: 6, stroke: ring, strokeAlpha: 0.95 }).setDepth(D));
+        const img = this.own(s.add.image(cwX, cy, `survivor_${key}`).setDepth(D + 1));
+        if (img.height > 0) img.setScale(22 / img.height);
+        if (injured || hungry) img.setAlpha(0.5); // abilità spenta → ritratto smorzato
+        this.own(s.add.circle(cwX + 10, cy - 10, 3.5, ring).setDepth(D + 2));
+      });
     }
 
     // Componenti (4): icona + SIGLA 3-lettere + % e barra a schema colore UNIFICATO (verde→ambra→rosso,
@@ -234,6 +254,23 @@ export default class HudController {
     this.own(Ui.box(s, OD_X + OD_W/2, OD_Y, OD_W, 9, { fill:UI.barGrey, radius:3 }).setDepth(D+1));
     this.overdriveFill = this.own(s.add.rectangle(OD_X, OD_Y, OD_W, 9, OD_COLORS.charge).setOrigin(0,0.5).setDepth(D+2));
     this.overdriveTxt  = this.own(Ui.text(s, OD_X + OD_W + 6, OD_Y, '', { fontSize:'10px', fontStyle:'bold', color:UI.gold }).setOrigin(0,0.5).setDepth(D+2));
+
+    // Nastro-odometro di campagna "IL CONVOGLIO" (F3): barra 0→totale km, con le tacche dei 6 atti,
+    // specchio della barra Sovraccarico ma a destra. Statico nella missione (progresso costante).
+    const ODO_W = 140, ODO_X = dW - ODO_W - 10, ODO_Y = OD_Y;
+    this.own(Ui.text(s, ODO_X + ODO_W, ODO_Y - 13, t('hud.odometer', { act: o.actName, km: o.campaignKm, total: o.campaignTotalKm }),
+      { fontSize:'10px', color:UI.greenSoft }).setOrigin(1, 0.5).setDepth(D+1));
+    this.own(Ui.box(s, ODO_X + ODO_W/2, ODO_Y, ODO_W, 8, { fill:UI.barGrey, radius:3 }).setDepth(D+1));
+    const odoPct = o.campaignTotalKm > 0 ? Math.min(1, o.campaignKm / o.campaignTotalKm) : 0;
+    this.own(s.add.rectangle(ODO_X, ODO_Y, Math.max(1, ODO_W * odoPct), 8, UI.distBar).setOrigin(0,0.5).setDepth(D+2));
+    const odoTicks = this.own(s.add.graphics().setDepth(D+3));
+    odoTicks.fillStyle(UI.black, 0.5);
+    for (let i = 1; i < 6; i++) odoTicks.fillRect(ODO_X + Math.round(ODO_W * i / 6), ODO_Y - 4, 1, 8);
+
+    // Morale del convoglio (F5): indicatore al centro della banda alta; vira rosso sotto la soglia di crollo.
+    this.own(Ui.text(s, dW / 2, ODO_Y, t('hud.morale', { n: Math.round(o.morale) }), {
+      fontSize:'11px', fontStyle:'bold', color: o.morale < o.moraleBreak ? UI.redSoft : UI.greenSoft,
+    }).setOrigin(0.5).setDepth(D+1));
 
     // Hint comandi: leggibile (U11). Prima era UI.disabled (#333) su pannello quasi nero → illeggibile.
     this.own(Ui.text(s, dW/2,H-6,t('hud.controls'),{fontSize:'11px',color:UI.faint}).setOrigin(0.5,1).setDepth(D));

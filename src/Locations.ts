@@ -17,6 +17,8 @@
  * Soste diegetiche (vedi docs/SOSTE_DIEGETICHE.md): i campi `hub*`/`stationKey` arredano la mini-scena
  * a piedi (`StopScene`) — colore di terreno/cielo, figure ambientali, nome della stazione-servizi.
  */
+import { STAGE_MANIFEST } from './World';
+
 export interface StopLocation {
   key: string;
   nameKey: string;    // titolo del luogo (rimpiazza "GARAGE")
@@ -62,6 +64,17 @@ const STOP_CYCLE = ['garage', 'depot', 'market', 'camp', 'garage', 'checkpoint',
 export function locationForMission(nextMission: number): StopLocation {
   const region = (((nextMission - 2) % 7) + 7) % 7;
   const key = STOP_CYCLE[region] ?? 'garage';
+  return STOP_LOCATIONS.find(l => l.key === key) ?? STOP_LOCATIONS[0]!;
+}
+
+/**
+ * Campagna "IL CONVOGLIO": sosta a valle della tratta APPENA COMPLETATA (`legIndex`), istanziata dal
+ * descrittore `STAGE_MANIFEST[legIndex].stopKind` invece che dal ciclo `STOP_CYCLE` mod-7. Fallback al
+ * GARAGE per indici fuori range (anti-softlock). Sostituisce `locationForMission` nei tre call-site
+ * (overlay fine missione · StopScene · ShopScene).
+ */
+export function locationForLeg(legIndex: number): StopLocation {
+  const key = STAGE_MANIFEST[legIndex]?.stopKind ?? 'garage';
   return STOP_LOCATIONS.find(l => l.key === key) ?? STOP_LOCATIONS[0]!;
 }
 

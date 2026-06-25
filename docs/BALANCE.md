@@ -18,7 +18,7 @@ Fonte: costanti in testa a `GameScene.ts`. La colonna **Valore** è validata (un
 | `costante` | Valore | Effetto |
 |---|---|---|
 | `SCROLL_SPEED` | 240 | velocità di scorrimento del mondo (u/s) = ritmo base |
-| `MISSION_DIST` | 18000 | lunghezza missione in u (~180 km mostrati · `KM_PER_UNIT`, ~75 s di guida — un singolo tratto credibile) |
+| `MISSION_DIST` | 6000 | lunghezza missione in u (~60 km mostrati · `KM_PER_UNIT`, ~25 s di guida base) — **pivot "This War of Mine su ruote"**: la tratta è un transito BREVE e teso, non il cuore (era 18000/~180 km) |
 | `BOSS_TRIGGER` | 0.82 | frazione di missione a cui appare il boss (82% → 14 760 u) |
 | `BASE_FUEL_DRAIN` | 0.5 | consumo carburante base /s (serbatoio integro) — × il `fuelEff` per-veicolo (§3 bis). Lento: il carburante PERSISTE tra le missioni (un pieno ≈ 3 missioni) |
 | `MAX_FUEL` | 100 | carburante massimo (+30 con upgrade) |
@@ -268,15 +268,20 @@ Fonte: `ZOMBIE_STATS` (velocità/HP/danno/punteggio) e `SPAWN_POOL` (peso pool).
 
 - **Sciami:** ogni `spawnZombie()` non genera più un singolo nemico per i *fodder* — Comune e Corridore arrivano in gruppo di **1-3**, Tossico **1-2**; tutti gli altri tipi restano **singoli**. Combinato con le sferzate (§1 bis) il risultato è un ritmo a picchi molto più affollato di prima (quando solo il Comune, al 25%, usciva a 2-3).
 
-### Scaling "new game+" (G2 · rafforzato in B4)
-Oltre la frequenza di spawn, da fine ciclo crescono **HP e danno** di nemici e boss col numero di ciclo di regioni (1 ciclo = 7 regioni):
+### Scaling di difficoltà — campagna "IL CONVOGLIO" (F1, derivato/non validato)
 
-`diffMult = 1 + 0.2 · ⌊(missione − 1)/7⌋`  → missioni 1–7 ×1.0 · 8–14 ×1.2 · 15–21 ×1.4 · …
+> 🔁 **Cambiato in F1.** La vecchia rampa **NG+ illimitata** legata al ciclo mod-7 (`1 + 0.2·⌊(missione−1)/7⌋`, missioni 1–7 ×1.0, 8–14 ×1.2, …) è sostituita da una curva **finita con TETTO** sull'**atto** corrente, coerente con l'arco finibile (vedi [`CAMPAGNA_CONVOGLIO.md`](CAMPAGNA_CONVOGLIO.md) §2). Niente più endless+.
 
-- **HP** = `Math.ceil(base · diffMult)` su tutti gli zombi (incl. gigante e spawn boss); **boss** = `round(hp · diffMult)`. Il `ceil` è deliberato: con `round`, `round(1×1.2)=1` lasciava invariati i nemici da 1 HP (comune/corridore, ~60% del pool) → lo scaling era di fatto inerte (B4). Ora anche loro salgono (1→2 al 2° ciclo).
-- **Danno da contatto** dei nemici = `round(danno · diffMult)` (prima il danno non scalava affatto).
-- I valori-base 🔒 in §5/§6 restano invariati: lo scaling è un fattore a runtime (la formula vive in `GameScene.difficultyMult` e, in sync, in `BossController`).
-- *Da tarare a playtest:* passo 0.2 e curva sono un punto di partenza, non un valore validato.
+`diffMult = 1 + 0.15 · min(actIndex, 5)`  (`actIndex` 0-based: Atto 1 = 0 … Atto 6 = 5)
+
+| Atto | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| `diffMult` | ×1.00 | ×1.15 | ×1.30 | ×1.45 | ×1.60 | ×1.75 (tetto) |
+
+- **HP** = `Math.ceil(base · diffMult)` su tutti gli zombi (incl. gigante e spawn boss); **boss** = `round(hp · diffMult)`. Il `ceil` è deliberato: con `round`, `round(1×1.15)=1` lascerebbe invariati i nemici da 1 HP (comune/corridore, ~60% del pool); col `ceil` salgono comunque dagli atti centrali.
+- **Danno da contatto** dei nemici = `round(danno · diffMult)`.
+- I valori-base 🔒 in §5/§6 restano invariati: lo scaling è un fattore a runtime (la formula vive in `GameScene.difficultyMult`, ora su `actIndex`). `BossController` mantiene la sua copia ma i boss sono **disattivati** (`BOSSES_ENABLED = false`) → ininfluente finché restano spenti.
+- *Da tarare a playtest:* passo 0.15 e tetto a 1.75 sono un punto di partenza, non un valore validato.
 
 ---
 
@@ -447,6 +452,78 @@ npm run build              # art + balance (gate duro) → tsc → vite build
 ```
 
 In **`npm run dev`** un plugin Vite (`scripts/vite-plugin-validate.mjs`) esegue entrambi i validatori all'avvio e a ogni salvataggio dei file rilevanti: in caso di deriva mostra un **banner in console** e l'**overlay d'errore** nel browser, senza fermare il server. Vedi [CLAUDE.md Regola n.2/n.3](../CLAUDE.md).
+
+---
+
+## §11 · Campagna "IL CONVOGLIO" — descrittori di tappa & curve (derivati, NON 🔒)
+
+> ⚠️ **Documentati, NON lockati riga-per-riga** (decisione [`CAMPAGNA_CONVOGLIO.md`](CAMPAGNA_CONVOGLIO.md) §9.6-B): il `STAGE_MANIFEST` (`src/World.ts`) è *contenuto di campagna in taratura continua* — lockarlo riga-per-riga ingesserebbe il level-design procedurale. Solo le **costanti-cardine** restano 🔒 (`MISSION_DIST`, §1). Qui si documentano gli **assi** del descrittore e le **curve**; i valori per-tratta vivono nel manifest.
+
+### Assi del descrittore di tappa (`StageDescriptor`)
+
+Ogni tratta della campagna è una riga di `STAGE_MANIFEST`; questi assi sono **moltiplicatori** letti nei punti di gioco già parametrici — **nessun nemico/scena/asset nuovo** (F2).
+
+| Asse | Range | Dove agisce (GameScene) | Default neutro |
+|---|---|---|---|
+| `lengthMult` | 0.6 … 1.5 | distanza-obiettivo `missionDist = MISSION_DIST·lengthMult` (durata + soglie eventi + HUD km); **NON** tocca `MISSION_DIST` 🔒 | 1.0 |
+| `spawnMult` | 0.6 (assedio) … 1.5 (quiete) | `calmInterval`/`burstInterval` × `spawnMultCombined()` | 1.0 |
+| `burstMult` | 0.8 … 1.6 | durata ondata in `advanceSpawnPhase` (`BURST_MS_BASE`·…) | 1.0 |
+| `fuelDrainMult` | 1.0 … 1.6 | `getEffectiveFuelDrain` (leva *This War of Mine*) | 1.0 |
+| `ammoCrateMult` | 0.5 (scarso) … 1.5 | intervallo casse munizioni (`13000 / ammoCrateMult`) | 1.0 |
+| `hazardMult` | 0.4 … 2.0 | intervallo hazard (`HAZARD_SPAWN_INTERVAL / (route.hazardMult·hazardMult)`) | 1.0 |
+| `poolBias` | `Partial<Record<ZombieType,number>>` | pesi-moltiplicatore sul `SPAWN_POOL` in `pickZombieType` (i pesi-base 🔒 §5 restano) | `{}` |
+| `setPiece` | `none`/`night`/`roadblock`/`storm`/`convoy`/`rescue` | evento forzato della tratta-climax (F4) | `none` |
+| `stopKind` | `garage`/`depot`/`camp`/`checkpoint`/`market` | sosta a valle (F1, `locationForLeg`) | garage |
+
+### Composizione `routeModifier`(B1) × descrittore(C2) — decisione §9.4-B
+
+Sulla **densità di spawn** i due sistemi si compongono in `spawnMultCombined()`: il descrittore di tappa (C2) è la **base** di difficoltà attesa; il nodo di percorso (B1, `routeSpawnMult`) la **perturba clampato ±30%** (`clamp(routeSpawnMult, 0.7, 1.3)`) per evitare estremi incontrollabili. Sugli **hazard** si moltiplicano direttamente (`route.hazardMult · hazardMult`).
+
+### Curva di difficoltà finita (vedi §5)
+
+`diffMult = 1 + 0.15 · min(actIndex, 5)` → ×1.00 (Atto 1) … ×1.75 (Atto 6, tetto). Rampa NG+ illimitata rimossa.
+
+### Lunghezza odometro (display)
+
+Km diegetici per tratta = `180 · lengthMult` (`MISSION_DIST·KM_PER_UNIT·lengthMult`). La **META** è ~**6000 km**: i `lengthMult` delle ~31 tratte sono tarati perché la loro **somma ≈ 33.3** → `Σ(180·lengthMult) ≈ 6000`. Il nastro-odometro HUD (F3) mostra questo avanzamento.
+
+### Morale del convoglio (F5 — implementato, derivato/NON 🔒)
+
+`MORALE` (`GameData.ts`, struct condivisa sul modello `FOOD`). Sotto `break` il gate unico `hasActiveSurvivor` si spegne **globalmente** (tutte le abilità OFF). Persistito col checkpoint come fuel/ammo: le variazioni in-missione si consolidano a fine tratta, alla morte si ripristina il checkpoint.
+
+| Leva | Valore | Dove |
+|---|---|---|
+| Iniziale · max | **60 · 100** | `MORALE.start` · `MORALE.max` |
+| Soglia crollo (abilità OFF sotto) | **40** | `MORALE.break` (gate `hasActiveSurvivor`) |
+| Soglia rotto (diserzione, gancio) | **15** | `MORALE.rout` |
+| Perdita di un sopravvissuto (morte/abbandono) | **−25** | `MORALE.dLoss` |
+| Salvataggio su strada riuscito | **+12** | `MORALE.dRescue` |
+| Sosta sicura (accampamento) | **+8** | `MORALE.dCamp` |
+| Reclutamento riuscito | **+6** | `MORALE.dRecruit` |
+| Almeno un affamato a fine consumo | **−10** | `MORALE.dHungry` |
+| Tratta completata | **+2** | `MORALE.dTrattaClean` |
+
+> **Epilogo (F5).** All'arrivo al rifugio `showEpilogue` sceglie **1 di 4 finali** da `sopravvissuti × morale finale × integrità veicolo`: *Il convoglio regge* (≥4 vivi ∧ morale ≥50) · *Pochi ma vivi* (1-3 vivi ∧ morale ≥25) · *Arrivi solo* (0 vivi ∨ morale <25) · *Il rifugio è caduto* (morale <15 ∨ integrità <25). I caduti (`RunData.fallen`) sono **nominati**.
+
+### Nemesi-con-memoria (F6 — implementato, opzionale, derivato/NON 🔒)
+
+Riusa lo scheletro del **Gigante** (timer `GIANT_SPAWN_INTERVAL`): negli atti centrali/finali (`actIndex ≥ 1`) il Gigante temporizzato **È** la Nemesi — firma viola, stinger, HP `× (1 + nemesisHeat/150)`. `nemesisState` (0=presagio Atto 1 → 3=resa dei conti Atto 6) derivato dall'atto; `nemesisHeat` (0..100) cresce **+8** per tratta braccata, cala **−12** alle soste `camp`, persistito. *"Si semina, non si batte"*: nessuna entità nuova, nessun duello-a-barra.
+
+### Incontri Tier C — rifondazione equipaggio (implementati, derivati/NON 🔒)
+
+Decisioni morali alle soste (`StopScene`, una per tipo di luogo), con conseguenza persistente in `RunData.choices`. L'epilogo le legge: ≥2 fra `sold`/`looted`/`forced` declassano *Il convoglio regge* → *Pochi ma vivi*. Mostrati **una volta per sosta** (guard `encounterDoneLeg` nel registry, azzerato a Nuova Partita). Stringhe in i18n ×6 (`enc.*`).
+
+| Luogo | Opzione | Effetto |
+|---|---|---|
+| **camp** | Dividi le razioni | −20 cibo · +10 morale |
+| **camp** | Razionamento duro | −8 morale |
+| **depot** | Saccheggia a fondo | +80★ · −6 morale |
+| **depot** | Prendi e fuggi | +20★ |
+| **market** | Compra provviste | −120★ · +50 cibo (se puoi pagare) |
+| **market** | Baratta una «bocca» | −1 sopravvissuto · +150★ · −18 morale |
+| **market** | Rifiuta | — |
+| **checkpoint** | Paga il pedaggio | −60★ |
+| **checkpoint** | Forza il blocco | −5 morale |
 
 ---
 

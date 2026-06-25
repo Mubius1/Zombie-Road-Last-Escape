@@ -56,7 +56,7 @@ Questo documento è la **fonte di verità** del *design del gioco*: cosa fa il g
 2. **Boss** all'**82%** della distanza di missione: mentre il boss è vivo l'avanzamento si congela e gli spawn ordinari si fermano — è un duello. *(Disattivato: con `BOSSES_ENABLED = false` non appare e l'avanzamento prosegue.)*
 3. **Missione completata** (a flag attivo: boss sconfitto → completamento; **a flag spento: al raggiungimento di `MISSION_DIST`**): converti il punteggio in **monete**, salvi lo stato dei componenti, passi al **Negozio**.
 4. **Sosta** (`StopScene` → `ShopScene`): al termine degli x km non si arriva **sempre** al garage — si approda a **uno di più luoghi** (Idea 1 · Track B3), ognuno con un'identità e un sottoinsieme di servizi diverso (vedi §9). La sosta è un **hub diegetico a piedi** (`StopScene`): **scendi dal mezzo** e cammini fino a una **stazione** — i **servizi** aprono il negozio (`ShopScene`, che filtra i pannelli per luogo) — da cui si **esce tornando alla sosta**, senza obbligo di proseguire — mentre il tuo **veicolo** fa *riparti* → missione successiva (via `RouteScene`). Il viaggio riprende **solo** salendo in auto. Piano e dettaglio in [`SOSTE_DIEGETICHE.md`](SOSTE_DIEGETICHE.md). I **rifornimenti essenziali** (riparazione, carburante, munizioni) sono **ovunque**; variano gli extra. Al **GARAGE** (la sosta completa) spendi le monete in riparazioni, potenziamenti, armi, veicoli; recluti **un** sopravvissuto (max 1 a sosta) tra 3 offerti, compri **razioni** e **curi** i feriti.
-5. **Loop a cicli**: regioni e boss ciclano (§3). Completare il ciclo delle **7 regioni** dà una **vittoria di ciclo** (schermata dedicata), poi si prosegue in **endless+** con difficoltà crescente (§10). L'obiettivo di lungo termine resta il **record** di missione/punteggio (salvato, §11).
+5. **Viaggio finibile (campagna "IL CONVOGLIO", F1)**: le tratte sono un manifest **finito** di ~31 tappe in **6 atti** verso il **RIFUGIO** (§10). Completare la tratta terminale lancia l'**EPILOGO** e chiude la corsa (niente endless+). I biomi non ciclano più per missione: li detta il descrittore di tappa (§3). Resta il **record** di missione/punteggio (§11). Dettaglio in [`CAMPAGNA_CONVOGLIO.md`](CAMPAGNA_CONVOGLIO.md).
 
 ---
 
@@ -104,8 +104,8 @@ Supporto pad via **Gamepad API** standard del browser (plugin abilitato in `game
 
 Tutto vive in uno **spazio di design alto 600** (vedi [CLAUDE.md → Risoluzione & scaling](../CLAUDE.md) e `Config.ts`). La strada è la fascia `ROAD_TOP=155 … ROAD_BOTTOM=445`; il veicolo è ancorato a `x=150`.
 
-### Regioni (ambienti)
-7 ambienti in `ENVIRONMENTS`, percorsi **in ciclo**: `envIndex = (missione − 1) mod 7`.
+### Regioni (ambienti / biomi)
+7 ambienti in `ENVIRONMENTS`. Nella campagna "IL CONVOGLIO" (F1) **non ciclano più** per missione: sono **biomi** pescati dal descrittore di ogni tratta (`STAGE_MANIFEST[legIndex].biome` → `envIndexForBiome`, vedi [`CAMPAGNA_CONVOGLIO.md`](CAMPAGNA_CONVOGLIO.md)). Lo stesso bioma ricorre in più tratte/atti; l'ordine è dato dal **manifest finito**, non da `(missione − 1) mod 7`.
 
 | # | Regione | Accento luce |
 |---|---|---|
@@ -121,6 +121,8 @@ Tutto vive in uno **spazio di design alto 600** (vedi [CLAUDE.md → Risoluzione
 
 ### Boss di regione
 > ⚠️ **Attualmente disattivati** (`BOSSES_ENABLED = false`): non compaiono a fine percorso, ma dati e codice restano intatti (questa scheda descrive il comportamento a flag attivo).
+>
+> 🚐 **Campagna "IL CONVOGLIO" — il climax è un LUOGO, non un boss (F4).** Ogni tratta di fine atto porta un asse `setPiece` (descrittore di tappa, `World.ts`) che **forza** un evento B2 esistente in modo deterministico (scavalca random + `EVENT_CHANCE`): ponte che crolla (`roadblock`), tunnel a fari spenti (`night`), tempesta/diga (`storm`), città sotto assedio (`roadblock`). Niente duello-a-barra. **Nemesi (F6, opzionale):** dagli atti centrali il **Gigante** temporizzato diventa la *Nemesi* — firma viola, più tenace col `nemesisHeat` (memoria persistente che cresce mentre sei braccato, cala alle soste sicure). *Si semina, non si batte.* Dettaglio in [`CAMPAGNA_CONVOGLIO.md`](CAMPAGNA_CONVOGLIO.md) §5, numeri in [BALANCE §11](BALANCE.md).
 
 4 boss in `BOSS_CONFIG`, anch'essi **in ciclo**: `boss = BOSS_ORDER[(missione − 1) mod 4]`.
 
@@ -137,10 +139,12 @@ Tutto vive in uno **spazio di design alto 600** (vedi [CLAUDE.md → Risoluzione
 
 ## §4 · Anatomia di una missione
 
+> 🚐 **Pivot "This War of Mine su ruote" (campagna "IL CONVOGLIO").** La TRATTA non è più il cuore del gioco: è un **transito breve e teso**. Il cuore è la **SOSTA** — dove cammini tra i tuoi, **parli con loro** (dialoghi/archi personali), e prendi decisioni che pesano. Vedi [`CAMPAGNA_CONVOGLIO.md`](CAMPAGNA_CONVOGLIO.md).
+
 | Parametro | Valore | Significato |
 |---|---|---|
-| Distanza missione | `MISSION_DIST = 18000` u | ~**180 km** mostrati (`KM_PER_UNIT`, un tratto credibile); ~75 s di guida pura a `SCROLL_SPEED=240 u/s`. Carburante **persistente**: un pieno copre ~3 missioni (§ Carburante in BALANCE) |
-| Trigger boss | `82%` (`BOSS_TRIGGER`) | il boss appare a 14 760 u; l'avanzamento si congela finché vive |
+| Distanza missione | `MISSION_DIST = 6000` u | ~**60 km** mostrati (`KM_PER_UNIT`); ~25 s di guida pura a `SCROLL_SPEED=240 u/s` — **transito breve** (era 18000/~180 km, troppo lungo). Carburante **persistente** tra le tratte |
+| Trigger boss | `82%` (`BOSS_TRIGGER`) | il boss appare a 4 920 u; l'avanzamento si congela finché vive (boss comunque disattivati) |
 | Spawn zombi (ritmo del terrore) | director a fasi **dread → burst** | **quiete** tesa (spawn radi, `CALM_INTERVAL`) ↔ **ondata** serrata (`BURST_INTERVAL` + batch d'apertura + stinger); sospeso durante il boss (§5, [BALANCE §1bis](BALANCE.md)) |
 | Gigante | ogni `22 000` ms | spawn speciale fuori dal pool ordinario |
 | Hazard di corsia | ogni `4500` ms | relitto/olio/mina che scorrono col mondo, da schivare (A1) |
@@ -264,12 +268,18 @@ Al **GARAGE** (e in generale, secondo i servizi del luogo):
 
 > Reclutamento, cibo, ferimento, cura, abbandono e salvataggio: numeri-sorgente in [BALANCE.md §8](BALANCE.md#8--negozio-ed-economia).
 
+> 🚐 **Morale del convoglio (campagna "IL CONVOGLIO", F5).** Oltre allo stato per-individuo, il convoglio ha un **morale** collettivo `0..100` (default 60): sale a reclutamento/salvataggio/sosta-sicura, scende a perdita (−25)/fame/razionamento. **Sotto soglia 40 tutte le abilità si spengono** (il gate unico `hasActiveSurvivor` aggiunge `morale ≥ MORALE.break`): un convoglio a pezzi rende meno, senza toccare le 6 abilità singole. Il morale finale, coi sopravvissuti vivi e l'integrità del veicolo, determina l'**epilogo** (§10). Numeri in [BALANCE §11](BALANCE.md).
+
+> 👥 **Rifondazione dell'equipaggio (implementata).** I sopravvissuti non sono più tre iniziali in un angolo: (1) **visibili** — pannello-crew con i ritratti a bordo e lo stato (sano/affamato/ferito) sul bordo sinistro dell'HUD; (2) **con voce** — al reclutamento leggono la propria bio, e una battuta col nome scatta a fame/morale-crollato; (3) oggetto di **incontri Tier C** alle soste (`StopScene`): scelte morali con conseguenza persistente in `RunData.choices`, lette dall'epilogo — *dividere le razioni* (camp), *saccheggiare a fondo* (depot), *barattare una «bocca»* al mercato (rimuove una persona), *pagare/forzare il pedaggio* (checkpoint); (4) la **perdita** di un sopravvissuto è un *beat* — il volto che sfuma e un superstite che resta in silenzio — non un toast. Numeri degli incontri in [BALANCE §11](BALANCE.md); stringhe in i18n ×6. Dettaglio in [`CAMPAGNA_CONVOGLIO.md`](CAMPAGNA_CONVOGLIO.md) §4/§5.
+>
+> 🩸 **Pivot "This War of Mine su ruote".** Il cuore del gioco sono le **persone e la storia**, non la guida (tratte ridotte a transito breve, §4). Alle soste **parli** coi tuoi (cammini fino a loro, premi E): ognuno dei **7 ha un arco personale** data-driven (`src/Convoy.ts` → `SURVIVOR_ARCS`) con un segreto/destino, una **scelta che pesa** (sbloccata per atto) e una **carta-epilogo**; lo **stato emotivo** (derivato da fame/ferite/morale) cambia come appaiono e parlano; una **radio** racconta il mondo che crolla, atto dopo atto, fino alla statica. Tutto procedurale, testi in i18n ×6.
+
 ---
 
 ## §10 · Condizioni di vittoria e sconfitta
 
 - **Sconfitta (game over):** salute **o** carburante a 0. La corsa **non** termina: si **rigioca la missione corrente** ripristinando il checkpoint d'inizio missione (veicolo/armi/sopravvissuti/potenziamenti intatti) e pagando un **pedaggio** di recupero (**−25% monete**, `DEATH_MONEY_PENALTY`, vedi [BALANCE §2](BALANCE.md#2--economia--flusso-delle-monete)). Il gioco salva a ogni missione, anche **tra sessioni** ("CONTINUA"). Solo **Nuova Partita** azzera davvero il progresso. *(Il pedaggio è un costo "morbido": chiudere/ricaricare prima di morire lo evita — scelta deliberata per una campagna forgiving, non un roguelike.)*
-- **Vittoria (di ciclo):** completare il **ciclo delle 7 regioni** (missione 7, 14, 21, …) mostra una schermata **"🏆 VITTORIA · Ciclo N"** e un lampo dorato; poi il gioco **continua in endless+** con lo scaling NG+ (HP nemici/boss crescenti per ciclo, vedi [BALANCE §5](BALANCE.md#5--nemici)). Non è una fine secca: è un traguardo ripetibile che dà un picco e una ragione per spingersi oltre.
+- **Vittoria (campagna "IL CONVOGLIO", F1):** la corsa è un **viaggio finito a senso unico** verso il **RIFUGIO**, non più un ciclo infinito. La posizione è `legIndex` su un manifest **finito** (`STAGE_MANIFEST` in `World.ts`: ~31 tratte raggruppate in **6 atti** — [`CAMPAGNA_CONVOGLIO.md`](CAMPAGNA_CONVOGLIO.md)), non più `(missione−1) mod 7`. Completare la **tratta terminale** lancia l'**EPILOGO** e **chiude** la corsa: niente missione N+1, niente endless+. La difficoltà cresce per **atto** con un **tetto** (`diffMult = 1 + 0.15·min(actIndex,5)`, max ×1.75 — [BALANCE §5](BALANCE.md#5--nemici)). L'epilogo (F5) è una **funzione di stato a 4 finali** — `sopravvissuti vivi × morale finale × integrità del veicolo` → *Il convoglio regge* / *Pochi ma vivi* / *Arrivi solo* / *Il rifugio è caduto* — coi **caduti nominati** (`RunData.fallen`). Soglie in [BALANCE §11](BALANCE.md). La vecchia "vittoria di ciclo ripetibile + endless+" è **rimossa**.
 - **Record persistente:** missione più lontana e punteggio di missione massimo sono salvati in `localStorage` (`SaveData`) e mostrati nel menu — sopravvivono al game over e alla chiusura del browser.
 
 ---
@@ -286,7 +296,7 @@ A ogni missione (e dopo ogni ricompensa/acquisto) quello stato viene **salvato s
 
 > 🗺️ Il piano per affrontare rigiocabilità e game-feel (profondità del core loop, scelte di run, distintività di boss/regioni, meta-progressione) vive in [`ROADMAP_RIGIOCABILITA.md`](ROADMAP_RIGIOCABILITA.md). Le voci qui sotto sono indicizzate lì (§12.2/§12.4 → Track D, §12.5 → Track C).
 
-1. ✅ **Condizione di vittoria** — *implementata*: vittoria al completamento del ciclo di 7 regioni, poi endless+ (vedi §10).
+1. ✅ **Condizione di vittoria** — *cambiata in F1 (campagna "IL CONVOGLIO")*: viaggio finibile verso il rifugio (tratta terminale → epilogo); la vittoria-di-ciclo + endless+ è **rimossa** (vedi §10 e [`CAMPAGNA_CONVOGLIO.md`](CAMPAGNA_CONVOGLIO.md)).
 2. ✅ **Persistenza** — *implementata*: oltre al **record**, l'intera **corsa** si salva a ogni missione (`SaveData.run` → localStorage) → "CONTINUA" cross-sessione (§11). Lo sblocco permanente di veicoli (meta) resta un *extra* possibile (Track D).
 3. ✅ **Curva di difficoltà oltre il ciclo** — *implementata*: scaling NG+ degli HP di nemici e boss per ciclo (`diffMult`, [BALANCE §5](BALANCE.md#5--nemici)). Danno/velocità ancora costanti (leva HP-only).
 4. ✅ **Costo della morte** — *risolta*: il gioco è una **campagna a checkpoint** (non roguelike). La morte rigioca la missione con un pedaggio (−25% monete) invece di azzerare; il progresso si salva a ogni missione, anche cross-sessione (§10/§11). Una valuta meta resta possibile come *extra* (Track D), non più necessaria per la retention.

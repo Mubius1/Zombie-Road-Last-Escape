@@ -48,6 +48,26 @@ export interface RunData {
   injured: string[];
   /** M3: missioni consecutive con almeno un affamato (a STARVE_MISSIONS_TO_LEAVE uno se ne va). */
   starveStreak: number;
+
+  // ── Campagna "IL CONVOGLIO" (docs/CAMPAGNA_CONVOGLIO.md) ──────────────────────
+  /** F1: posizione sul manifest finito (0..CAMPAIGN_LENGTH−1). Sostituisce il mod-7 su missionNumber. */
+  legIndex: number;
+  /** F1: atto corrente (0-based; cacheato per la curva di difficoltà e i banner). Derivabile da legIndex. */
+  actIndex: number;
+  /** F1: la campagna ha raggiunto il rifugio terminale (la corsa è conclusa con epilogo). */
+  reachedRefuge: boolean;
+  /** F3: ramo scelto a ogni biforcazione (chiave-bivio → chiave-ramo). Per coerenza retry + epilogo. */
+  branchTaken: Record<string, string>;
+  /** F5: morale del convoglio 0..100 (sotto MORALE_BREAK spegne le abilità via hasActiveSurvivor). */
+  morale: number;
+  /** F5: flag-conseguenza degli incontri Tier C, letti dall'epilogo. */
+  choices: string[];
+  /** F5: nomi-chiave dei sopravvissuti CADUTI lungo la campagna (morte/abbandono), nominati nell'epilogo. */
+  fallen: string[];
+  /** F6 (opz.): stato della Nemesi (0=presagio → 3=resa-dei-conti). */
+  nemesisState: number;
+  /** F6 (opz.): memoria della Nemesi 0..100 (cresce se la semini male/spari troppo, cala se la eviti). */
+  nemesisHeat: number;
 }
 
 /** Lettura tipizzata dal registry. Ritorna `undefined` se la chiave non è ancora impostata
@@ -85,6 +105,17 @@ export function resetRunState(registry: Phaser.Data.DataManager) {
   setRun(registry, 'foodMission', -1);
   setRun(registry, 'injured', []);
   setRun(registry, 'starveStreak', 0);
+  // Campagna "IL CONVOGLIO": posizione e stato del viaggio.
+  setRun(registry, 'legIndex', 0);
+  setRun(registry, 'actIndex', 0);
+  setRun(registry, 'reachedRefuge', false);
+  setRun(registry, 'branchTaken', {});
+  setRun(registry, 'morale', 60); // = MORALE.start (F5)
+  setRun(registry, 'choices', []);
+  setRun(registry, 'fallen', []);
+  setRun(registry, 'nemesisState', 0);
+  setRun(registry, 'nemesisHeat', 0);
+  registry.set('encounterDoneLeg', -1); // guard transiente degli incontri Tier C (non in RunData): azzera tra le run
 }
 
 /**
@@ -113,6 +144,15 @@ export function snapshotRun(registry: Phaser.Data.DataManager): RunData {
     foodMission:   getRun(registry, 'foodMission') ?? -1,
     injured:       getRun(registry, 'injured') ?? [],
     starveStreak:  getRun(registry, 'starveStreak') ?? 0,
+    legIndex:      getRun(registry, 'legIndex') ?? 0,
+    actIndex:      getRun(registry, 'actIndex') ?? 0,
+    reachedRefuge: getRun(registry, 'reachedRefuge') ?? false,
+    branchTaken:   getRun(registry, 'branchTaken') ?? {},
+    morale:        getRun(registry, 'morale') ?? 60,
+    choices:       getRun(registry, 'choices') ?? [],
+    fallen:        getRun(registry, 'fallen') ?? [],
+    nemesisState:  getRun(registry, 'nemesisState') ?? 0,
+    nemesisHeat:   getRun(registry, 'nemesisHeat') ?? 0,
   };
 }
 
@@ -137,4 +177,13 @@ export function restoreRun(registry: Phaser.Data.DataManager, run: RunData): voi
   setRun(registry, 'foodMission', run.foodMission ?? -1);
   setRun(registry, 'injured',      run.injured ?? []);
   setRun(registry, 'starveStreak', run.starveStreak ?? 0);
+  setRun(registry, 'legIndex',      run.legIndex ?? 0);
+  setRun(registry, 'actIndex',      run.actIndex ?? 0);
+  setRun(registry, 'reachedRefuge', run.reachedRefuge ?? false);
+  setRun(registry, 'branchTaken',   run.branchTaken ?? {});
+  setRun(registry, 'morale',        run.morale ?? 60);
+  setRun(registry, 'choices',       run.choices ?? []);
+  setRun(registry, 'fallen',        run.fallen ?? []);
+  setRun(registry, 'nemesisState',  run.nemesisState ?? 0);
+  setRun(registry, 'nemesisHeat',   run.nemesisHeat ?? 0);
 }

@@ -11,3 +11,8 @@ release/
 # Guard anti-ricaduta: i sorgenti sono .ts, in src/ non esistono .js scritti a mano.
 src/**/*.js
 src/**/*.js.map
+
+# Test E2E (Playwright): report HTML, tracce, screenshot di traccia/diagnostica.
+test-results/
+playwright-report/
+.playwright/
