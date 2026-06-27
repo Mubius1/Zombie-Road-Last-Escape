@@ -105,10 +105,11 @@ function drawFarBox(g: G, x: number, baseY: number, w: number, h: number, color:
 export function dropShadow(scene: Phaser.Scene, L: HubLight, x: number, y: number, w: number, depth: number) {
   const { nx, ny, dist } = lightDir(L, x, y);
   const long = Phaser.Math.Clamp(dist / L.reach, 0.4, 1.6), ang = Math.atan2(ny, nx);
+  // Scia direzionale SMORZATA (no losanga): allungamento ridotto + alpha che svanisce con la distanza dalla luce.
   scene.add.image(x + nx * w * 0.2, y + ny * w * 0.1, 'fx_shadow')
-    .setRotation(ang).setScale((w * 0.92) / 64 * (1 + long * 0.8), (w * 0.92) / 64 * 0.7)
-    .setAlpha(0.34).setDepth(depth - 0.1);
-  scene.add.ellipse(x, y, w * 0.5, 5, 0x000000, 0.32).setDepth(depth - 0.05);
+    .setRotation(ang).setScale((w * 0.92) / 64 * (1 + long * 0.45), (w * 0.92) / 64 * 0.7)
+    .setAlpha(0.18 + 0.18 * falloff(L, x, y)).setDepth(depth - 0.1);
+  scene.add.ellipse(x, y, w * 0.42, 4.5, 0x000000, 0.4).setDepth(depth - 0.05); // contatto-terra netto
 }
 
 // ─── Texture (personaggio + NPC) ────────────────────────────────────────────────
@@ -220,10 +221,10 @@ function buildFigure(scene: Phaser.Scene, key: string, jacket: number, skin: num
   g.fillStyle(0x2a2a22); g.fillRect(5, 23, 14, 2.4); g.fillStyle(0x6a5c40); g.fillRect(10, 23, 3, 2.4); // cintura + fibbia
   g.fillStyle(mix(jacket, 0x000000, 0.5)); g.fillRoundedRect(16, 15, 4, 9, 2);                         // zaino
   g.fillStyle(mix(skin, 0x000000, 0.28)); g.fillRect(10, 10, 4, 4);                                    // collo
-  g.fillStyle(mix(skin, 0x000000, 0.18)); g.fillCircle(13, 8, 6);                                      // testa (ombra)
-  g.fillStyle(skin); g.fillCircle(11, 7, 5.4);                                                         // testa (luce)
-  g.fillStyle(mix(skin, 0xffffff, 0.22)); g.fillCircle(9, 5, 2.2);                                     // highlight fronte
-  g.fillStyle(0x17110a); g.fillCircle(9.6, 7.4, 0.9); g.fillCircle(12.4, 7.4, 0.9);                    // occhi
+  g.fillStyle(mix(skin, 0x000000, 0.18)); g.fillCircle(12.6, 8, 5.2);                                  // testa (ombra) — meno chibi
+  g.fillStyle(skin); g.fillCircle(11, 7, 4.6);                                                         // testa (luce)
+  g.fillStyle(mix(skin, 0xffffff, 0.22)); g.fillCircle(9.4, 5.4, 1.8);                                 // highlight fronte
+  g.fillStyle(0x17110a); g.fillCircle(9.8, 7.2, 0.85); g.fillCircle(12.1, 7.2, 0.85);                  // occhi
   // Capelli + COPRICAPO per ruolo (distingue le persone, non solo il colore della giacca). `hair` = colore.
   if (gear === 'helmet') {                                                                             // soldato: elmetto
     g.fillStyle(hair); g.fillRoundedRect(5, 1, 13, 5, 4);
@@ -337,38 +338,74 @@ function drawBackground(scene: Phaser.Scene, location: StopLocation, L: HubLight
   drawBackdropFeature(scene, location, L, designW, rng, wc);
 }
 
-/** Elemento-firma sul muro di fondo per ciascun luogo (porta/serbatoi/container/torre/tende). */
+/** Elemento-firma sul muro di fondo per ciascun luogo — DEVE dichiarare il luogo (ART_BIBLE_SOSTE fix #1):
+ *  faccia illuminata chiara + cresta-rim verso la luce + accento emissivo + mini-bloom che stacca dal muro. */
 function drawBackdropFeature(scene: Phaser.Scene, location: StopLocation, L: HubLight, designW: number, rng: (n: number) => number, wc: number) {
   const g = scene.add.graphics().setDepth(1.4);
+  const em = scene.add.graphics().setDepth(1.5).setBlendMode(Phaser.BlendModes.ADD); // strato emissivo (insegne/vetri/neon)
   const cx = Math.round(designW * 0.66), B = HUB_HORIZON;
+  const ADD = Phaser.BlendModes.ADD;
   switch (location.key) {
-    case 'garage': // serranda + insegna OFFICINA
-      g.fillStyle(mix(wc, 0x000000, 0.35)); g.fillRect(cx - 46, B - 92, 92, 86);
-      g.fillStyle(mix(wc, 0xffffff, 0.06)); for (let y = B - 88; y < B - 6; y += 7) g.fillRect(cx - 44, y, 88, 3); // doghe serranda
-      g.fillStyle(mix(wc, 0x000000, 0.5)); g.fillRect(cx - 48, B - 94, 96, 4);
-      g.lineStyle(2, L.color, 0.8); g.strokeRoundedRect(cx + 60, B - 80, 10, 40, 3); // tubo al neon verticale
+    case 'garage': { // serranda CHIARA + rim verde + INSEGNA OFFICINA emissiva
+      g.fillStyle(mix(wc, 0xffffff, 0.10)); g.fillRect(cx - 46, B - 92, 92, 86);                      // serranda (faccia illuminata)
+      g.fillStyle(mix(wc, L.color, 0.20)); g.fillRect(cx - 46, B - 92, 92, 4);                        // cresta-rim verso la luce
+      g.fillStyle(mix(wc, 0x000000, 0.30)); for (let y = B - 86; y < B - 6; y += 7) g.fillRect(cx - 44, y, 88, 2); // doghe (ombra)
+      g.fillStyle(mix(wc, 0xffffff, 0.13)); for (let y = B - 85; y < B - 6; y += 7) g.fillRect(cx - 44, y, 88, 1);  // doghe (luce)
+      g.fillStyle(mix(wc, 0x000000, 0.5)); g.fillRect(cx - 48, B - 96, 96, 4);                        // architrave
+      g.fillStyle(0x101014); g.fillRoundedRect(cx - 34, B - 114, 68, 16, 3);                          // insegna OFFICINA (pannello)
+      em.fillStyle(L.color, 0.95); em.fillRoundedRect(cx - 30, B - 111, 60, 9, 2);                    // barra emissiva
+      em.fillStyle(0xffffff, 0.6); em.fillRect(cx - 28, B - 110, 56, 2);
+      scene.add.image(cx, B - 106, 'fx_light').setTint(L.color).setBlendMode(ADD).setScale(2.0, 0.9).setAlpha(0.3).setDepth(1.55);
+      em.fillStyle(L.color, 0.9); em.fillRoundedRect(cx + 60, B - 80, 6, 40, 3);                      // neon verticale (additivo)
+      scene.add.image(cx + 63, B - 60, 'fx_light').setTint(L.color).setBlendMode(ADD).setScale(1.0, 1.9).setAlpha(0.26).setDepth(1.55);
       break;
-    case 'depot': // serbatoi cilindrici + tubi
-      for (const dx of [-150, 130]) { g.fillStyle(mix(wc, 0x000000, 0.3)); g.fillRoundedRect(cx + dx, B - 110, 70, 104, 10);
-        g.fillStyle(mix(wc, 0xffffff, 0.08)); g.fillRect(cx + dx + 8, B - 110, 14, 104); g.fillStyle(mix(wc, 0x000000, 0.4)); g.fillRect(cx + dx + 56, B - 110, 12, 104);
-        g.lineStyle(2, mix(wc, 0x000000, 0.5), 0.6); g.strokeRect(cx + dx, B - 78, 70, 2); }
-      g.fillStyle(mix(wc, 0x000000, 0.4)); g.fillRect(cx - 80, B - 40, 160, 5); // tubo orizzontale
+    }
+    case 'depot': { // serbatoi a 3 toni (shadeCyl) + banda-pericolo arancio + stacco dal muro
+      for (const dx of [-150, 130]) {
+        const tx = cx + dx;
+        scene.add.image(tx + 35, B - 56, 'fx_light').setTint(L.color).setBlendMode(ADD).setScale(1.7, 2.3).setAlpha(0.14).setDepth(1.35); // stacco dietro
+        shadeCyl(g, tx, B - 110, 70, 104, mix(wc, 0xffffff, 0.10));                                   // cilindro a 3 toni (chiaro)
+        g.fillStyle(mix(wc, L.color, 0.22)); g.fillRect(tx, B - 110, 70, 3);                          // rim alto
+        em.fillStyle(L.color, 0.65); em.fillRect(tx, B - 66, 70, 5);                                  // banda-pericolo emissiva
+        g.fillStyle(mix(wc, 0x000000, 0.5)); g.fillRect(tx, B - 9, 70, 5);                            // base in ombra
+      }
+      g.fillStyle(mix(wc, 0xffffff, 0.06)); g.fillRect(cx - 80, B - 40, 160, 4); g.fillStyle(mix(wc, 0x000000, 0.4)); g.fillRect(cx - 80, B - 36, 160, 2); // tubo orizzontale
       break;
-    case 'camp': // tende + barricata di lamiere
-      for (const dx of [-120, -70, 90, 150]) { g.fillStyle(mix(wc, 0x000000, 0.3)); g.fillTriangle(cx + dx - 26, B - 6, cx + dx, B - 54, cx + dx + 26, B - 6);
-        g.fillStyle(mix(wc, 0x000000, 0.5)); g.fillTriangle(cx + dx, B - 54, cx + dx + 26, B - 6, cx + dx + 8, B - 6); g.fillStyle(mix(L.color, 0x000000, 0.2), 0.3); g.fillRect(cx + dx - 2, B - 30, 4, 24); }
+    }
+    case 'camp': { // tende con falda illuminata verso il fuoco + colmo a cresta chiara
+      for (const dx of [-120, -70, 90, 150]) {
+        const tx = cx + dx;
+        g.fillStyle(mix(wc, 0x000000, 0.28)); g.fillTriangle(tx - 26, B - 6, tx, B - 54, tx + 26, B - 6);  // corpo tenda
+        g.fillStyle(mix(wc, L.color, 0.22)); g.fillTriangle(tx - 26, B - 6, tx, B - 54, tx - 8, B - 6);    // falda illuminata (verso il fuoco)
+        g.fillStyle(mix(wc, 0x000000, 0.5)); g.fillTriangle(tx, B - 54, tx + 26, B - 6, tx + 8, B - 6);    // falda in ombra
+        g.fillStyle(mix(wc, 0xffffff, 0.16)); g.fillTriangle(tx - 1.5, B - 54, tx + 1.5, B - 54, tx, B - 10); // colmo (cresta chiara)
+        em.fillStyle(L.color, 0.22); em.fillRect(tx - 2, B - 28, 4, 22);                              // bagliore interno
+      }
       break;
-    case 'checkpoint': // torretta di guardia + muro blast
-      g.fillStyle(mix(wc, 0x000000, 0.3)); g.fillRect(cx - 26, B - 120, 52, 114);
-      g.fillStyle(mix(wc, 0xffffff, 0.06)); g.fillRect(cx - 26, B - 120, 52, 4);
-      g.fillStyle(0x05060a); g.fillRect(cx - 18, B - 110, 36, 16); g.fillStyle(mix(L.color, 0xffffff, 0.3), 0.5); g.fillRect(cx - 16, B - 108, 32, 4); // vetri illuminati cabina
-      g.fillStyle(mix(wc, 0x000000, 0.45)); g.fillRect(cx - 30, B - 6, 60, 6);
+    }
+    case 'checkpoint': { // torretta PIÙ ALTA, corpo chiaro, vetri-cabina additivi + faretto
+      const tw = 64, ty = B - 150;
+      scene.add.image(cx, ty + 72, 'fx_light').setTint(L.color).setBlendMode(ADD).setScale(1.9, 2.7).setAlpha(0.13).setDepth(1.35); // stacco
+      g.fillStyle(mix(wc, 0xffffff, 0.08)); g.fillRect(cx - tw / 2, ty, tw, 144);                     // corpo torre (chiaro)
+      g.fillStyle(mix(wc, L.color, 0.20)); g.fillRect(cx - tw / 2, ty, tw, 4);                        // cresta-rim
+      g.fillStyle(mix(wc, 0x000000, 0.45)); g.fillRect(cx + tw / 2 - 6, ty, 6, 144);                  // lato dx in ombra
+      g.fillStyle(0x05060a); g.fillRect(cx - 22, ty + 8, 44, 18);                                     // vano cabina
+      em.fillStyle(mix(L.color, 0xffffff, 0.55), 0.8); em.fillRect(cx - 20, ty + 10, 40, 14);         // vetri illuminati (additivi)
+      scene.add.image(cx, ty + 17, 'fx_light').setTint(mix(L.color, 0xffffff, 0.5)).setBlendMode(ADD).setScale(1.7, 1.0).setAlpha(0.45).setDepth(1.55);
+      g.fillStyle(mix(wc, 0x000000, 0.45)); g.fillRect(cx - 34, B - 6, 68, 6);                        // base blast
       break;
-    case 'market': // muro di container impilati
-      for (let i = 0; i < 7; i++) { const bx = -20 + i * (designW / 6), bw = designW / 6 - 6, c = [0x3a2a2a, 0x2a3a3a, 0x3a3a2a][i % 3]!;
-        const h = 40 + rng(i + 5) * 30; g.fillStyle(mix(c, 0x000000, 0.45)); g.fillRect(bx, B - h - 6, bw, h);
-        g.fillStyle(mix(c, 0x000000, 0.6)); for (let r = 1; r < 5; r++) g.fillRect(bx + (bw / 5) * r, B - h - 6, 1.5, h); g.fillStyle(mix(c, 0xffffff, 0.06)); g.fillRect(bx, B - h - 6, bw, 3); }
+    }
+    case 'market': { // container a GRADONI, 3 colori SEPARATI, stacchi chiari
+      for (let i = 0; i < 7; i++) {
+        const bx = -20 + i * (designW / 6), bw = designW / 6 - 6, c = [0x4a3232, 0x32484a, 0x4a4a32][i % 3]!;
+        const h = 44 + rng(i + 5) * 52;                                                              // altezze più varie (gradoni)
+        g.fillStyle(mix(c, 0x000000, 0.20)); g.fillRect(bx, B - h - 6, bw, h);                        // corpo (più chiaro)
+        g.fillStyle(mix(c, 0xffffff, 0.20)); g.fillRect(bx, B - h - 6, bw, 4);                        // top-rim chiaro
+        g.fillStyle(mix(c, 0xffffff, 0.12)); g.fillRect(bx, B - h - 6, 2, h);                         // stacco verticale
+        g.fillStyle(mix(c, 0x000000, 0.45)); for (let r = 1; r < 5; r++) g.fillRect(bx + (bw / 5) * r, B - h - 6, 1.5, h); // corrugazioni
+      }
       break;
+    }
   }
 }
 
@@ -395,11 +432,17 @@ function drawStation(scene: Phaser.Scene, location: StopLocation, L: HubLight, s
       g.fillStyle(0x101014); g.fillRect(sx + 38, sy - 30, 28, 15); g.fillStyle(a, 0.5); g.fillRect(sx + 38, sy - 30, 28, 2); sign(sx + 52, sy - 52, 38); break;
     }
     case 'camp': {
-      g.fillStyle(0x2a241e); for (let i = 0; i < 9; i++) { const ang = i / 9 * Math.PI; g.fillEllipse(sx + Math.cos(ang) * 22, sy + 3, 7, 4); }
-      shadeCyl(g, sx - 16, sy - 7, 32, 8, 0x3a2818); g.fillStyle(0xff5a20, 0.9); for (let i = 0; i < 6; i++) g.fillCircle(sx - 12 + i * 5, sy - 2, 1.8);
+      g.fillStyle(0x2a241e); for (let i = 0; i < 9; i++) { const ang = i / 9 * Math.PI; g.fillEllipse(sx + Math.cos(ang) * 22, sy + 3, 7, 4); } // pietre del focolare
+      shadeCyl(g, sx - 16, sy - 7, 32, 8, 0x3a2818);                                                  // legna
+      g.fillStyle(0xff7a20, 1); for (let i = 0; i < 7; i++) g.fillCircle(sx - 14 + i * 4.6, sy - 2, 2.0 + (i % 2) * 0.7); // letto di brace (più acceso)
       g.fillStyle(0x6a4424); g.fillRect(sx - 18, sy - 7, 36, 4); g.fillRect(sx - 5, sy - 16, 4, 13);
-      g.fillStyle(0xff7a22, 0.95); g.fillTriangle(sx - 11, sy - 5, sx, sy - 34, sx + 11, sy - 5);
-      g.fillStyle(0xffd24a, 0.95); g.fillTriangle(sx - 6, sy - 5, sx + 1, sy - 23, sx + 6, sy - 5); break;
+      // Fiamme stratificate e ASIMMETRICHE (no triangolo-cartone) + nucleo bianco-caldo.
+      g.fillStyle(0xcc3a12, 0.9);  g.fillTriangle(sx - 13, sy - 4, sx - 2, sy - 38, sx + 9, sy - 4);
+      g.fillStyle(0xff6a1e, 0.95); g.fillTriangle(sx - 10, sy - 4, sx + 3, sy - 30, sx + 11, sy - 4);
+      g.fillStyle(0xff7a22, 0.95); g.fillTriangle(sx - 9, sy - 4, sx - 4, sy - 33, sx + 2, sy - 4);
+      g.fillStyle(0xffb02a, 0.95); g.fillTriangle(sx - 6, sy - 4, sx + 1, sy - 24, sx + 7, sy - 4);
+      g.fillStyle(0xffe27a, 0.95); g.fillTriangle(sx - 3.5, sy - 4, sx + 0.5, sy - 17, sx + 4.5, sy - 4);
+      g.fillStyle(0xfff0c0, 1);    g.fillTriangle(sx - 2, sy - 5, sx, sy - 12, sx + 2.5, sy - 5); break; // nucleo bianco-caldo
     }
     case 'checkpoint': {
       sandbags(g, sx - 38, sy - 12, 7); sandbags(g, sx - 26, sy - 23, 5);
@@ -462,12 +505,12 @@ function drawWreck(scene: Phaser.Scene, L: HubLight, x: number, y: number, colli
   colliders.push({ x, y: y - 2, r: 30 });
 }
 function drawProps(scene: Phaser.Scene, location: StopLocation, L: HubLight, designW: number, sx: number, sy: number, rng: (n: number) => number, colliders: Collider[]) {
-  const blocked = (px: number, py: number) => Math.hypot(px - 150, py - 432) < 78 || Math.hypot(px - sx, py - sy) < 94 || Math.hypot(px - 260, py - 476) < 46;
+  const blocked = (px: number, py: number) => Math.hypot(px - 150, py - 432) < 78 || Math.hypot(px - sx, py - sy) < 120 || Math.hypot(px - 260, py - 476) < 46;
   const place = (px: number, py: number, i: number) => {
     if (blocked(px, py)) return;
     const depth = py, gg = scene.add.graphics().setDepth(depth);
     dropShadow(scene, L, px, py, 24, depth);
-    const r = rng(i + 40), can = [0xcc3322, 0x4a7a3a, 0xc89a30][i % 3]!;
+    const r = rng(i + 40), can = [0x7a4438, 0x4a5a40, 0x6a5e3a][i % 3]!;
     if (r > 0.84) { barrel(gg, px, py - 6, mix(0x3a342c, L.color, 0.08)); barrel(gg, px + 11, py - 3, 0x35322a); if (rng(i + 88) > 0.5) barrel(gg, px + 5, py - 14, 0x3a342c); colliders.push({ x: px + 5, y: py - 5, r: 14 }); }
     else if (r > 0.66) { crate(gg, px - 8, py - 13, mix(location.hubGround, 0x3a3a2a, 0.45)); if (rng(i + 99) > 0.45) crate(gg, px - 7, py - 25, 0x33302a); if (rng(i + 70) > 0.6) crate(gg, px + 9, py - 13, 0x35322c); colliders.push({ x: px, y: py - 8, r: 13 }); }
     else if (r > 0.54) { tire(gg, px, py); if (rng(i + 60) > 0.5) tire(gg, px + 6, py - 2); colliders.push({ x: px, y: py - 3, r: 10 }); }
@@ -479,7 +522,7 @@ function drawProps(scene: Phaser.Scene, location: StopLocation, L: HubLight, des
   // griglia jitterata su TUTTO il pavimento (cortile di fondo + zona calpestabile)
   const cols = 8, rows = 4; let i = 0;
   for (let c = 0; c < cols; c++) for (let rr = 0; rr < rows; rr++) {
-    i++; if (rng(c * 11 + rr + 1) < 0.2) continue;
+    i++; if (rng(c * 11 + rr + 1) < 0.42) continue;
     const px = 56 + (c + 0.5) / cols * (designW - 112) + (rng(c * 13 + rr) - 0.5) * 64;
     const py = HUB_HORIZON + 14 + (rr + 0.5) / rows * (560 - HUB_HORIZON) + (rng(c + rr * 9) - 0.5) * 40;
     place(px, py, i);
@@ -522,15 +565,35 @@ function drawParticles(scene: Phaser.Scene, L: HubLight, sx: number, sy: number,
   scene.add.particles(0, 0, 'particle', {
     x: { min: 40, max: designW - 40 }, y: { min: 230, max: 545 },
     speedX: { min: -4, max: 4 }, speedY: { min: -6, max: 3 }, scale: { start: 0.32 / OVERSAMPLE, end: 0 },
-    alpha: { start: 0.12, end: 0 }, lifespan: 4200, frequency: 110, quantity: 1, tint: 0x9aa0aa,
-  }).setDepth(700);
+    alpha: { start: 0.12, end: 0 }, lifespan: 4200, frequency: 110, quantity: 1, tint: warm ? 0xbfa090 : 0x9aa0aa,
+  }).setDepth(700); // pulviscolo caldo nei luoghi "caldi" (market/camp), freddo altrove (fix #5)
+}
+
+/** Figura ILLUMINATA: ombra di contatto + alone-rim color-firma (la stacca dal buio, "scalda" il volto) +
+ *  sprite. Persone, non sagome nel nero (fix #3). `scale` è già in unità design (es. 1.3/OVERSAMPLE). */
+function litFigure(scene: Phaser.Scene, L: HubLight, x: number, y: number, texKey: string, scale: number, flip = false) {
+  const fo = falloff(L, x, y);
+  dropShadow(scene, L, x, y, 22, y);
+  scene.add.image(x, y - 16, 'fx_light').setTint(mix(L.color, 0xffffff, 0.35)).setBlendMode(Phaser.BlendModes.ADD)
+    .setScale(1.0, 1.5).setAlpha(0.16 + 0.22 * fo).setDepth(y - 1); // alone-rim dietro la figura
+  return scene.add.image(x, y, texKey).setOrigin(0.5, 1).setScale(scale).setDepth(y).setFlipX(flip);
+}
+
+/** Fascio CONICO additivo dalla sorgente (faro/generatore): trapezio stretto in alto → largo a terra. Dà
+ *  direzionalità alla luce di depot/checkpoint invece del disco radiale (fix #2). */
+function drawLightCone(scene: Phaser.Scene, L: HubLight, color: number, baseY: number, topHalf: number, baseHalf: number) {
+  const g = scene.add.graphics().setDepth(2.95).setBlendMode(Phaser.BlendModes.ADD);
+  const cone = (bh: number, a: number) => { g.fillStyle(color, a); g.fillPoints([
+    { x: L.x - topHalf, y: L.y }, { x: L.x + topHalf, y: L.y },
+    { x: L.x + bh, y: baseY }, { x: L.x - bh, y: baseY }], true); };
+  cone(baseHalf * 1.3, 0.05); cone(baseHalf, 0.09); cone(baseHalf * 0.55, 0.10);
 }
 
 /** Rende l'intero hub e restituisce stazioni, collider e il bloom-sorgente (per il flicker). */
 export function renderHub(scene: Phaser.Scene, location: StopLocation, designW: number): HubLayout {
   Shadows.buildTexture(scene);
   const rng = makeRng(location.key);
-  const warm = location.key === 'camp' || location.key === 'market';
+  const warm = location.hubLight.warmth >= 0.6; // fix #5: temperatura (flicker+brace) derivata dal CAMPO, non dalla key
   const sx = Math.round(designW * 0.66), sy = 372;
   const hl = location.hubLight;
   const L: HubLight = { x: sx + hl.offX, y: sy + hl.offY, color: location.accent, warmth: hl.warmth, reach: hl.reach };
@@ -538,37 +601,51 @@ export function renderHub(scene: Phaser.Scene, location: StopLocation, designW: 
 
   drawBackground(scene, location, L, designW, rng);
   scene.add.image(0, HUB_HORIZON, groundTexture(scene, location, designW)).setOrigin(0, 0).setDepth(2);
-  scene.add.rectangle(designW / 2, 300, designW, 600, 0x000000, 0.18).setDepth(2.9); // penombra globale (più leggera)
+  // Raccordo muro→pavimento: ombra di contatto che cola dalla base del muro sul terreno → niente "cucitura" netta (fix #2).
+  const seamC = mix(location.hubGround, 0x000000, 0.6);
+  scene.add.graphics().setDepth(2.4).fillGradientStyle(seamC, seamC, seamC, seamC, 0.6, 0.6, 0, 0).fillRect(0, HUB_HORIZON, designW, 64);
+  scene.add.rectangle(designW / 2, 300, designW, 600, 0x000000, 0.30).setDepth(2.9); // penombra globale: più buio = più contrasto, meno "lavato" (fix #1/#6)
 
-  // LUCE: pozza a terra additiva (flattened) SOTTO gli oggetti — niente disco gigante che galleggia.
-  scene.add.image(sx, sy + 12, 'fx_light').setTint(L.color).setBlendMode(Phaser.BlendModes.ADD)
-    .setScale(warm ? 4.4 : 3.8, warm ? 2.6 : 2.2).setAlpha(warm ? 0.4 : 0.3).setDepth(3);
+  // LUCE-firma: pozza come VOLUME con falloff (stack di 3 fx_light concentriche), non disco a bordo duro (fix #2).
+  // depot freddo-industriale → pozza desaturata verso il bianco-acciaio; l'arancio resta accento sulle valvole (fix #5).
+  const poolTint = location.key === 'depot' ? mix(L.color, 0x8fb4d8, 0.45) : L.color;
+  const pool = (sxx: number, syy: number, a: number) => scene.add.image(sx, sy + 12, 'fx_light')
+    .setTint(poolTint).setBlendMode(Phaser.BlendModes.ADD).setScale(sxx, syy).setAlpha(a).setDepth(3);
+  pool(warm ? 8.0 : 7.2, warm ? 3.4 : 3.0, 0.13); // ampia: MOLTO schiacciata → luce su pavimento, non disco (fix #4)
+  pool(warm ? 5.2 : 4.6, warm ? 2.1 : 1.9, 0.18); // media
+  pool(warm ? 3.0 : 2.7, warm ? 1.2 : 1.1, 0.20); // alone basso: core spento → niente "lampadina"/decalcomania
+  if (location.key === 'depot' || location.key === 'checkpoint')                                       // fascio conico (sorgente direzionale)
+    drawLightCone(scene, L, mix(poolTint, 0xffffff, 0.3), sy + 44, 10, location.key === 'checkpoint' ? 84 : 62);
+  // Fill-light di raccordo: collega i due poli (veicolo ≈x150 ↔ stazione) e toglie il vuoto centrale nero (fix #4).
+  scene.add.image((150 + sx) / 2, 432, 'fx_light').setTint(poolTint).setBlendMode(Phaser.BlendModes.ADD).setScale(5.0, 1.8).setAlpha(0.09).setDepth(3);
+  scene.add.image(170, 446, 'fx_light').setTint(mix(poolTint, 0xffffff, 0.2)).setBlendMode(Phaser.BlendModes.ADD).setScale(3.4, 1.3).setAlpha(0.11).setDepth(3);
 
   drawStation(scene, location, L, sx, sy);
   drawProps(scene, location, L, designW, sx, sy, rng, colliders);
   location.hubNpcs.forEach((role, i) => {
     const nx = sx + (i === 0 ? -66 : 60) + (i > 1 ? (i - 1) * 30 : 0), ny = sy + 42 + i * 5;
-    dropShadow(scene, L, nx, ny, 22, ny);
-    scene.add.image(nx, ny, npcTexture(scene, role)).setOrigin(0.5, 1).setScale(1 / OVERSAMPLE).setDepth(ny);
+    litFigure(scene, L, nx, ny, npcTexture(scene, role), 1.95 / OVERSAMPLE); // NPC-eroe più grande: legge come persona, non soldatino (fix #5)
     colliders.push({ x: nx, y: ny - 8, r: 11 });
   });
-  // figure ambientali sparse nel cortile (popolano il vuoto centrale; dialoghi = Tier C, in arrivo)
+  // Figure ambientali: SOLO se il luogo ha equipaggio (depot = transito → resta vuoto, fix #3). Vincolate DENTRO
+  // la reach della luce (niente sagome che galleggiano nel buio) e ingrandite per leggere come persone.
   const AMB = ['soldier', 'looter', 'explorer', 'medic', 'mechanic'];
-  for (let k = 0, n = warm ? 3 : 2; k < n; k++) {
-    const ax = 300 + rng(k + 300) * 210, ay = 410 + rng(k + 310) * 116;
+  const ambN = location.hubNpcs.length === 0 ? 0 : (warm ? 2 : 1);
+  for (let k = 0; k < ambN; k++) {
+    const ax = sx + (rng(k + 300) - 0.5) * L.reach * 0.7, ay = sy + 36 + rng(k + 310) * 70;
     const role = AMB[(k + location.key.length) % AMB.length]!;
-    dropShadow(scene, L, ax, ay, 22, ay);
-    scene.add.image(ax, ay, npcTexture(scene, role)).setOrigin(0.5, 1).setScale(1 / OVERSAMPLE).setDepth(ay).setFlipX(rng(k + 320) > 0.5);
+    litFigure(scene, L, ax, ay, npcTexture(scene, role), 1.62 / OVERSAMPLE, rng(k + 320) > 0.5);
     colliders.push({ x: ax, y: ay - 8, r: 11 });
   }
   drawForeground(scene, location, designW);
   drawParticles(scene, L, sx, sy, warm, designW);
 
-  // Bloom STRETTO alla sorgente (insegna/fuoco): il punto luminoso che "accende", non un disco scenico.
-  const glowScale = warm ? 1.9 : 1.5, glowAlpha = warm ? 0.85 : 0.6;
-  const glow = scene.add.image(L.x, L.y, 'fx_light').setTint(mix(L.color, 0xffffff, 0.4)).setBlendMode(Phaser.BlendModes.ADD)
+  // Bloom STRETTO alla sorgente: accende il punto ma ABBASSATO (no "lampadina"), e meno bianco nel tint →
+  // il colore-firma resta saturo (fix #2).
+  const glowScale = warm ? 1.5 : 1.2, glowAlpha = warm ? 0.6 : 0.42;
+  const glow = scene.add.image(L.x, L.y, 'fx_light').setTint(mix(poolTint, 0xffffff, 0.3)).setBlendMode(Phaser.BlendModes.ADD)
     .setScale(glowScale).setAlpha(glowAlpha).setDepth(sy + 1);
-  if (location.key === 'depot') scene.add.image(sx + 52, sy - 34, 'fx_light').setTint(mix(L.color, 0xffffff, 0.4)).setBlendMode(Phaser.BlendModes.ADD).setScale(1.3).setAlpha(0.6).setDepth(sy + 1);
+  if (location.key === 'depot') scene.add.image(sx + 52, sy - 34, 'fx_light').setTint(mix(poolTint, 0xffffff, 0.3)).setBlendMode(Phaser.BlendModes.ADD).setScale(1.1).setAlpha(0.42).setDepth(sy + 1);
 
   let service: { x: number; y: number };
   let pump: { x: number; y: number } | null = null;

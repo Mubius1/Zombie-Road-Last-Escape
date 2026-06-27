@@ -13,6 +13,9 @@ import { t } from '../i18n';
 
 const H = 600;
 
+/** Esiti dell'epilogo (anteprima debug, un pulsante ciascuno). */
+type Outcome = 'convoy' | 'few' | 'alone' | 'fallen';
+
 // `label` = chiave i18n (risolta con t() al render).
 interface ZombieInfo { key: string; label: string; }
 
@@ -200,9 +203,9 @@ export default class DebugScene extends Phaser.Scene {
     }));
 
     // Riga 2: navigazione
-    const y2 = y + 42;
+    const y2 = y + 32;
     const mk2 = (x: number, w: number, label: string, color: number, cb: () => void) => {
-      const b = this.add.rectangle(x, y2, w, 32, color).setInteractive({ useHandCursor: true });
+      const b = this.add.rectangle(x, y2, w, 30, color).setInteractive({ useHandCursor: true });
       Ui.text(this, x, y2, label, { fontSize: '13px', color: UI.white, fontStyle: 'bold' }).setOrigin(0.5);
       b.on('pointerover', () => b.setAlpha(0.8));
       b.on('pointerout',  () => b.setAlpha(1));
@@ -213,6 +216,48 @@ export default class DebugScene extends Phaser.Scene {
     mk2(296, 120, t('debug.shop'), 0x2a2a5a, () => Juice.go(this, 'ShopScene'));
     mk2(468, 150, t('debug.locations'), 0x1a3a4a, () => this.openLocationGallery());
     mk2(658, 168, t('debug.toGame'), 0x3a3a3a, () => Juice.go(this, 'GameScene'));
+
+    // Riga 3: anteprima filmati (CutsceneScene). Prologo + un pulsante per ESITO dell'epilogo.
+    const y3 = y + 64;
+    const mk3 = (x: number, w: number, label: string, color: number, cb: () => void) => {
+      const b = this.add.rectangle(x, y3, w, 24, color).setInteractive({ useHandCursor: true });
+      Ui.text(this, x, y3, label, { fontSize: '11px', color: UI.white, fontStyle: 'bold' }).setOrigin(0.5);
+      b.on('pointerover', () => b.setAlpha(0.8));
+      b.on('pointerout',  () => b.setAlpha(1));
+      b.on('pointerdown', cb);
+      this.reg(b);
+    };
+    mk3(70, 110, t('debug.cutscenePrologue'), 0x3a2a4a, () =>
+      this.scene.start('CutsceneScene', { cutscene: 'prologue', next: 'DebugScene' }));
+    Ui.text(this, 134, y3, t('debug.cutsceneEpilogue'), { fontSize: '11px', color: UI.faint }).setOrigin(0, 0.5);
+    mk3(275, 82, t('debug.epiConvoy'), 0x4a3a1a, () => this.previewEpilogue('convoy'));
+    mk3(362, 82, t('debug.epiFew'),    0x3a3a3a, () => this.previewEpilogue('few'));
+    mk3(449, 82, t('debug.epiAlone'),  0x1a2a4a, () => this.previewEpilogue('alone'));
+    mk3(540, 92, t('debug.epiFallen'), 0x4a1a1a, () => this.previewEpilogue('fallen'));
+  }
+
+  /** Anteprima di UN esito specifico dell'epilogo, con un cast di esempio. */
+  private previewEpilogue(endKey: Outcome) {
+    // Campioni COERENTI: chi è tra i `fallen` ha la carta `died`; chi ha una carta da vivo NON è tra i caduti
+    // (com'è derivato per davvero in GameScene.showEpilogue → niente "caduto e vivo insieme").
+    const cardsByEnd: Record<Outcome, string[]> = {
+      convoy: ['campaign.ending.mechanic.work', 'campaign.ending.sniper.cover_us'], // Bruno + Eva vivi
+      few:    ['campaign.ending.mechanic.died', 'campaign.ending.sniper.cover_us'], // Bruno caduto, Eva viva
+      alone:  [],                                                                   // mai reclutato → nessuna carta, nessun caduto
+      fallen: ['campaign.ending.sniper.died', 'campaign.ending.mechanic.work'],     // Eva caduta, Bruno vivo
+    };
+    const fallenByEnd: Record<Outcome, string[]> = {
+      convoy: [], few: ['mechanic'], alone: [], fallen: ['sniper'],
+    };
+    const survByEnd: Record<Outcome, number> = { convoy: 6, few: 3, alone: 0, fallen: 2 };
+    const fallen = fallenByEnd[endKey]
+      .map(k => { const s = SURVIVORS.find(sv => sv.key === k); return s ? `${s.properName} ${s.surname}` : k; })
+      .join(' · ');
+    this.registry.set('debugRun', true);
+    this.scene.start('CutsceneScene', {
+      cutscene: 'epilogue', next: 'DebugScene',
+      epi: { endKey, cards: cardsByEnd[endKey], survivors: survByEnd[endKey], fallen, score: 12500, earned: 340 },
+    });
   }
 
   /** Galleria Luoghi: apre l'hub diegetico (StopScene) in modalità ispezione, ciclabile coi tasti 1–5. */

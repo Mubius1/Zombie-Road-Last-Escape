@@ -143,7 +143,7 @@ Tutto vive in uno **spazio di design alto 600** (vedi [CLAUDE.md → Risoluzione
 
 | Parametro | Valore | Significato |
 |---|---|---|
-| Distanza missione | `MISSION_DIST = 6000` u | ~**60 km** mostrati (`KM_PER_UNIT`); ~25 s di guida pura a `SCROLL_SPEED=240 u/s` — **transito breve** (era 18000/~180 km, troppo lungo). Carburante **persistente** tra le tratte |
+| Distanza missione | `MISSION_DIST = 6000` u | ~**180 km** mostrati (`KM_PER_UNIT=0.03`); ~25 s di guida pura a `SCROLL_SPEED=240 u/s` — **transito breve** (era 18000 u, troppo lungo). Carburante **persistente** tra le tratte |
 | Trigger boss | `82%` (`BOSS_TRIGGER`) | il boss appare a 4 920 u; l'avanzamento si congela finché vive (boss comunque disattivati) |
 | Spawn zombi (ritmo del terrore) | director a fasi **dread → burst** | **quiete** tesa (spawn radi, `CALM_INTERVAL`) ↔ **ondata** serrata (`BURST_INTERVAL` + batch d'apertura + stinger); sospeso durante il boss (§5, [BALANCE §1bis](BALANCE.md)) |
 | Gigante | ogni `22 000` ms | spawn speciale fuori dal pool ordinario |
@@ -201,7 +201,7 @@ Il veicolo è definito da `VEHICLES[key]` (salute/armatura/velocità/cadenza bas
 | **SERBATOIO** | consumo carburante fino a **3×** a serbatoio rovinato |
 | **TORRETTA** | cadenza di fuoco peggiora; a **0 non spari più** |
 
-> **Armatura passiva:** la **corazza** non è più un componente che degrada (componenti 5→4) — è una **riduzione danno passiva** (armatura del veicolo + upgrade *Corazza rinforzata*), mostrata come badge HUD. **Morte solo su Salute = 0 o Carburante = 0.** Il colpo danneggia il componente coerente con la **fonte** (tossico → serbatoio; contatti/relitti → scafo/Salute; cannone → torretta; aggancio → slot). Mappa e formule in [BALANCE.md §4](BALANCE.md#4--degrado-dei-componenti).
+> **Armatura passiva:** la **corazza** non è più un componente che degrada (componenti 5→4) — è una **riduzione danno passiva** (armatura del veicolo + upgrade *Corazza rinforzata*), mostrata come badge HUD. **Morte solo su Salute = 0** (il **Carburante = 0 non è più game over** → RIMORCHIO alla sosta, vedi §7). Il colpo danneggia il componente coerente con la **fonte** (tossico → serbatoio; contatti/relitti → scafo/Salute; cannone → torretta; aggancio → slot). Mappa e formule in [BALANCE.md §4](BALANCE.md#4--degrado-dei-componenti).
 > I componenti si **portano dietro** tra una missione e l'altra (salvati nel registry): la riparazione al Negozio è una scelta economica reale.
 
 ---
@@ -209,8 +209,8 @@ Il veicolo è definito da `VEHICLES[key]` (salute/armatura/velocità/cadenza bas
 ## §7 · Risorse del giocatore
 
 - **Salute** (`100 + bonus veicolo`): a 0 → *"Veicolo distrutto!"* (game over).
-- **Carburante** (`100`, +30 con upgrade serbatoio): cala di continuo (`BASE_FUEL_DRAIN`), più in fretta se il serbatoio è danneggiato; a 0 → *"Carburante esaurito!"* (game over). **Non si ricarica su strada** (niente taniche): il pieno si fa **solo al garage** (item *Rifornimento*), più qualche extra dagli eventi (convoglio/salvataggio). L'**Esploratore** riduce il consumo del 20%.
-- **Punteggio / Combo**: ogni uccisione dà punti × moltiplicatore combo. La **combo** sale a ogni kill entro 2,5 s dal precedente e moltiplica fino a **×5** (cap a 13 kill di fila, vedi [BALANCE §2](BALANCE.md#2--economia--flusso-delle-monete)). Il punteggio è la valuta-sorgente: a fine missione diventa **monete** (= ⌊punteggio/8⌋). Il **boss** dà inoltre una **ricompensa in monete diretta** (accreditata subito) **più** +500 punteggio — due accrediti distinti a fine missione.
+- **Carburante** (`100`, +30 con upgrade serbatoio): cala di continuo (`BASE_FUEL_DRAIN`), più in fretta se il serbatoio è danneggiato; a 0 → **NON è game over**: si viene **RIMORCHIATI alla sosta successiva** (la tratta AVANZA comunque; pedaggio −20% monete + crollo morale, **nessun sopravvissuto perso** — più mite della morte). È il pivot *This War of Mine*: il carburante è **logistica**, non morte al secondo. Garantisce **niente softlock** anche quando un pieno non basterebbe per quel mezzo/tratta (es. Mezzo Pesante nel deserto: serve >130, serbatoio max 100) — il leg «impossibile» si **supera per traino**, non si completa. Sul leg finale (niente sosta dopo il rifugio) si resta sul leg con pieno + serbatoio riparato (corto → sempre completabile). Costanti `STRAND_MONEY_PENALTY 0.20` / `STRAND_TOW_FUEL 25` (`GameScene.ts`). Il pieno vero si fa alla sosta (item *Rifornimento*), più qualche extra dagli eventi (convoglio/salvataggio). L'**Esploratore** riduce il consumo del 20%.
+- **Punteggio / Combo**: ogni uccisione dà punti × moltiplicatore combo. La **combo** sale a ogni kill entro 2,5 s dal precedente e moltiplica fino a **×5** (cap a 13 kill di fila, vedi [BALANCE §2](BALANCE.md#2--economia--flusso-delle-monete)). Il punteggio è una valuta-sorgente: a fine tratta diventa **monete** (`⌊punteggio/5⌋`) **più** una **quota fissa per uccisione** (svincolata dalla combo, BALANCE §2). Il **boss**, *quando attivo* (oggi `BOSSES_ENABLED=false`), darebbe in più una **ricompensa diretta** + 500 punteggio.
 - **Sovraccarico (Overdrive)** (A3): una barra che si carica dalle uccisioni in combo. A barra piena, **F** scatena ~3 s di cadenza di fuoco ×2, veicolo-ariete (il contatto uccide senza danneggiare i componenti) e un'onda d'urto frontale. È la valvola **attiva** legata alla combo — premia l'aggressività e aggiunge un secondo verbo oltre allo Scatto. Numeri in [BALANCE §1](BALANCE.md#1--costanti-di-missione-).
 - **Monete (★)**: spese solo al Negozio. **Non** sopravvivono al game over.
 - **Munizioni** (pivot horror, pilastro 2): riserva **finita** per ogni arma forte; la **Mitragliatrice base è ∞** (fallback). Si raccolgono dalle **casse** sulla strada (~13 s) o si ricomprano al garage (`restock`). A secco → click + ripiego automatico sulla MG. Numeri in [BALANCE §7bis](BALANCE.md#7--armi).
@@ -247,7 +247,7 @@ La sosta tra una missione e l'altra (`ShopScene`) non è più sempre il garage: 
 | **Posto di blocco** | armi | l'armeria militare |
 | **Mercato nero** | potenziamenti · armi · veicoli | il bazar dell'attrezzatura (no sopravvissuti) |
 
-> Ciclo per regione (0..6): `garage · deposito · mercato · accampamento · garage · posto-di-blocco · mercato` → il **garage ricorre ~ogni 3-4 soste**, mai più di 3 soste-specialiste di distanza. Una selezione **seedabile/varia** (e i *twist* attivi della speculazione originale — assedio, pedaggio, saccheggio sotto minaccia) restano estensioni possibili sopra questa base.
+> Le soste sono dettate dal **manifest finito** (`STAGE_MANIFEST[leg].stopKind`), non più dal vecchio ciclo mod-7. Distribuzione tarata perché ci sia **almeno un GARAGE per atto** (leg 0·8·15·19·26 + terminale) → il catalogo (veicoli, upgrade, reclutamento) resta **raggiungibile lungo tutto il viaggio**, non solo nell'Atto 1. I rifornimenti essenziali (ripara·rifornisci·munizioni) sono comunque **ovunque**. Una selezione seedabile/varia resta un'estensione possibile.
 
 Al **GARAGE** (e in generale, secondo i servizi del luogo):
 
@@ -268,11 +268,13 @@ Al **GARAGE** (e in generale, secondo i servizi del luogo):
 
 > Reclutamento, cibo, ferimento, cura, abbandono e salvataggio: numeri-sorgente in [BALANCE.md §8](BALANCE.md#8--negozio-ed-economia).
 
-> 🚐 **Morale del convoglio (campagna "IL CONVOGLIO", F5).** Oltre allo stato per-individuo, il convoglio ha un **morale** collettivo `0..100` (default 60): sale a reclutamento/salvataggio/sosta-sicura, scende a perdita (−25)/fame/razionamento. **Sotto soglia 40 tutte le abilità si spengono** (il gate unico `hasActiveSurvivor` aggiunge `morale ≥ MORALE.break`): un convoglio a pezzi rende meno, senza toccare le 6 abilità singole. Il morale finale, coi sopravvissuti vivi e l'integrità del veicolo, determina l'**epilogo** (§10). Numeri in [BALANCE §11](BALANCE.md).
+> 🚐 **Morale del convoglio (campagna "IL CONVOGLIO", F5).** Oltre allo stato per-individuo, il convoglio ha un **morale** collettivo `0..100` (default 60): sale a reclutamento/salvataggio/sosta-sicura, scende a perdita (−25)/fame/razionamento. **Sotto soglia 25 tutte le abilità si spengono** (il gate unico `hasActiveSurvivor` aggiunge `morale ≥ MORALE.break`): un convoglio a pezzi rende meno, senza toccare le 6 abilità singole. Il morale finale, coi sopravvissuti vivi e l'integrità del veicolo, determina l'**epilogo** (§10). Numeri in [BALANCE §11](BALANCE.md).
 
 > 👥 **Rifondazione dell'equipaggio (implementata).** I sopravvissuti non sono più tre iniziali in un angolo: (1) **visibili** — pannello-crew con i ritratti a bordo e lo stato (sano/affamato/ferito) sul bordo sinistro dell'HUD; (2) **con voce** — al reclutamento leggono la propria bio, e una battuta col nome scatta a fame/morale-crollato; (3) oggetto di **incontri Tier C** alle soste (`StopScene`): scelte morali con conseguenza persistente in `RunData.choices`, lette dall'epilogo — *dividere le razioni* (camp), *saccheggiare a fondo* (depot), *barattare una «bocca»* al mercato (rimuove una persona), *pagare/forzare il pedaggio* (checkpoint); (4) la **perdita** di un sopravvissuto è un *beat* — il volto che sfuma e un superstite che resta in silenzio — non un toast. Numeri degli incontri in [BALANCE §11](BALANCE.md); stringhe in i18n ×6. Dettaglio in [`CAMPAGNA_CONVOGLIO.md`](CAMPAGNA_CONVOGLIO.md) §4/§5.
 >
 > 🩸 **Pivot "This War of Mine su ruote".** Il cuore del gioco sono le **persone e la storia**, non la guida (tratte ridotte a transito breve, §4). Alle soste **parli** coi tuoi (cammini fino a loro, premi E): ognuno dei **7 ha un arco personale** data-driven (`src/Convoy.ts` → `SURVIVOR_ARCS`) con un segreto/destino, una **scelta che pesa** (sbloccata per atto) e una **carta-epilogo**; lo **stato emotivo** (derivato da fame/ferite/morale) cambia come appaiono e parlano; una **radio** racconta il mondo che crolla, atto dopo atto, fino alla statica. Tutto procedurale, testi in i18n ×6.
+>
+> Alcune scelte d'arco diventano **diramazioni giocabili reali** (scaffold `World.detourStage`): la tratta dopo è una *deviazione* a tema, con esito pesato e amaro che l'epilogo ricorda — **«Cerca Lena»** (Sara, la trovi/tardi/esca; trovarla la riporta a bordo) e **«Il valico»** (Nadia, il passo dove perse il suo gruppo). E i **bisogni** si fanno individuali: la **stanchezza** (`FATIGUE`) è il primo stato per-persona oltre alla scorta condivisa — si accumula viaggiando, si recupera dormendo al **campo**, e oltre soglia spegne l'abilità (recuperabile, ≠ fame). Numeri in [BALANCE §11](BALANCE.md).
 
 ---
 
@@ -301,6 +303,18 @@ A ogni missione (e dopo ogni ricompensa/acquisto) quello stato viene **salvato s
 3. ✅ **Curva di difficoltà oltre il ciclo** — *implementata*: scaling NG+ degli HP di nemici e boss per ciclo (`diffMult`, [BALANCE §5](BALANCE.md#5--nemici)). Danno/velocità ancora costanti (leva HP-only).
 4. ✅ **Costo della morte** — *risolta*: il gioco è una **campagna a checkpoint** (non roguelike). La morte rigioca la missione con un pedaggio (−25% monete) invece di azzerare; il progresso si salva a ogni missione, anche cross-sessione (§10/§11). Una valuta meta resta possibile come *extra* (Track D), non più necessaria per la retention.
 5. 🟡 **Differenziazione dei boss** — *parziale*: aggiunta una **2ª fase** sotto il 40% HP (attacchi più fitti + telegrafo). Pattern d'attacco completamente distinti per tipo restano un'estensione possibile.
+
+---
+
+## §13 · Rigiocabilità (Fase R)
+
+> Estensione per la durata Steam: per un arcade survival le ore non sono la *lunghezza della linea* ma `durata di una corsa × quante corse + difficoltà`. Si investe in **rigiocabilità** attorno al contenuto esistente, non nell'allungare la campagna. Numeri in [BALANCE §12](BALANCE.md); piano in [`CAMPAGNA_CONVOGLIO.md` §10](CAMPAGNA_CONVOGLIO.md).
+
+**Meta-profilo (R1).** Esiste un secondo strato persistente, **separato** dal checkpoint della corsa (`SaveData.run`): il **meta-profilo** (`MetaProfile`, localStorage) **sopravvive a Nuova Partita**. Registra fatti grezzi cross-corsa (corse completate, atto più alto raggiunto, finali visti, archi ingaggiati, difficoltà battuta, salvataggi e monete cumulative). La **corsa resta terminale** (al rifugio l'epilogo chiude, §10): finire una corsa **registra** e **sblocca**, e la **Nuova Partita riparte da capo ma più ricca** (modello roguelite; nessun carry-over della build).
+
+**Difficoltà (R2).** Tre livelli — **Normale · Difficile · Incubo** — scelti a Nuova Partita (`NewRunScene`), bloccati per la corsa (`RunData.difficulty`). Modulano uno strato globale su nemici/densità/carburante (numeri in [BALANCE §12](BALANCE.md)). **Incubo** è gated: richiede di aver finito almeno a Difficile.
+
+**Sblocchi (R3) — varietà, non potenza.** Si parte con un **kit completo e vincibile** (Auto Civile·Pickup / MG·Doppia MG·Fucile / Bruno·Sara·Marcus); il resto del catalogo si **sblocca** completando traguardi (tabella in [BALANCE §12](BALANCE.md)). Il negozio/roster **non offre** ciò che non è meta-sbloccato; le monete in-run restano il secondo gate (modello FTL/Hades). Un veicolo sbloccato è anche scegliibile come **loadout iniziale** a Nuova Partita. Effetto collaterale voluto: il nuovo giocatore parte con un kit focalizzato e il catalogo si apre corsa dopo corsa (onboarding paced).
 
 ---
 

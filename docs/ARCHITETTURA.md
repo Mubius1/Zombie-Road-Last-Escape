@@ -167,7 +167,7 @@ Le 18 chiavi del contratto `RunData` ([`RunState.ts`](../src/RunState.ts)):
 | `missionNumber` | number | indice missione corrente | Game (`+1` a fine missione), Debug |
 | `money` | number | valuta corrente | Game (a fine missione), Shop (acquisti), Debug |
 | `survivors` | string[] | sopravvissuti reclutati | Shop, Debug |
-| `upgrades` | `Record<vehicleKey, Upgrades>` | potenziamenti **per-veicolo** (ogni veicolo tiene il suo set armor/engine/turret/fuelTank; i salvataggi vecchi piatti degradano a `{}`) | Shop, Debug |
+| `upgrades` | `Upgrades` | potenziamenti **globali del convoglio** (portabili: comprati una volta, non ri-pagati al cambio mezzo; ogni veicolo applica solo quelli nel suo catalogo). Salvataggi vecchi (per-veicolo) fusi da `migrateUpgrades` | Shop |
 | `vehicle` | string | veicolo equipaggiato | Shop, Debug |
 | `ownedVehicles` | string[] | veicoli posseduti | Shop, Debug |
 | `ownedWeapons` | WeaponType[] | armi possedute | Shop, Debug |

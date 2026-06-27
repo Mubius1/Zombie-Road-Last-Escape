@@ -8,11 +8,13 @@
  * Regola di equità: i RIFORNIMENTI essenziali di sopravvivenza — riparazione, carburante, munizioni
  * (le voci ripetibili `repair`/`refuel`/`restock` di `SHOP_ITEMS`) — sono disponibili in OGNI luogo.
  * Variano solo gli "extra": potenziamenti one-time, armi, sopravvissuti, veicoli. Così nessuna sosta
- * può lasciare il giocatore senza il minimo per ripartire (no softlock).
+ * può lasciare il giocatore senza il minimo per ripartire (no softlock). La garanzia "no softlock" è
+ * strutturale: ogni sosta rifornisce + finire la benzina su strada NON è game over ma un RIMORCHIO che
+ * AVANZA alla sosta successiva (`GameScene.strandLeg`) → nessun leg può restare invincibile.
  *
- * Selezione DETERMINISTICA dalla regione appena percorsa (learnable, non casuale in questa prima
- * versione): il GARAGE (servizi completi) ricorre ~ogni 3-4 soste; gli altri sono specialisti.
- * Una versione seedabile/varia resta possibile con l'RNG di Track D0.
+ * Nella campagna il tipo di sosta viene dal manifest (`STAGE_MANIFEST[leg].stopKind`): distribuzione
+ * tarata con ≥1 GARAGE per atto (catalogo raggiungibile lungo tutto il viaggio). Il ciclo `STOP_CYCLE`
+ * qui sotto è solo il FALLBACK per-regione (learnable). Una versione seedabile/varia resta possibile (Track D0).
  *
  * Soste diegetiche (vedi docs/SOSTE_DIEGETICHE.md): i campi `hub*`/`stationKey` arredano la mini-scena
  * a piedi (`StopScene`) — colore di terreno/cielo, figure ambientali, nome della stazione-servizi.
@@ -43,10 +45,10 @@ export interface StopLocation {
  *  NB: gli `accent` evitano il BLU (riservato al chrome UI per art bible) → il depot usa arancio-fuoco. */
 export const STOP_LOCATIONS: StopLocation[] = [
   { key: 'garage',     nameKey: 'loc.garage.name',     flavorKey: 'loc.garage.flavor',     accent: 0x66cc66, upgrades: true,  weapons: true,  survivors: true,  vehicles: true,  hubGround: 0x1c1c22, hubSky: 0x0c0c14, hubNpcs: ['mechanic'],            stationKey: 'hub.station.workshop', hubLight: { warmth: 0.30, reach: 200, offX: -6, offY: -40 } },
-  { key: 'depot',      nameKey: 'loc.depot.name',      flavorKey: 'loc.depot.flavor',      accent: 0xff7722, upgrades: false, weapons: false, survivors: false, vehicles: false, hubGround: 0x20201a, hubSky: 0x0a0c10, hubNpcs: [],                       stationKey: 'hub.station.pump',     hubLight: { warmth: 0.70, reach: 230, offX:  0, offY: -30 } },
+  { key: 'depot',      nameKey: 'loc.depot.name',      flavorKey: 'loc.depot.flavor',      accent: 0xff7722, upgrades: false, weapons: false, survivors: false, vehicles: false, hubGround: 0x20201a, hubSky: 0x0a0c10, hubNpcs: [],                       stationKey: 'hub.station.pump',     hubLight: { warmth: 0.42, reach: 230, offX:  0, offY: -30 } },
   { key: 'camp',       nameKey: 'loc.camp.name',       flavorKey: 'loc.camp.flavor',       accent: 0xffaa55, upgrades: false, weapons: false, survivors: true,  vehicles: false, hubGround: 0x1e1813, hubSky: 0x120b0a, hubNpcs: ['medic', 'explorer'],    stationKey: 'hub.station.fire',     hubLight: { warmth: 1.00, reach: 210, offX:  0, offY: -22 } },
   { key: 'checkpoint', nameKey: 'loc.checkpoint.name', flavorKey: 'loc.checkpoint.flavor', accent: 0xaabb55, upgrades: false, weapons: true,  survivors: false, vehicles: false, hubGround: 0x1a1c16, hubSky: 0x0c0e0b, hubNpcs: ['soldier'],             stationKey: 'hub.station.guard',    hubLight: { warmth: 0.55, reach: 240, offX:  0, offY: -34 } },
-  { key: 'market',     nameKey: 'loc.market.name',     flavorKey: 'loc.market.flavor',     accent: 0xcc66cc, upgrades: true,  weapons: true,  survivors: false, vehicles: true,  hubGround: 0x191320, hubSky: 0x0f0a14, hubNpcs: ['looter'],              stationKey: 'hub.station.stall',    hubLight: { warmth: 0.45, reach: 220, offX:  0, offY: -28 } },
+  { key: 'market',     nameKey: 'loc.market.name',     flavorKey: 'loc.market.flavor',     accent: 0xcc66cc, upgrades: true,  weapons: true,  survivors: false, vehicles: true,  hubGround: 0x191320, hubSky: 0x0f0a14, hubNpcs: ['looter'],              stationKey: 'hub.station.stall',    hubLight: { warmth: 0.62, reach: 220, offX:  0, offY: -28 } },
 ];
 
 /**

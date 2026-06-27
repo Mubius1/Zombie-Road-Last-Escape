@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { VEHICLES, VEHICLE_KEYS, SURVIVORS, SurvivorData, Upgrades, WEAPONS, WEAPON_KEYS, WEAPON_AMMO, weaponInfiniteAmmo, WeaponType, FOOD, MORALE, vehicleRangeKm } from '../GameData';
+import MetaProfile from '../MetaProfile';
 import { buildEntityTextures, buildSurvivorTextures } from '../EntityTextures';
 import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import Juice from '../Juice';
@@ -8,7 +9,7 @@ import SoundManager from '../SoundManager';
 import Ui, { UI } from '../Ui';
 import MenuPad, { Focusable } from '../MenuPad';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
-import { getRun, setRun, snapshotRun } from '../RunState';
+import { getRun, setRun, snapshotRun, migrateUpgrades } from '../RunState';
 import SaveData from '../SaveData';
 import { locationForLeg, accentCss, StopLocation } from '../Locations';
 import { t } from '../i18n';
@@ -22,7 +23,7 @@ interface ShopItem {
 }
 
 // Catalogo COMPLETO dei potenziamenti. 'repair' è universale; quali degli altri compaiano nel negozio
-// dipende dal veicolo corrente (VEHICLES[key].upgrades). Acquisti = per-veicolo (RunData.upgrades).
+// dipende dal veicolo corrente (VEHICLES[key].upgrades). Acquisti = GLOBALI del convoglio (RunData.upgrades: Upgrades, portabili).
 export const SHOP_ITEMS: ShopItem[] = [
   { key: 'repair',     label: 'item.repair.label',     cost:  80, desc: 'item.repair.desc',     oneTime: false },
   { key: 'refuel',     label: 'item.refuel.label',     cost:  50, desc: 'item.refuel.desc',     oneTime: false }, // carburante "viaggio": fa il pieno; compare solo se il serbatoio non è già pieno
@@ -41,8 +42,7 @@ export const SHOP_ITEMS: ShopItem[] = [
 
 export default class ShopScene extends Phaser.Scene {
   private money = 0;
-  private upgrades: Upgrades = {};                     // set del veicolo CORRENTE (vista del negozio)
-  private allUpgrades: Record<string, Upgrades> = {};  // tutti i set per-veicolo (RunData.upgrades)
+  private upgrades: Upgrades = {};                     // upgrade POSSEDUTI: set GLOBALE del convoglio (portabili)
   private currentWeapon: WeaponType = 'mg';
   private ownedWeapons: WeaponType[] = ['mg'];
   private currentVehicle = 'civilian_car';
@@ -85,8 +85,7 @@ export default class ShopScene extends Phaser.Scene {
 
     this.money          = getRun(this.registry, 'money')         ?? 0;
     this.currentVehicle = getRun(this.registry, 'vehicle')       ?? 'civilian_car';
-    this.allUpgrades    = { ...(getRun(this.registry, 'upgrades') ?? {}) };
-    this.upgrades       = { ...(this.allUpgrades[this.currentVehicle] ?? {}) }; // potenziamenti del mezzo corrente
+    this.upgrades       = migrateUpgrades(getRun(this.registry, 'upgrades')); // upgrade posseduti (globali del convoglio, portabili)
     this.ownedVehicles  = getRun(this.registry, 'ownedVehicles')  ?? ['civilian_car'];
     this.survivors      = getRun(this.registry, 'survivors')      ?? [];
     this.food           = getRun(this.registry, 'food')           ?? FOOD.start;
@@ -105,7 +104,8 @@ export default class ShopScene extends Phaser.Scene {
     const offerMission = this.registry.get('offeredSurvivorsMission') as number | undefined;
     const cachedKeys = (this.registry.get('offeredSurvivors') as string[] | undefined) ?? [];
     if (offerMission !== this.missionNum || cachedKeys.length === 0) {
-      const available = SURVIVORS.filter(s => !this.survivors.includes(s.key));
+      // Fase R (R3): si possono reclutare solo i sopravvissuti META-SBLOCCATI (gate di varietà del roster).
+      const available = SURVIVORS.filter(s => !this.survivors.includes(s.key) && MetaProfile.isUnlocked('survivor', s.key));
       this.offeredSurvivors = Phaser.Utils.Array.Shuffle([...available]).slice(0, 3);
       this.registry.set('offeredSurvivors', this.offeredSurvivors.map(s => s.key));
       this.registry.set('offeredSurvivorsMission', this.missionNum);
@@ -249,7 +249,9 @@ export default class ShopScene extends Phaser.Scene {
     this.drawDivider(py - 8);
     Ui.text(this, px, py - 4, t('shop.weapons'), { fontSize: '13px', color: '#ff9944', fontStyle: 'bold' });
 
-    WEAPON_KEYS.forEach((key, i) => {
+    // Fase R (R3): il negozio offre solo le armi META-SBLOCCATE (o già possedute). Gate di VARIETÀ, non potenza.
+    const shopWeapons = WEAPON_KEYS.filter(k => MetaProfile.isUnlocked('weapon', k) || this.ownedWeapons.includes(k));
+    shopWeapons.forEach((key, i) => {
       const w        = WEAPONS[key];
       const wx       = px + i * 88;
       const owned    = this.ownedWeapons.includes(key);
@@ -395,7 +397,9 @@ export default class ShopScene extends Phaser.Scene {
     const py = 428;
     Ui.text(this, 14 + this.ox, py, t('shop.vehicles'), { fontSize: '13px', color: UI.blueBright, fontStyle: 'bold' });
 
-    VEHICLE_KEYS.forEach((key, i) => {
+    // Fase R (R3): il negozio offre solo i veicoli META-SBLOCCATI (o già posseduti).
+    const shopVehicles = VEHICLE_KEYS.filter(k => MetaProfile.isUnlocked('vehicle', k) || this.ownedVehicles.includes(k));
+    shopVehicles.forEach((key, i) => {
       const v = VEHICLES[key]!;
       const vx = 14 + this.ox + i * 112;
       const owned    = this.ownedVehicles.includes(key);
@@ -498,10 +502,9 @@ export default class ShopScene extends Phaser.Scene {
       for (const wk of this.ownedWeapons) if (!weaponInfiniteAmmo(wk)) ammo[wk] = WEAPON_AMMO[wk];
       setRun(this.registry, 'ammo', ammo);
     } else {
-      // Potenziamento applicato al SOLO veicolo corrente (catalogo per-veicolo).
+      // Potenziamento POSSEDUTO globalmente (portabile): comprato una volta, vale su ogni mezzo che lo supporta.
       (this.upgrades as Record<string,boolean>)[item.key] = true;
-      this.allUpgrades[this.currentVehicle] = { ...this.upgrades };
-      setRun(this.registry, 'upgrades', { ...this.allUpgrades });
+      setRun(this.registry, 'upgrades', { ...this.upgrades });
     }
     this.afterPurchase();
   }
@@ -645,7 +648,7 @@ export default class ShopScene extends Phaser.Scene {
   /** Serbatoio massimo del veicolo corrente (= MAX_FUEL 100 + Serbatoio extra). MAX_FUEL non è importabile
    *  da GameScene → letterale 100, allineato a `MAX_FUEL`/`item.fuelTank` (+30). */
   private maxFuelForVehicle(): number {
-    return 100 + (this.upgrades.fuelTank ? 30 : 0);
+    return 100 + (this.upgrades.fuelTank && (VEHICLES[this.currentVehicle]?.upgrades ?? []).includes('fuelTank') ? 30 : 0);
   }
 
   /** True se il serbatoio non è già pieno (→ il rifornimento al garage ha effetto). */

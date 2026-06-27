@@ -40,14 +40,19 @@ Tutte e 6 le fasi della roadmap (§8) sono **implementate** sul branch `dev`, ci
 **Rifondazione dell'equipaggio (implementata, oltre F1-F6).** I sopravvissuti — la posta in gioco — non sono più astratti: **visibili** (pannello-crew coi ritratti e lo stato sano/affamato/ferito in-missione), **con voce** (bio al reclutamento + battute col nome a fame/morale), oggetto di **incontri Tier C** alle soste (`StopScene`: camp/depot/market/checkpoint → scelte morali con conseguenza in `RunData.choices`, lette dall'epilogo), e la **perdita** è un *beat* (il volto che sfuma + un superstite in silenzio), non un toast. Numeri in [BALANCE §11](BALANCE.md), regole in [GAME_DESIGN §9](GAME_DESIGN.md).
 
 **🩸 Pivot "This War of Mine su ruote" (in corso).** Decisione del designer: il **cuore** del gioco sono le **persone e la storia**, non la guida — la tratta è solo *pressione*. Implementato:
-- **Tratte corte** — `MISSION_DIST` 18000→6000 (~60 km / ~25 s): la guida è un **transito breve e teso**. Ondata d'apertura alleggerita (dread, non sciame).
+- **Tratte corte** — `MISSION_DIST` 18000→6000 (~180 km / ~25 s): la guida è un **transito breve e teso**. Ondata d'apertura alleggerita (dread, non sciame).
 - **Dialoghi coi sopravvissuti** — cammini fino a un membro dell'equipaggio nell'hub (figure full-body in scala col mondo, colorate per ruolo) e **parli** (modale riusato, `bodyKey` = ciò che dice).
 - **7 archi personali DATA-DRIVEN** (`src/Convoy.ts` → `SURVIVOR_ARCS`, testi in i18n): ognuno ha un **segreto/destino** che si intreccia in un solo mondo — Sara/Lena, Bruno e le mani che tremano, Marcus e l'ordine, Nadia e il valico, Vince e la scorta nascosta, Eva e il colpo mancato, Karim e i cancelli murati. Cadenza: battuta-in-voce (per **stato emotivo**) → **beat** (la scelta, sbloccato per atto `unlockAct`) → eco → **carta-epilogo** letta dall'epilogo generalizzato.
 - **Stato emotivo** (derivato: affamato/ferito/morale<break) → la figura nell'hub appare **spenta e fredda** e la battuta cambia (calm/distressed). Alla sosta un **pannello-stato** (alto-sx) rende leggibili i *bisogni*: scorta di cibo + quanti resterebbero **a digiuno** alla ripartenza, **morale** con la sua parola (saldo/fragile/a terra/alla rotta), e l'elenco di **affamati/feriti** per nome — più una **pastiglia colorata** sopra ogni testa (verde/ambra/rosso) che mappa lo stato sulla persona.
 - **Radio del mondo** — bollettino per atto (`radio.act0..5`) che **degrada** dal "è tutto sotto controllo" alla statica del "venite, vi prego", mostrato all'inizio di ogni atto (in alto: è una trasmissione).
 - **Voce dell'equipaggio in guida** — finestra **lower-third** in basso con **ritratto (`survivor_<key>`) + nome** del parlante: battute ambientali a mezza voce durante la tratta, scelte per **umore** (`bark.idle.calm/uneasy/breaking`, derivato da morale + fame/ferite di chi parla) + i bark di morale/fame a inizio tratta. Le persone presenti *anche al volante* (This War of Mine). In coda, non si sovrappongono; ~1 per tratta breve.
+- **Diramazioni giocabili d'arco** (scaffold `World.detourStage` + `resolveDetour`) — una scelta d'arco col campo `detour` marca `pendingDetour` (RunData) e la **tratta successiva diventa una DEVIAZIONE reale** (override del descrittore: tema/tensione del kind, intro dedicata al posto della radio). A fine deviazione un **esito pesato e amaro** applica effetti, mostra una **carta on-arrival**, e fa riflettere all'**epilogo** del personaggio l'esito reale (`<kind>_<esito>`, priorità sull'esito base). Due rami vivi:
+  - **«Cerca Lena»** (Sara): centro raccolta in città. Esiti *trovata / troppo tardi / esca*; la **probabilità di trovarla scala col morale** (dai *agency* alla speranza) e cala se la medica è a pezzi. Se la trovi, **Lena resta a bordo** = +morale a ogni tratta.
+  - **«Il valico»** (Nadia): il passo di montagna dove perse il suo gruppo. Esiti *passate pulite / la frana / le tracce* (trovi i segni dei suoi). Tono This War of Mine pieno ("a dei nomi si può dare della terra").
+  - È lo **scheletro riusabile** per altri archi (vedi anche i bivii fissi `BRANCHES` a leg 11/22). Numeri in [BALANCE §11](BALANCE.md).
+- **Stanchezza per-persona** (`FATIGUE`) — primo bisogno *individuale* oltre alla scorta condivisa: ogni sopravvissuto accumula fatica viaggiando e **recupera dormendo al campo**; oltre soglia è **sfinito** (abilità spenta finché non riposa) — stato *soft e recuperabile* (≠ fame). Leggibile ovunque (pannello «Sfiniti», pastiglia/anello azzurro, figura spenta). Apre la strada a fame individuale / malattia / attriti.
 
-**Prossimo:** sotto-beat multipli per arco, intrecci fra personaggi (relazioni), audio della radio (`playRadioBlip`), e un pass di **game-feel del combat** (peso, paura) a playtest.
+**Prossimo:** continuare i *bisogni vivi* (fame individuale · malattia · attriti tra persone), altri archi→diramazioni, e un pass di **game-feel del combat** a playtest.
 
 **Resta da fare (taratura a playtest):** ritmo/densità delle tratte (i primi atti possono risultare radi); somma `lengthMult` → ~6000 km esatti; bilancio dei numeri morale/incontri; **parità gamepad** dei pannelli Tier C (oggi: mouse + tasti `1-N`; pad = opzione neutra).
 
@@ -157,7 +162,7 @@ Il deliverable e la revisione interna richiedono che l'aritmetica torni. Numeri 
 
 L'unica vera **UI nuova** necessaria è un **nastro-odometro** in HUD: una barra `0 → 6000 km` con le **6 tacche d'atto** e la posizione corrente, così l'arco finibile è sempre leggibile ("sai sempre quanto manca"). Riusa `Ui.box`/`rectangle` e i token daltonico-safe già in `HudController`.
 
-**Riconciliazione dei km (anti-incoerenza).** Il km mostrato per tratta è `MISSION_DIST × KM_PER_UNIT × lengthMult = 18000 × 0.01 × lengthMult = 180 × lengthMult` km. La **META è fissata a 6000 km** (numero diegetico tondo). Perché la somma torni, i `lengthMult` delle 31 tratte (tabella §11 `BALANCE`) sono **tarati perché la loro somma ≈ 33.3** → `Σ(180 × lengthMult) ≈ 6000 km`. In altre parole: **6000 km non è hand-waved**, è il vincolo di taratura della colonna `lengthMult` (media ~1.07). Senza questa nota, un giocatore che somma "180 km/tratta × 31" otterrebbe 5580 km e non 6000: la differenza è proprio la somma dei `lengthMult > 1` delle maratone (Atto 2/4/5).
+**Riconciliazione dei km (anti-incoerenza).** Il km mostrato per tratta è `MISSION_DIST × KM_PER_UNIT × lengthMult = 6000 × 0.03 × lengthMult = 180 × lengthMult` km. La **META è fissata a 6000 km** (numero diegetico tondo). Perché la somma torni, i `lengthMult` delle 31 tratte (tabella §11 `BALANCE`) sono **tarati perché la loro somma ≈ 33.3** → `Σ(180 × lengthMult) ≈ 6000 km`. In altre parole: **6000 km non è hand-waved**, è il vincolo di taratura della colonna `lengthMult` (media ~1.07). Senza questa nota, un giocatore che somma "180 km/tratta × 31" otterrebbe 5580 km e non 6000: la differenza è proprio la somma dei `lengthMult > 1` delle maratone (Atto 2/4/5).
 
 ### 2.5 Come estende `RouteScene` e `RunState`
 
@@ -455,7 +460,7 @@ Oggi una "corsa" non ha durata di progetto: il loop è **infinito** (`envIndex =
 | Voce | Valore reale (ancorato) |
 |---|---|
 | Durata guida pura / missione | ~75 s (`MISSION_DIST = 18000` ÷ `SCROLL_SPEED = 240`) |
-| km mostrati / missione | 180 km (`18000 × KM_PER_UNIT 0.01`) |
+| km mostrati / missione | 180 km (`6000 × KM_PER_UNIT 0.03`) |
 | Regioni prima del riciclo | 7 (solo colore, gameplay identico) |
 | Guida pura, un giro | ~9 min (7 × ~75 s) |
 | + soste/overlay/shop fra missioni | ~5 min |
@@ -701,6 +706,70 @@ Il modello scelto è **odometro lineare con branch *dichiarati* nel manifest** (
 
 ---
 
+## §10 · Fase R — Rigiocabilità & profondità (estensione post F1-F6)
+
+> **Stato:** in implementazione (giu-2026). **Movente:** una corsa completa dura ~1,5-3h (31 tratte da ~25s + 30 soste); per il bar Steam **non si allunga la linea** (sarebbe padding, e contraddice la scelta-designer *"roba giusta al momento giusto"*). Per un arcade survival le ore-Steam sono `durata di una corsa × quante corse vuoi fare + modalità` → si investe in **rigiocabilità** e **profondità delle soste**, non in lunghezza. Decisione-designer: **profondità soste + rigiocabilità** (non modalità endless, non campagna più lunga).
+>
+> **Bonus di pacing:** gli sblocchi (R3) risolvono anche il vecchio *"troppe cose troppo presto"* — un nuovo giocatore parte con un **kit focalizzato** e il catalogo si **apre** corsa dopo corsa. R1/R3 fanno doppio lavoro: retention **e** onboarding.
+
+### R1 — Meta-profilo (slot persistente separato dalla run) · **Valore/rischio: ALTO / BASSO**
+
+**Modello del "continuare" (decisione-designer = A).** La **corsa** è terminale: al rifugio l'epilogo **chiude** (P1 "il viaggio finisce" è il pagamento emotivo — invariato). Il **gioco** non finisce: finire una corsa **registra** progressi e **sblocca** contenuto, e la prossima **Nuova Partita riparte da capo ma più ricca**. Ciclo: `corsa → epilogo → meta-profilo registra+sblocca → Nuova Partita arricchita → ripeti`. Niente carry-over della build (l'opzione "NG+ morbido" è scartata: rimetterebbe la rampa infinita tagliata in F1).
+
+**Due strati di salvataggio distinti.** Il **meta-profilo** è uno slot localStorage **separato** da `SaveData.run` (il checkpoint della corsa, invariato): sopravvive a Nuova Partita, sul modello di `Settings`/`SaveData`. Traccia **solo fatti grezzi** (anti-drift); gli sblocchi sono **derivati** da questi via una tabella di predicati (niente array mutabile da tenere in sync):
+
+| Campo (`MetaProfile`) | Tipo | Ruolo |
+|---|---|---|
+| `runsCompleted` | `number` | corse arrivate al rifugio |
+| `furthestAct` | `number` | atto più alto **raggiunto** (1..6) su tutte le corse |
+| `endingsSeen` | `string[]` | finali visti (`convoy`/`few`/`alone`/`fallen`) |
+| `arcsCompleted` | `string[]` | chiavi-sopravvissuto di cui hai ingaggiato l'arco (da `RunData.choices`) |
+| `bestDifficulty` | `number` | difficoltà più alta a cui hai **finito** (0=Normale·1=Difficile·2=Incubo) |
+| `lifetimeRescues` | `number` | salvataggi su strada cumulativi |
+| `lifetimeMoney` | `number` | monete guadagnate cumulative |
+
+**Hook di registrazione (call-site reali).** `showEpilogue` (run completata + `endKey` + archi da `choices` + difficoltà → `bestDifficulty`); `triggerMissionComplete` (cambio-atto → `furthestAct`; `lifetimeMoney += earned`); `rescueSucceeded` (`lifetimeRescues++`). `MenuScene.newGame` **non** azzera il meta-profilo.
+
+### R2 — Livelli di difficoltà · **Valore/rischio: MEDIO-ALTO / BASSO**
+
+Tre tier che modulano uno **strato globale** sopra i moltiplicatori già esistenti: `diffMult` (passo/tetto della curva §5), scarsità (`fuelDrainMult`/`ammoCrateMult`), densità (`spawnMult`). **Normale** = baseline odierna (×1). **Difficile**/**Incubo** stringono. Pick a **Nuova Partita** (overlay in `MenuScene`); preferenza in `Settings`. **Incubo** gated dietro `bestDifficulty ≥ 1`. Numeri in **BALANCE §12** (derivati/NON 🔒, come `diffMult`).
+
+### R3 — Sblocchi: varietà, non potenza · **Valore/rischio: ALTO / MEDIO**
+
+**Principio.** Si parte con un **kit completo e vincibile**; gli sblocchi aggiungono **stili di gioco**, non "i giocattoli veri più tardi". Il negozio/roster **non mostra** ciò che non è meta-sbloccato; le monete in-run restano il secondo gate (modello FTL/Hades). Una volta sbloccato un veicolo è anche scegliibile come **loadout iniziale** (parti con quello invece dell'Auto Civile) → grande leva di varietà.
+
+| | Aperto da subito (kit completo) | Sbloccabile ← traguardo (`MetaProfile`) |
+|---|---|---|
+| **Veicoli** | Auto Civile · Pickup | SUV ← `furthestAct≥2` · Furgone ← `lifetimeRescues≥3` · Camion ← `furthestAct≥4` · Mezzo Pesante ← `runsCompleted≥1` · Sperimentale ← `bestDifficulty≥1` |
+| **Armi** | MG · Doppia MG · Fucile | Razzi ← `furthestAct≥3` · Lanciafiamme ← `arcsCompleted≥1` |
+| **Sopravvissuti** | Bruno (mecc.) · Sara (medico) · Marcus (soldato) | Nadia ← `furthestAct≥2` · Vince ← `lifetimeMoney≥3000` · Eva ← `runsCompleted≥1` · Karim ← `bestDifficulty≥1` |
+| **Difficoltà** | Normale | Incubo ← `bestDifficulty≥1` (R2) |
+
+> La tabella vive in **codice** (`MetaProfile.UNLOCKS`, predicati puri sul profilo) ed è documentata in **GAME_DESIGN §11** (regola di progressione) + **BALANCE §12** (soglie, derivate/NON 🔒). Le notifiche "Hai sbloccato …" si calcolano per **diff** del set di sblocchi prima/dopo la registrazione della corsa. Stringhe in i18n ×6 (`meta.*`).
+
+### S1 — Profondità delle soste · **Valore/rischio: MEDIO / ALTO (contenuto)**
+
+Più materiale da rivedere tra le corse (non tutto emerge in una sola): nuovi **archi** (`SURVIVOR_ARCS`, oggi 7), nuove **diramazioni giocabili** (`detourStage`/`resolveDetour`, oggi 2: lena/valico), **varianti d'incontro Tier C** per tipo di sosta. Tutto data-driven; ogni stringa i18n ×6 (`dlg.*`/`enc.*`/`detour.*`/`campaign.*`). **Pacing (anti-"troppe cose"):** gli extra si distribuiscono tra le corse, non si dumpano in una.
+
+### Impatto validatori / file
+
+- **`GAME_DESIGN.md`** (Regola n.3, obbligatorio): nuova **§11 "Rigiocabilità"** — meta-profilo, modello-A del continuare, sblocchi varietà-non-potenza, difficoltà.
+- **`BALANCE.md`**: nuova **§12 "Fase R"** — soglie sblocchi + moltiplicatori difficoltà (derivati/NON 🔒; nessuna nuova tabella 🔒, nessun cambio al validatore).
+- **`validate:art`**: invariato finché si riusano texture esistenti (overlay sblocco/difficoltà = UI/HUD → scheda `ART_BIBLE_INTERFACCE` se si aggiunge un pannello).
+- **`validate:i18n ×6`**: nuove chiavi `meta.*` (sblocchi, difficoltà, loadout) + i testi S1.
+- **File:** `src/MetaProfile.ts` (nuovo, modello `SaveData`); `src/Settings.ts` (difficoltà); `src/scenes/MenuScene.ts` (pick difficoltà+loadout, applica sblocchi a `resetRunState`); `src/scenes/GameScene.ts` (hook registrazione + strato difficoltà su `difficultyMult`/scarsità); `src/scenes/ShopScene.ts` (gating offerta veicoli/armi); `src/scenes/StopScene.ts` (gating reclutamento + S1); `src/Convoy.ts`/`src/World.ts` (S1).
+
+### Stato di implementazione
+
+| Blocco | Stato |
+|---|---|
+| **R1** Meta-profilo + tracking | ✅ `MetaProfile.ts` (slot separato); hook su `triggerMissionComplete`/`showEpilogue`/`rescueSucceeded` |
+| **R2** Difficoltà | ✅ `DIFFICULTIES` (3 tier) + `RunData.difficulty` + `Settings.difficulty`; strato su `difficultyMult`/`spawnMultCombined`/`getEffectiveFuelDrain`; pick in `NewRunScene` (Incubo gated) |
+| **R3** Sblocchi + loadout | ✅ gate negozio (armi/veicoli) + roster (reclutamento); notifica "Sbloccato" al menu; loadout mezzo di partenza in `NewRunScene` |
+| **S1** Profondità soste | ⬜ |
+
+---
+
 ## Appendice A · Valori-costante verificati contro il codice
 
 Ancore usate in tutto il documento (verificate; i **riferimenti di riga** restano indicativi, §disclaimer in testa):
@@ -718,7 +787,7 @@ Ancore usate in tutto il documento (verificate; i **riferimenti di riga** restan
 | `GIANT_SPAWN_INTERVAL` | `22000` | `GameScene.ts` |
 | `EVENT_FRACTIONS` | `[0.3, 0.62]` | `GameScene.ts` |
 | `DEATH_MONEY_PENALTY` | `0.25` | `GameScene.ts` |
-| `KM_PER_UNIT` / `KM_PER_FUEL` | `0.01` / `4.8` | `World.ts` |
+| `KM_PER_UNIT` / `KM_PER_FUEL` | `0.03` / `4.8` | `World.ts` |
 | `FOOD` | `{ max:120, perSurvivor:10, start:40, rationFood:40, rationCost:100 }` | `GameData.ts` |
 | `survivorSlots` (7 veicoli) | `4 / 2 / 5 / 4 / 4 / 3 / 2` | `GameData.ts` |
 | `ZombieType` | 8 tipi | `World.ts` |

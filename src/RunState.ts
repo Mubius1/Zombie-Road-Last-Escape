@@ -14,11 +14,15 @@ import type { ComponentKey } from './World';
  */
 export interface RunData {
   missionNumber: number;
+  /** Fase R (R2): difficoltà della corsa (0=Normale · 1=Difficile · 2=Incubo). Scelta a Nuova Partita,
+   *  bloccata per tutta la corsa, persistita col checkpoint (retry/Continua la mantengono). Vedi DIFFICULTIES. */
+  difficulty: number;
   money: number;
   survivors: string[];
-  /** Potenziamenti PER-VEICOLO: ogni veicolo tiene il suo set (key veicolo → Upgrades).
-   *  I salvataggi vecchi (Upgrades piatto) degradano a {} per il veicolo corrente (reset benigno). */
-  upgrades: Record<string, Upgrades>;
+  /** Potenziamenti POSSEDUTI: set GLOBALE del convoglio (portabili tra i veicoli — non si ri-pagano al
+   *  cambio mezzo). Ogni veicolo APPLICA solo gli upgrade nel suo catalogo (VEHICLES[key].upgrades) → identità
+   *  del mezzo preservata. I salvataggi vecchi (per-veicolo, Record<vehicleKey,Upgrades>) sono fusi da `migrateUpgrades`. */
+  upgrades: Upgrades;
   vehicle: string;
   ownedVehicles: string[];
   ownedWeapons: WeaponType[];
@@ -68,6 +72,33 @@ export interface RunData {
   nemesisState: number;
   /** F6 (opz.): memoria della Nemesi 0..100 (cresce se la semini male/spari troppo, cala se la eviti). */
   nemesisHeat: number;
+  /** Diramazione narrativa in sospeso (es. 'lena' = «Cerca Lena» di Sara): la PROSSIMA tratta è la deviazione.
+   *  '' = nessuna. Marcato alla scelta in StopScene, consumato a fine tratta-detour in GameScene. */
+  pendingDetour: string;
+  /** Stanchezza per-persona 0..100 (key sopravvissuto → livello). Oltre FATIGUE.tired l'abilità è spenta; si
+   *  accumula viaggiando e si recupera alle soste (molto al campo). Derivata "tired" dal livello, non salvata. */
+  fatigue: Record<string, number>;
+}
+
+/**
+ * Migrazione upgrade: i salvataggi VECCHI tenevano gli upgrade PER-VEICOLO (`Record<vehicleKey, Upgrades>`);
+ * ora sono GLOBALI del convoglio (`Upgrades` piatto, portabili tra i mezzi). Normalizza qualunque forma:
+ * - forma nuova (valori boolean) → usata così com'è (idempotente);
+ * - forma vecchia (valori = set per-veicolo) → fusa con un OR su tutte le chiavi possedute da QUALSIASI mezzo.
+ */
+export function migrateUpgrades(raw: unknown): Upgrades {
+  if (!raw || typeof raw !== 'object') return {};
+  const values = Object.values(raw as Record<string, unknown>);
+  // Forma nuova: nessun valore è un oggetto annidato → è già un Upgrades piatto.
+  if (!values.some(v => v !== null && typeof v === 'object')) return { ...(raw as Upgrades) };
+  // Forma vecchia (per-veicolo): OR di tutti i set in un unico Upgrades del convoglio.
+  const merged: Record<string, boolean> = {};
+  for (const set of values) {
+    if (set && typeof set === 'object') {
+      for (const [k, on] of Object.entries(set as Record<string, unknown>)) if (on) merged[k] = true;
+    }
+  }
+  return merged;
 }
 
 /** Lettura tipizzata dal registry. Ritorna `undefined` se la chiave non è ancora impostata
@@ -88,6 +119,7 @@ export function setRun<K extends keyof RunData>(reg: Phaser.Data.DataManager, ke
  */
 export function resetRunState(registry: Phaser.Data.DataManager) {
   setRun(registry, 'missionNumber', 1);
+  setRun(registry, 'difficulty', 0); // Fase R (R2): Normale; sovrascritto dal pick a Nuova Partita
   setRun(registry, 'money', 0);
   setRun(registry, 'survivors', []);
   setRun(registry, 'upgrades', {});
@@ -100,7 +132,7 @@ export function resetRunState(registry: Phaser.Data.DataManager) {
   setRun(registry, 'components', null);
   setRun(registry, 'routeModifier', 'none');
   setRun(registry, 'recruitLockMission', -1);
-  setRun(registry, 'food', 40); // = FOOD.start (RunState non importa da GameData per non creare cicli)
+  setRun(registry, 'food', 60); // = FOOD.start (RunState non importa da GameData per non creare cicli)
   setRun(registry, 'hungry', []);
   setRun(registry, 'foodMission', -1);
   setRun(registry, 'injured', []);
@@ -115,6 +147,8 @@ export function resetRunState(registry: Phaser.Data.DataManager) {
   setRun(registry, 'fallen', []);
   setRun(registry, 'nemesisState', 0);
   setRun(registry, 'nemesisHeat', 0);
+  setRun(registry, 'pendingDetour', '');
+  setRun(registry, 'fatigue', {});
   registry.set('encounterDoneLeg', -1); // guard transiente degli incontri Tier C (non in RunData): azzera tra le run
 }
 
@@ -126,9 +160,10 @@ export function resetRunState(registry: Phaser.Data.DataManager) {
 export function snapshotRun(registry: Phaser.Data.DataManager): RunData {
   return {
     missionNumber: getRun(registry, 'missionNumber') ?? 1,
+    difficulty:    getRun(registry, 'difficulty') ?? 0,
     money:         getRun(registry, 'money') ?? 0,
     survivors:     getRun(registry, 'survivors') ?? [],
-    upgrades:      getRun(registry, 'upgrades') ?? {},
+    upgrades:      migrateUpgrades(getRun(registry, 'upgrades')),
     vehicle:       getRun(registry, 'vehicle') ?? 'civilian_car',
     ownedVehicles: getRun(registry, 'ownedVehicles') ?? ['civilian_car'],
     ownedWeapons:  getRun(registry, 'ownedWeapons') ?? ['mg'],
@@ -153,15 +188,18 @@ export function snapshotRun(registry: Phaser.Data.DataManager): RunData {
     fallen:        getRun(registry, 'fallen') ?? [],
     nemesisState:  getRun(registry, 'nemesisState') ?? 0,
     nemesisHeat:   getRun(registry, 'nemesisHeat') ?? 0,
+    pendingDetour: getRun(registry, 'pendingDetour') ?? '',
+    fatigue:       getRun(registry, 'fatigue') ?? {},
   };
 }
 
 /** Riversa uno snapshot (checkpoint) nel registry — l'inverso di `snapshotRun`. */
 export function restoreRun(registry: Phaser.Data.DataManager, run: RunData): void {
   setRun(registry, 'missionNumber', run.missionNumber);
+  setRun(registry, 'difficulty',    run.difficulty ?? 0);
   setRun(registry, 'money',         run.money);
   setRun(registry, 'survivors',     run.survivors);
-  setRun(registry, 'upgrades',      run.upgrades);
+  setRun(registry, 'upgrades',      migrateUpgrades(run.upgrades));
   setRun(registry, 'vehicle',       run.vehicle);
   setRun(registry, 'ownedVehicles', run.ownedVehicles);
   setRun(registry, 'ownedWeapons',  run.ownedWeapons);
@@ -186,4 +224,6 @@ export function restoreRun(registry: Phaser.Data.DataManager, run: RunData): voi
   setRun(registry, 'fallen',        run.fallen ?? []);
   setRun(registry, 'nemesisState',  run.nemesisState ?? 0);
   setRun(registry, 'nemesisHeat',   run.nemesisHeat ?? 0);
+  setRun(registry, 'pendingDetour', run.pendingDetour ?? '');
+  setRun(registry, 'fatigue',       run.fatigue ?? {});
 }

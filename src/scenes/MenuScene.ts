@@ -4,7 +4,7 @@ import Ui, { UI } from '../Ui';
 import MenuPad from '../MenuPad';
 import { buildVehicleTexture, buildTurretTextures, TURRET_DX } from '../VehicleTextures';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
-import { resetRunState, getRun, restoreRun } from '../RunState';
+import { getRun, restoreRun } from '../RunState';
 import SaveData from '../SaveData';
 import { t } from '../i18n';
 
@@ -29,6 +29,7 @@ export default class MenuScene extends Phaser.Scene {
     this.buildAtmosphere();
     this.buildTitle();
     this.buildButtons();
+    this.showPendingUnlocks(); // Fase R (R3): novità sbloccate dall'ultima corsa completata
 
     Ui.text(this, this.designW / 2, 552, t('menu.hint'), {
       fontSize: '12px', color: UI.ghost,
@@ -186,6 +187,17 @@ export default class MenuScene extends Phaser.Scene {
     for (const b of btns) nav.add(b.bg);
   }
 
+  /** Fase R (R3): se l'ultima corsa ha sbloccato contenuto, annuncialo al ritorno al menu (one-shot). */
+  private showPendingUnlocks() {
+    const unlocks = this.registry.get('pendingUnlocks') as string[] | undefined;
+    if (!unlocks || unlocks.length === 0) return;
+    this.registry.set('pendingUnlocks', []); // consumato: una sola volta
+    const banner = Ui.text(this, this.designW / 2, 266, t('meta.unlocked', { items: unlocks.join('  ·  ') }), {
+      fontSize: '13px', color: UI.gold, fontStyle: 'bold', align: 'center', wordWrap: { width: 540 },
+    }).setOrigin(0.5).setDepth(12).setAlpha(0);
+    this.tweens.add({ targets: banner, alpha: 1, duration: 600, ease: 'Power2' });
+  }
+
   /** Una corsa è in corso se il registry ha stato oltre i default (es. uscita al menu dalla pausa). */
   private hasProgress(): boolean {
     if (SaveData.hasRun()) return true;    // checkpoint su disco → "CONTINUA" anche a freddo (cross-sessione)
@@ -209,11 +221,9 @@ export default class MenuScene extends Phaser.Scene {
   // ─── Azioni ───────────────────────────────────────────────────────────────────
 
   private newGame() {
-    // Azzera completamente il progresso: è l'UNICO vero reset (cancella anche il checkpoint salvato).
-    SaveData.clearRun();
-    this.registry.set('debugRun', false);
-    resetRunState(this.registry);
-    Juice.go(this, 'GameScene');
+    // Fase R: la Nuova Partita passa per la schermata di setup (scelta DIFFICOLTÀ in R2, + LOADOUT in R3),
+    // che poi azzera il progresso e avvia (prologo → GameScene). Vedi NewRunScene.
+    Juice.go(this, 'NewRunScene');
   }
 
   private openSettings() {

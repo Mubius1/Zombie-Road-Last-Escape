@@ -104,6 +104,8 @@ export async function waitForSceneActive(page: Page, key: string, timeout = 20_0
 /** Dal menu, avvia una missione (ENTER = Nuova Partita) e attende che GameScene sia viva e con veicolo. */
 export async function startMission(page: Page): Promise<void> {
   await waitForSceneActive(page, 'MenuScene');
+  // Bypassa il filmato del prologo (CutsceneScene) che altrimenti si frappone tra Nuova Partita e GameScene.
+  await page.evaluate(() => window.__ZR?.registry?.set('skipCutscenes', true));
   await page.keyboard.press('Enter');
   await waitForSceneActive(page, 'GameScene');
   await page.waitForFunction(() => {

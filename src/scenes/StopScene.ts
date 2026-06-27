@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
-import { getRun, setRun, snapshotRun } from '../RunState';
+import { getRun, setRun, snapshotRun, migrateUpgrades } from '../RunState';
 import { locationForLeg, accentCss, STOP_LOCATIONS, StopLocation } from '../Locations';
-import { MORALE, FOOD, SURVIVORS } from '../GameData';
+import { MORALE, FOOD, FATIGUE, SURVIVORS, VEHICLES } from '../GameData';
 import { SURVIVOR_ARCS } from '../Convoy';
 import { renderHub, buildHubTextures, buildHubCar, buildCrewFigure, dropShadow, HUB_WALK, CAR_GY, CAR_FH } from '../HubEnvironment';
 import { buildEntityTextures } from '../EntityTextures';
@@ -16,6 +16,8 @@ import { t } from '../i18n';
 
 const KC = Phaser.Input.Keyboard.KeyCodes;
 const PAD_DEADZONE = 0.28;
+const PAD_BTN = { A: 0, B: 1 } as const; // standard mapping (come GameScene/MenuPad)
+const ENC_REPEAT_MS = 220;       // auto-repeat della navigazione del modale col pad (= MenuPad.REPEAT_MS)
 const WALK_SPEED = 150;          // px/s (spazio di design)
 const INTERACT_RADIUS = 80;      // distanza per attivare una stazione
 
@@ -49,6 +51,12 @@ export default class StopScene extends Phaser.Scene {
   private encObjs: Array<{ destroy(): void }> = [];
   private encLeg = -1;
   private encIsAuto = false; // true = incontro Tier C automatico (segna encounterDoneLeg); false = dialogo
+  // Navigazione del modale col PAD: focus + cornice di selezione, conferma SOLO con A (mai una direzione/altro
+  // tasto). Tastiera (1..N) e mouse restano invariati. Vedi handleEncInput/redrawEncHighlight.
+  private encSel = 0;                                          // opzione focalizzata (pad)
+  private encBtns: Phaser.GameObjects.Rectangle[] = [];        // rettangoli-opzione (per il riquadro di selezione)
+  private encHi: Phaser.GameObjects.Graphics | null = null;   // cornice di selezione (visibile solo col pad)
+  private encPrevA = false; private encPrevDir = 0; private encNavAt = 0; // edge-trigger A + auto-repeat nav
 
   // Modalità galleria (solo debug): mostra/ispeziona ogni luogo senza giocare.
   private gallery = false;
@@ -112,20 +120,22 @@ export default class StopScene extends Phaser.Scene {
       const crew = getRun(this.registry, 'survivors') ?? [];
       const hungry = getRun(this.registry, 'hungry') ?? [];
       const injured = getRun(this.registry, 'injured') ?? [];
+      const fatigue = getRun(this.registry, 'fatigue') ?? {};
       const morale = getRun(this.registry, 'morale') ?? MORALE.start;
+      const isTired = (k: string) => (fatigue[k] ?? 0) >= FATIGUE.tired;
       crew.slice(0, 5).forEach((key, i) => {
         const sv = SURVIVORS.find(x => x.key === key);
         const tx = Math.round(this.designW * 0.40) + i * 56, ty = 470;
         const texKey = buildCrewFigure(this, key, sv ? sv.color : '#556070');
         const fig = this.add.image(tx, ty, texKey).setOrigin(0.5, 0.96).setScale(1 / OVERSAMPLE).setDepth(ty); // full-body in scala col mondo (= driver)
-        // Stato emotivo (derivato): affamato / ferito / morale a terra → figura spenta e fredda.
-        const distressed = hungry.includes(key) || injured.includes(key) || morale < MORALE.break;
+        // Stato emotivo (derivato): affamato / ferito / sfinito / morale a terra → figura spenta e fredda.
+        const distressed = hungry.includes(key) || injured.includes(key) || isTired(key) || morale < MORALE.break;
         if (distressed) fig.setTint(0x8a93a0).setAlpha(0.85);
         // Idle minimo: respiro (scaleY) sfasato per figura → sembrano vivi, non manichini. Più fiacco se a pezzi.
         this.tweens.add({ targets: fig, scaleY: (1 / OVERSAMPLE) * (distressed ? 1.02 : 1.035), duration: (distressed ? 2000 : 1500) + i * 150, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: i * 180 });
-        // Pastiglia di stato sopra la testa: verde in forze · ambra affamato · rosso ferito (mappa stato↔persona, leggibile a colpo d'occhio).
+        // Pastiglia di stato sopra la testa: verde in forze · ambra affamato · rosso ferito · azzurro sfinito (mappa stato↔persona).
         const dotY = ty - fig.displayHeight * 0.96 - 6;
-        const dotCol = injured.includes(key) ? 0xff5555 : hungry.includes(key) ? 0xffaa44 : 0x44cc66;
+        const dotCol = injured.includes(key) ? 0xff5555 : hungry.includes(key) ? 0xffaa44 : isTired(key) ? 0x88aacc : 0x44cc66;
         this.add.circle(tx, dotY, 5, 0x000000, 0.55).setDepth(ty + 1);
         this.add.circle(tx, dotY, 3.4, dotCol).setDepth(ty + 2);
         this.stations.push({ x: tx, y: ty, kind: 'talk', label: t('hub.talk', { name: sv ? sv.properName : key }), survivor: key });
@@ -163,6 +173,9 @@ export default class StopScene extends Phaser.Scene {
     const morale = getRun(this.registry, 'morale') ?? MORALE.start;
     const hungry = getRun(this.registry, 'hungry') ?? [];
     const injured = getRun(this.registry, 'injured') ?? [];
+    const fatigue = getRun(this.registry, 'fatigue') ?? {};
+    const tired = crew.filter(k => (fatigue[k] ?? 0) >= FATIGUE.tired);
+    const lenaAboard = (getRun(this.registry, 'choices') ?? []).includes('lena_found');
     const nameOf = (k: string) => SURVIVORS.find(s => s.key === k)?.properName ?? k;
 
     const fed = Math.min(crew.length, Math.floor(food / FOOD.perSurvivor)); // sfamati alla prossima tratta
@@ -179,28 +192,30 @@ export default class StopScene extends Phaser.Scene {
     lines.push({ t: `${t('hub.morale', { n: morale, max: MORALE.max })}  ·  ${t(mState.k)}`, c: mState.c, s: 12 });
     if (injured.length) lines.push({ t: t('hub.statusInjured', { names: injured.map(nameOf).join(', ') }), c: UI.red, s: 10 });
     if (hungry.length) lines.push({ t: t('hub.statusHungry', { names: hungry.map(nameOf).join(', ') }), c: UI.amberSoft, s: 10 });
-    if (!injured.length && !hungry.length) lines.push({ t: t('hub.statusWell'), c: UI.greenOk, s: 10 });
+    if (tired.length) lines.push({ t: t('hub.statusTired', { names: tired.map(nameOf).join(', ') }), c: '#88aacc', s: 10 });
+    if (!injured.length && !hungry.length && !tired.length) lines.push({ t: t('hub.statusWell'), c: UI.greenOk, s: 10 });
+    if (lenaAboard) lines.push({ t: t('hub.lenaAboard'), c: UI.gold, s: 10 });
 
     const left = 12, top = 62, W = 246, padX = 10; // sotto il titolo+sottotitolo centrati del luogo (niente sovrapposizione)
     let y = top + 8;
     for (const ln of lines) {
       const txt = Ui.text(this, left + padX, y, ln.t,
         { fontSize: `${ln.s}px`, color: ln.c, fontStyle: ln.b ? 'bold' : 'normal', wordWrap: { width: W - padX * 2 } })
-        .setOrigin(0, 0).setScrollFactor(0).setDepth(1001);
+        .setOrigin(0, 0).setDepth(1001);
       y += txt.height + 4;
     }
     this.add.rectangle(left, top, W, (y - top) + 4, UI.black, 0.5).setOrigin(0, 0)
-      .setStrokeStyle(1, this.location.accent, 0.55).setScrollFactor(0).setDepth(1000);
+      .setStrokeStyle(1, this.location.accent, 0.55).setDepth(1000);
   }
 
   private buildOverlays() {
     const accent = accentCss(this.location.accent);
     Ui.text(this, this.designW / 2, 14, t(this.location.nameKey), {
       fontSize: '22px', color: accent, fontStyle: 'bold',
-    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1000);
+    }).setOrigin(0.5, 0).setDepth(1000);
     Ui.text(this, this.designW / 2, 40, t(this.location.flavorKey), {
       fontSize: '11px', color: UI.faint, fontStyle: 'italic',
-    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1000);
+    }).setOrigin(0.5, 0).setDepth(1000);
 
     if (!this.gallery) this.drawConvoyStatus(); // pannello-stato: cibo · morale · affamati/feriti (i BISOGNI, leggibili)
 
@@ -213,10 +228,10 @@ export default class StopScene extends Phaser.Scene {
       Ui.text(this, this.designW / 2, 574, t('hub.galleryBar', {
         i: this.galleryIndex + 1, n: STOP_LOCATIONS.length, name: t(this.location.nameKey),
       }), { fontSize: '12px', color: UI.cyanDebug, fontStyle: 'bold' })
-        .setOrigin(0.5, 1).setScrollFactor(0).setDepth(1000);
+        .setOrigin(0.5, 1).setDepth(1000);
     } else {
       Ui.text(this, this.designW / 2, 576, t('hub.hint'), { fontSize: '11px', color: UI.ghost })
-        .setOrigin(0.5, 1).setScrollFactor(0).setDepth(1000);
+        .setOrigin(0.5, 1).setDepth(1000);
     }
   }
 
@@ -241,9 +256,11 @@ export default class StopScene extends Phaser.Scene {
     this.input.on('pointermove', () => { this.usingPad = false; });
     this.input.gamepad?.on('down', (_p: Phaser.Input.Gamepad.Gamepad, btn: Phaser.Input.Gamepad.Button) => {
       this.usingPad = true;
-      if (this.encActive) { this.pickEncounter(this.encOptions.length - 1); return; } // pad: sceglie l'opzione neutra (ultima)
-      if (btn.index === 0) this.tryInteract();   // A = interagisci
-      if (btn.index === 1 && this.gallery) this.exitGallery(); // B = esci dalla galleria
+      // Modale aperto: nav + conferma li gestisce handleEncInput (croce su/giù = focus, A = conferma). Qui NON
+      // committare nulla — basta rivelare la cornice di selezione. (Prima: qualsiasi tasto sceglieva l'ultima.)
+      if (this.encActive) { this.redrawEncHighlight(); return; }
+      if (btn.index === PAD_BTN.A) this.tryInteract();   // A = interagisci
+      if (btn.index === PAD_BTN.B && this.gallery) this.exitGallery(); // B = esci dalla galleria
     });
   }
 
@@ -353,8 +370,8 @@ export default class StopScene extends Phaser.Scene {
    *  nessuna deriva); maxFuel rispecchia ShopScene (MAX_FUEL 100 + Serbatoio extra 30). Persiste il checkpoint. */
   private refuelAtPump() {
     const veh = getRun(this.registry, 'vehicle') ?? 'civilian_car';
-    const up = ((getRun(this.registry, 'upgrades') ?? {})[veh] ?? {}) as { fuelTank?: boolean };
-    const maxFuel = 100 + (up.fuelTank ? 30 : 0);
+    const up = migrateUpgrades(getRun(this.registry, 'upgrades')); // upgrade globali del convoglio
+    const maxFuel = 100 + (up.fuelTank && (VEHICLES[veh]?.upgrades ?? []).includes('fuelTank') ? 30 : 0);
     const fuel = getRun(this.registry, 'fuel') ?? 100;
     const money = getRun(this.registry, 'money') ?? 0;
     const cost = SHOP_ITEMS.find(i => i.key === 'refuel')?.cost ?? 50;
@@ -433,42 +450,99 @@ export default class StopScene extends Phaser.Scene {
     this.encIsAuto = isAuto;
     this.encOptions = enc.options;
     this.encObjs = [];
-    // Modale in spazio di DESIGN con scrollFactor(0) — come gli overlay del luogo (titolo/flavor): resta
-    // SEMPRE centrata su schermo, indipendente da dove la camera segue il personaggio. (Rettangoli Phaser
-    // supportano setScrollFactor; Ui.box/RoundRect no → uso this.add.rectangle.)
+    // Modale in spazio di DESIGN (oggetti-mondo, NIENTE scrollFactor): la camera dell'hub è statica e
+    // centrata su (designW/2, 300), quindi un oggetto a designW/2 cade al centro schermo a ogni risoluzione.
+    // ⚠️ NON usare setScrollFactor(0) con coord di design: sotto zoom S≠1 sbanda in alto-a-sinistra (regola
+    // del progetto: scrollFactor(0) ⟺ pixel nativi scale.width/height). (Ui.box/RoundRect non supportano
+    // scrollFactor → uso this.add.rectangle, ma qui scrollFactor non serve affatto.)
     const cx = this.designW / 2, cyc = 300, n = enc.options.length;
-    const bodyH = enc.bodyKey ? 58 : 0;
-    const ph = 86 + bodyH + n * 56;
-    this.encObjs.push(this.add.rectangle(cx, cyc, this.designW + 400, 760, 0x000000, 0.72).setScrollFactor(0).setDepth(1100).setInteractive());
-    this.encObjs.push(this.add.rectangle(cx, cyc, 560, ph, UI.black, 0.96).setStrokeStyle(2, this.location.accent, 0.8).setScrollFactor(0).setDepth(1101));
+    // Layout verticale a padding espliciti: titolo · (descrizione opz.) · bottoni. `titleH` RISERVA sempre
+    // spazio al titolo → senza questa riserva, quando manca la descrizione (incontri auto Tier C) il 1° bottone
+    // risaliva sotto il titolo e ci si sovrapponeva. Vedi anche il commento sul perché non c'è scrollFactor.
+    const padTop = 18, titleH = 40, rowH = 56, padBottom = 22;
+    const bodyH = enc.bodyKey ? 46 : 0;
+    const ph = padTop + titleH + bodyH + n * rowH + padBottom;
+    this.encObjs.push(this.add.rectangle(cx, cyc, this.designW + 400, 760, 0x000000, 0.72).setDepth(1100).setInteractive());
+    this.encObjs.push(this.add.rectangle(cx, cyc, 560, ph, UI.black, 0.96).setStrokeStyle(2, this.location.accent, 0.8).setDepth(1101));
     const top = cyc - ph / 2;
-    this.encObjs.push(Ui.text(this, cx, top + 20, enc.titleRaw ?? (enc.titleKey ? t(enc.titleKey) : ''), {
+    this.encObjs.push(Ui.text(this, cx, top + padTop, enc.titleRaw ?? (enc.titleKey ? t(enc.titleKey) : ''), {
       fontSize: '20px', color: accentCss(this.location.accent), fontStyle: 'bold', align: 'center', wordWrap: { width: 520 },
-    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1102));
+    }).setOrigin(0.5, 0).setDepth(1102));
     if (enc.bodyKey) {
-      this.encObjs.push(Ui.text(this, cx, top + 48, t(enc.bodyKey), {
+      this.encObjs.push(Ui.text(this, cx, top + padTop + titleH, t(enc.bodyKey), {
         fontSize: '14px', color: UI.greenSoft, fontStyle: 'italic', align: 'center', wordWrap: { width: 510 },
-      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1102));
+      }).setOrigin(0.5, 0).setDepth(1102));
     }
-    const optTop = top + 56 + bodyH;
+    const optTop = top + padTop + titleH + bodyH + rowH / 2;
+    // Selettore PAD: focus alla 1ª opzione + cornice di selezione (sopra i bottoni). Seed dell'edge di A allo
+    // stato CORRENTE del pad → la A con cui hai aperto un dialogo (tryInteract) non conta come conferma fresca.
+    this.encSel = 0; this.encBtns = []; this.encPrevDir = 0; this.encNavAt = 0;
+    const pad0 = this.activePad(); this.encPrevA = !!pad0?.A;
+    this.encHi = this.add.graphics().setDepth(1104).setVisible(false);
+    this.encObjs.push(this.encHi);
     enc.options.forEach((opt, i) => {
       const by = optTop + i * 56;
-      const btn = this.add.rectangle(cx, by, 520, 46, 0x1c1c2a).setStrokeStyle(1, this.location.accent, 0.4).setScrollFactor(0).setDepth(1102).setInteractive();
-      this.encObjs.push(btn);
+      const btn = this.add.rectangle(cx, by, 520, 46, 0x1c1c2a).setStrokeStyle(1, this.location.accent, 0.4).setDepth(1102).setInteractive();
+      this.encObjs.push(btn); this.encBtns.push(btn);
       this.encObjs.push(Ui.text(this, cx - 244, by, `${i + 1}.  ${t(opt.labelKey)}`, {
         fontSize: '14px', color: UI.white, align: 'left', wordWrap: { width: 500 },
-      }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(1103));
-      btn.on('pointerover', () => btn.setFillStyle(0x26263a));
+      }).setOrigin(0, 0.5).setDepth(1103));
+      // mouse: hover evidenzia QUESTO bottone e cede al mouse (nasconde la cornice pad → "last input wins").
+      btn.on('pointerover', () => { btn.setFillStyle(0x26263a); this.usingPad = false; this.encHi?.setVisible(false); });
       btn.on('pointerout',  () => btn.setFillStyle(0x1c1c2a));
       btn.on('pointerdown', () => this.pickEncounter(i));
     });
+    // Suggerimento d'uso col pad (solo se collegato): la lista numerata da sola non dice che la croce naviga.
+    if (this.activePad()) {
+      this.encObjs.push(Ui.text(this, cx, top + ph - 10, t('enc.padHint'), {
+        fontSize: '10px', color: UI.faint, fontStyle: 'italic',
+      }).setOrigin(0.5, 1).setDepth(1103));
+    }
+    this.redrawEncHighlight();
   }
 
-  /** Tastiera: i tasti numerici 1..N scelgono l'opzione (mouse: clic sulla carta; pad: A = neutra). */
+  /** Input del modale: tastiera 1..N (diretto) e mouse (clic) invariati. PAD: croce su/giù + stick sinistro
+   *  NAVIGANO il focus; SOLO A (edge-triggered) conferma l'opzione focalizzata. Nessuna direzione o altro
+   *  tasto committa — era il bug. È pollato ogni frame da update() finché `encActive`. */
   private handleEncInput() {
     for (let i = 0; i < this.encOptions.length && i < this.numKeys.length; i++) {
       if (Phaser.Input.Keyboard.JustDown(this.numKeys[i]!)) { this.pickEncounter(i); return; }
     }
+    const pad = this.activePad();
+    if (!pad) return;
+    const ls = pad.leftStick;
+    let dir = 0;
+    if (pad.up   || ls.y < -PAD_DEADZONE) dir = -1;
+    else if (pad.down || ls.y >  PAD_DEADZONE) dir = 1;
+    const now = this.time.now;
+    if (dir !== 0) {
+      this.usingPad = true;
+      if (dir !== this.encPrevDir || now - this.encNavAt > ENC_REPEAT_MS) {
+        const n = this.encOptions.length;
+        this.encSel = (this.encSel + dir + n) % n; // wrap su lista corta
+        this.redrawEncHighlight();
+        this.encNavAt = now;
+      }
+    }
+    this.encPrevDir = dir;
+    // Conferma: SOLO A, edge-triggered e con pad come sorgente attiva (cfr. MenuPad). B non chiude (gli incontri
+    // si concludono scegliendo un'opzione, incl. "rifiuta"/"chiudi") → niente dismiss accidentale.
+    const a = !!pad.A;
+    if (a && !this.encPrevA && this.usingPad) { this.encPrevA = a; this.pickEncounter(this.encSel); return; }
+    this.encPrevA = a;
+  }
+
+  /** Cornice di selezione (pad) attorno all'opzione focalizzata. Visibile solo se il pad è la sorgente attiva
+   *  ("last input wins": mouse/tastiera la nascondono). Stile coerente con MenuPad.drawCursor. */
+  private redrawEncHighlight() {
+    if (!this.encHi) return;
+    const btn = this.encBtns[this.encSel];
+    if (!btn || !this.usingPad) { this.encHi.setVisible(false); return; }
+    const b = btn.getBounds();
+    this.encHi.clear()
+      .lineStyle(2, 0x88ccff, 1)
+      .strokeRoundedRect(b.x - 3, b.y - 3, b.width + 6, b.height + 6, 7)
+      .setVisible(true);
   }
 
   private pickEncounter(i: number) {
@@ -481,13 +555,13 @@ export default class StopScene extends Phaser.Scene {
     if (this.encIsAuto) this.registry.set('encounterDoneLeg', this.encLeg); // solo l'incontro AUTO non si ri-mostra
     if (this.registry.get('debugRun') !== true) SaveData.saveRun(snapshotRun(this.registry));
     for (const o of this.encObjs) o.destroy();
-    this.encObjs = [];
+    this.encObjs = []; this.encBtns = []; this.encHi = null; // la cornice/i bottoni sono in encObjs → già distrutti
     if (!msg) return; // dialogo "chiudi": nessuna replica da mostrare
-    // Esito/replica al centro, in evidenza (design + scrollFactor(0), come il modale).
+    // Esito/replica al centro, in evidenza (oggetto-mondo in spazio design, come il modale).
     const txt = Ui.text(this, this.designW / 2, 300, msg, {
       fontSize: '15px', color: UI.greenSoft, fontStyle: 'italic', stroke: '#000000', strokeThickness: 3,
       align: 'center', wordWrap: { width: 480 },
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1102);
+    }).setOrigin(0.5).setDepth(1102);
     this.tweens.add({ targets: txt, alpha: 0, y: 270, delay: 1600, duration: 1400, onComplete: () => txt.destroy() });
   }
 
@@ -499,8 +573,9 @@ export default class StopScene extends Phaser.Scene {
   private isDistressed(key: string): boolean {
     const hungry = getRun(this.registry, 'hungry') ?? [];
     const injured = getRun(this.registry, 'injured') ?? [];
+    const fatigue = getRun(this.registry, 'fatigue') ?? {};
     const morale = getRun(this.registry, 'morale') ?? MORALE.start;
-    return hungry.includes(key) || injured.includes(key) || morale < MORALE.break;
+    return hungry.includes(key) || injured.includes(key) || (fatigue[key] ?? 0) >= FATIGUE.tired || morale < MORALE.break;
   }
 
   private talkTo(key: string) {
@@ -524,16 +599,28 @@ export default class StopScene extends Phaser.Scene {
     const chosen = arc.options.find(o => choices.includes(o.flag));
 
     if (chosen) {
-      // Dopo la scelta: la sua eco (o, in mancanza, la battuta di stato).
+      // S1: un ESITO-diramazione con battute dedicate (es. Sara dopo aver ritrovato/perso Lena) ha la PRIORITÀ
+      // sull'eco generica della scelta, e varia per stato emotivo. Altrimenti: eco della scelta, o battuta di stato.
+      const outcome = arc.talkAfter?.find(ta => choices.includes(ta.flag));
       const after = arc.after.find(a => a.flag === chosen.flag);
-      const body = after ? after.key : (this.isDistressed(key) ? arc.talk.distressed : arc.talk.calm);
+      const body = outcome ? (this.isDistressed(key) ? outcome.distressed : outcome.calm)
+                 : after ? after.key
+                 : (this.isDistressed(key) ? arc.talk.distressed : arc.talk.calm);
       this.showEncounter({ titleRaw: name, bodyKey: body, options: [{ labelKey: 'dlg.close', flag: '', apply: () => '' }] }, false);
       return;
     }
-    if (actIndex >= arc.unlockAct) {
+    // Una DIRAMAZIONE alla volta: se questo arco aprirebbe una deviazione ma una è già in sospeso (scelta a
+    // questa stessa sosta), RIMANDA il beat (mostra la battuta di stato) — niente sovrascrittura di pendingDetour.
+    const detourPending = (getRun(reg, 'pendingDetour') ?? '') !== '';
+    const wouldDetour = arc.options.some(o => o.detour);
+    if (actIndex >= arc.unlockAct && !(wouldDetour && detourPending)) {
       // Il BEAT: la scelta che pesa (effetti + flag dal dato).
       this.showEncounter({ titleRaw: name, bodyKey: arc.beatKey, options: arc.options.map(o => ({
-        labelKey: o.labelKey, flag: o.flag, apply: () => { adjMorale(o.morale); adjFood(o.food); adjMoney(o.money); return t(o.replyKey); },
+        labelKey: o.labelKey, flag: o.flag, apply: () => {
+          adjMorale(o.morale); adjFood(o.food); adjMoney(o.money);
+          if (o.detour) setRun(reg, 'pendingDetour', o.detour); // DIRAMAZIONE: la prossima tratta è la deviazione
+          return t(o.replyKey);
+        },
       })) }, false);
       return;
     }

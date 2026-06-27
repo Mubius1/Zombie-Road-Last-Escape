@@ -44,6 +44,8 @@ export interface HudBuildOpts {
   hungry: string[];
   /** M3: sopravvissuti feriti (abilità spenta → ritratto smorzato + anello rosso nel pannello-crew). */
   injured: string[];
+  /** Stanchezza: sopravvissuti sfiniti (abilità spenta finché non riposano → anello azzurro nel pannello-crew). */
+  tired: string[];
   /** M2 corazza passiva: riduzione danno % (badge statico, non più una barra componente). */
   armorReductionPct: number;
   ownedWeapons: WeaponType[];
@@ -215,12 +217,12 @@ export default class HudController {
       const cwX = 18, cwGap = 30, cwY0 = H / 2 - (crew.length - 1) * cwGap / 2;
       crew.forEach((key, i) => {
         const cy = cwY0 + i * cwGap;
-        const injured = o.injured.includes(key), hungry = o.hungry.includes(key);
-        const ring = injured ? 0xff5555 : hungry ? 0xffaa44 : 0x44cc66; // rosso ferito · ambra affamato · verde sano (numerico per box/circle)
+        const injured = o.injured.includes(key), hungry = o.hungry.includes(key), tired = o.tired.includes(key);
+        const ring = injured ? 0xff5555 : hungry ? 0xffaa44 : tired ? 0x88aacc : 0x44cc66; // rosso ferito · ambra affamato · azzurro sfinito · verde sano
         this.own(Ui.box(s, cwX, cy, 26, 26, { fill: UI.black, fillAlpha: 0.5, radius: 6, stroke: ring, strokeAlpha: 0.95 }).setDepth(D));
         const img = this.own(s.add.image(cwX, cy, `survivor_${key}`).setDepth(D + 1));
         if (img.height > 0) img.setScale(22 / img.height);
-        if (injured || hungry) img.setAlpha(0.5); // abilità spenta → ritratto smorzato
+        if (injured || hungry || tired) img.setAlpha(0.5); // abilità spenta → ritratto smorzato
         this.own(s.add.circle(cwX + 10, cy - 10, 3.5, ring).setDepth(D + 2));
       });
     }

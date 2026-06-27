@@ -12,8 +12,9 @@ export interface VehicleData {
   survivorSlots: number;
   /** Specifiche descrittive (flavor/UI, NON gameplay): cavalli (CV), peso (kg), velocità max (km/h). */
   horsepower: number; weight: number; topSpeed: number;
-  /** Catalogo potenziamenti disponibili per QUESTO veicolo (oltre a 'repair', universale). I
-   *  potenziamenti acquistati sono per-veicolo: vedi RunData.upgrades = Record<vehicleKey, Upgrades>. */
+  /** Catalogo potenziamenti disponibili per QUESTO veicolo (oltre a 'repair', universale). Gli upgrade
+   *  POSSEDUTI sono GLOBALI del convoglio (RunData.upgrades: Upgrades), portabili tra i mezzi; ma ogni
+   *  veicolo APPLICA solo quelli nel suo catalogo → identità del mezzo preservata. */
   upgrades: UpgradeKey[];
   /** Chiave i18n della descrizione del veicolo. */
   desc: string;
@@ -52,7 +53,7 @@ export function vehicleRangeKm(v: VehicleData, tank = 100): number {
 
 /** M2 cibo & mantenimento sopravvissuti (numeri in BALANCE.md §8). Condiviso GameScene↔ShopScene
  *  per evitare drift tra consumo (gioco) e proiezione "affamato" (negozio). */
-export const FOOD = { max: 120, perSurvivor: 10, start: 40, rationFood: 40, rationCost: 100 } as const;
+export const FOOD = { max: 120, perSurvivor: 6, start: 60, rationFood: 40, rationCost: 100 } as const;
 
 /**
  * Campagna "IL CONVOGLIO" (F5) — MORALE del convoglio (0..max), modellato sul pattern FOOD (struct
@@ -61,14 +62,38 @@ export const FOOD = { max: 120, perSurvivor: 10, start: 40, rationFood: 40, rati
  * Registro This War of Mine: il morale è "non crollare", non un buff — nessun bonus a morale alto.
  */
 export const MORALE = {
-  start: 60, max: 100, break: 40, rout: 15,
+  start: 60, max: 100, break: 25, rout: 15,
   dLoss: -25,        // perdita di un sopravvissuto (morte/abbandono)
   dRescue: 12,       // salvataggio su strada riuscito
   dCamp: 8,          // sosta sicura all'accampamento
   dRecruit: 6,       // reclutamento riuscito
   dHungry: -10,      // almeno un affamato a fine consumo cibo
   dTrattaClean: 2,   // tratta completata (deriva positiva lenta)
+  dLena: 2,          // Lena ritrovata e a bordo: piccola spinta al morale a ogni tratta (effetto duraturo)
 } as const;
+
+/**
+ * STANCHEZZA per-persona (bisogni "vivi", oltre alla scorta condivisa): ogni sopravvissuto a bordo accumula
+ * fatica viaggiando (`perLeg`), recupera poco a ogni sosta (`stopRest`) e MOLTO dormendo al campo (`campRest`).
+ * Oltre `tired` l'abilità si spegne (come fame/ferita, via `hasActiveSurvivor`) finché non riposa: stato SOFT
+ * e recuperabile (≠ fame, che fa andar via). Derivato/in taratura (BALANCE §11), NON 🔒.
+ */
+export const FATIGUE = { max: 100, tired: 50, perLeg: 14, stopRest: 9, campRest: 40, hungryPenalty: 8 } as const;
+
+/**
+ * Fase R (R2) — LIVELLI DI DIFFICOLTÀ. Strato GLOBALE che modula i moltiplicatori già esistenti (niente
+ * nuovo sistema): `enemyMult` scala `difficultyMult` (HP + danno da contatto), `spawnMult` scala la densità
+ * (`spawnMultCombined`; <1 = intervalli più corti = più fitto = più duro), `fuelMult` scala il consumo
+ * (`getEffectiveFuelDrain`; >1 = più scarsità). Normale = baseline odierna (×1). Scelta a Nuova Partita,
+ * Incubo sbloccato dopo aver finito a Difficile (MetaProfile.bestDifficulty ≥ 1). Derivati/in taratura
+ * (BALANCE §12), NON 🔒. L'indice è `RunData.difficulty`; i nomi sono chiavi i18n `difficulty.<key>.*`.
+ */
+export interface DifficultyData { key: string; enemyMult: number; spawnMult: number; fuelMult: number; }
+export const DIFFICULTIES: DifficultyData[] = [
+  { key: 'normal',    enemyMult: 1.0,  spawnMult: 1.0,  fuelMult: 1.0  },
+  { key: 'hard',      enemyMult: 1.18, spawnMult: 0.88, fuelMult: 1.12 },
+  { key: 'nightmare', enemyMult: 1.38, spawnMult: 0.78, fuelMult: 1.25 },
+];
 
 export interface SurvivorData {
   /** Chiave stabile (logica/persistenza). */

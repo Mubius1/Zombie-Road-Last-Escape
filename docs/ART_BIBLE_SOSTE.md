@@ -1,7 +1,7 @@
 # 🏚️ Art Bible — Soste (luoghi di fine percorso)
 ### Zombie Road: Last Escape · Direzione Artistica (qualità AAA)
 
-> **Stato:** v0.1 · **BOZZA** · estratta da [`SOSTE_DIEGETICHE.md`](SOSTE_DIEGETICHE.md) §3-4 e dal codice reale ([`src/HubEnvironment.ts`](../src/HubEnvironment.ts), [`src/Locations.ts`](../src/Locations.ts)). I numeri delle tabelle 🔒 sono **verificati contro il codice** alla stesura; il resto è **target visivo da validare a schermo** (Galleria Luoghi). **Non ancora agganciata a `validate:art`** (vedi §9).
+> **Stato:** v1.0 · **tarata sul pass visivo** (5 hub catturati dalla Galleria a 1600×1200 e giudicati a schermo + diagnosi multi-agente, vedi ⭐ Verdetto). Estratta da [`SOSTE_DIEGETICHE.md`](SOSTE_DIEGETICHE.md) §3-4 e dal codice reale ([`src/HubEnvironment.ts`](../src/HubEnvironment.ts), [`src/Locations.ts`](../src/Locations.ts)). I numeri delle tabelle 🔒 sono **verità del codice attuale**; i **target di rifinitura** (ciò che va cambiato) vivono nel ⭐ Verdetto e nelle schede §5. **Non ancora agganciata a `validate:art`** (vedi §9).
 > **Ambito:** gli **hub diegetici** dove il convoglio approda dopo ogni tratta — i 5 luoghi (`garage` · `depot` · `camp` · `checkpoint` · `market`): terreno, muro/edificio di fondo, **luce-firma**, stazione-eroe, arredo, NPC, particelle e composizione. È la **fonte di verità estetica** di tutto ciò che `StopScene` mette a schermo.
 > **Riferimento di stile:** *Death Road to Canada* (cugino diretto: in viaggio sei l'auto, alle tappe scendi e cammini) filtrato dalla **penombra survival-horror** del titolo. La sosta non è un fondale: è una **vignetta vivente**.
 > **Vincolo fondante:** grafica **100% procedurale** (Phaser Graphics API → `generateTexture`; post-processing GLSL via [`PostFx.ts`](../src/PostFx.ts)). **Nessun PNG / nessun asset esterno.**
@@ -21,6 +21,61 @@ I tre pilastri del titolo (coesione · game feel · rifinitura) tradotti sull'hu
 - **Rifinitura.** Niente bande piatte: il terreno ha grana, crepe, gomma, pozze, segnaletica sbiadita; ogni volume ha **shading a 3 toni + rim**; la scena è **chiusa** da un muro di fondo (no cielo vuoto). La differenza tra "livello di test" e "AAA" è qui.
 
 > **Regola d'oro della sosta:** *Una schermata ferma dell'hub deve reggere come **key-art** — un punto d'interesse, una gerarchia di luce chiara, materia che racconta. Se sembra un livello di test, non è finita.* (criterio §3 di SOSTE_DIEGETICHE, qui promosso a **gate di accettazione**.)
+
+---
+
+## ⭐ Verdetto del pass visivo (v1.0) — dove siamo e cosa fixare per primo
+
+I 5 hub sono stati **catturati dalla Galleria a 1600×1200 e giudicati a schermo** (diagnosi adversariale per-hub + pass di coerenza). Esito netto: **nessun hub regge ancora come key-art**; 2 sono *vicini* (garage, camp), 3 *falliscono* (depot, checkpoint, market). I difetti sono **sistemici** — quasi tutti comuni a tutti e 5 → si correggono toccando **funzioni condivise**, non 5 luoghi a mano.
+
+| Hub | key-art | Difetto specifico più grave | Cosa già funziona |
+|---|---|---|---|
+| `garage` | **near** | firma OFFICINA sul muro invisibile; pozza a "due dischi impilati" | verde freddo centrato; focal sul banco regge; terreno materico |
+| `depot` | **fail** | **deriva temperatura**: legge caldo-da-falò, non freddo-industriale; serbatoi-firma invisibili | pompe gemelle vincono il focal; micro-firma "carburante" |
+| `camp` | **near** | **fuoco "diorama"** (2 triangoli di cartone); volti NON scaldati dal fuoco | il fuoco È il focal giusto; scena correttamente calda |
+| `checkpoint` | **fail** | torretta-firma invisibile (1/5); faro = "macchia + lampadina", non cono | sbarra a strisce rosse legge come confine |
+| `market` | **fail** | pozza a "decalcomania" a bordo duro; muro-container invisibile; **deriva fredda** | magenta-firma unico e riconoscibile a colpo d'occhio |
+
+### I 7 difetti sistemici (comuni a più hub)
+
+1. **Muro-firma invisibile (tutti e 5)** — la feature diegetica sul muro di fondo (serranda/serbatoi/tende/torretta/container) è `mix(wc, nero, 0.30–0.50)` su un muro **già** scuro → si fonde e non legge **mai**. *È la causa n.1 per cui i 5 posti non si distinguono se non per colore della luce.*
+2. **Pozza-luce a "due dischi impilati" (tutti e 5)** — ellisse larga + core-glow stretto quasi-bianco → "disco su disco" / "macchia + lampadina" / "decalcomania a bordo duro", non un volume con falloff. `lightQuality 2/5` ovunque.
+3. **Veicolo annegato + vuoto centrale (tutti e 5)** — il mezzo è sempre a sinistra **fuori** dalla pozza, e tra mezzo e stazione c'è una fascia di cortile buio e morto. Composizione **monopolare**, secondo polo sprecato.
+4. **Figure-giocattolo (tutti e 5)** — stesse figure ~24×38 con testone chibi a `1/OVERSAMPLE`: troppo piccole, spesso fuori dalla luce, **senza rim-light** dalla sorgente → birilli/puntini, non *persone*. `figureReadability 1–2/5`.
+5. **Deriva temperatura (depot & market, speculare)** — la temperatura è decisa dal solo numero `warmth` + tint della pozza, **scollegata** da pulviscolo/particelle/cielo → depot **caldo** invece che freddo-industriale; market **gelido** invece che caldo-sporco.
+6. **Architettura non differenziante (tutti e 5)** — stesso muro a tetto seghettato, stessa scaletta nello stesso punto, stessa banda di testo, stesso layout veicolo-sinistra/stazione-66%.
+7. **Ombre a losanga (tutti e 5)** — `dropShadow` proietta ellissi allungate uniformi (`alpha 0.34` fisso), identiche sotto ogni prop, senza relazione con la forma né la distanza.
+
+### Roadmap di fix prioritizzata (massimo salto a sforzo minimo)
+
+> Ordine per **impatto/sforzo**. I primi 4 toccano **funzioni condivise** → un fix migliora tutti e 5 i frame. Vincolo: ogni modifica numerica aggiorna le tabelle 🔒 §6 + (a gancio attivo) `validate:art`.
+
+| # | Fix | Dove (funzione) | Hub | Perché |
+|---|---|---|---|---|
+| **1** | **Rendere leggibili le feature-firma del muro**: faccia illuminata `mix(wc,bianco,0.08–0.12)` + cresta-rim verso la luce `mix(wc,L.color,0.18–0.25)`; `shadeCyl` a 3 toni sui cilindri; mini-bloom additivo dietro la silhouette; insegna emissiva dove serve (OFFICINA, banda-pericolo, vetri-cabina) | `drawBackdropFeature` | tutti | **identità del luogo** — il muro deve *dichiarare* "questo è un X" (difetto n.1) |
+| **2** | **Pozza come volume con falloff**: stack di **3** `fx_light` concentriche (core ~1.1/α0.42 · medio ~2.6/α0.22 · ampio ~4.2–6.0/α0.10), core più basso; **ramo conico** (triangolo/fan additivo dalla sorgente) per depot+checkpoint | `renderHub` | tutti | `lightQuality 2/5` ovunque; il "disco a due strati" è il difetto-killer ripetuto |
+| **3** | **Figure persone-non-giocattoli**: testa più piccola + gambe più lunghe (meno chibi); NPC-eroe a ~1.25–1.4/OVERSAMPLE; ambientali ridotte e **vincolate dentro la reach** della luce; **rim-light per-figura** color-firma sul lato verso la sorgente (volti scaldati al camp) | `buildFigure` + loop NPC in `renderHub` | tutti | cuore della north-star "persone, non veicoli"; NB: depot resta **vuoto** (`hubNpcs=[]`) → rendere il conteggio NPC **per-luogo** |
+| **4** | **Collegare i due poli + riempire il vuoto**: avvicinare il veicolo alla pozza o fill-light di raccordo a metà corridoio (`fx_light` ~3.0×2.0 α0.18); 1–2 volumi medi diegetici sull'asse centrale; rim-light color-firma sul mezzo | `renderHub` / `StopScene` / `drawProps` | tutti | recupera il **secondo polo** già presente; alto impatto compositivo a basso costo |
+| **5** | **Temperatura dal CAMPO completo** (vedi decisione §3): depot `warmth 0.70→0.42` + pozza desaturata verso bianco-freddo (arancio solo come accento-valvole); market `warmth 0.45→0.62` + pulviscolo/brace caldi; derivare `warm` da `warmth ≥ 0.6` | `Locations.ts` + `renderHub`/`drawParticles` | depot · market | risolve la rottura di coerenza più grave (depot e camp indistinguibili per temperatura) |
+| **6** | **Ombre**: ridurre l'allungamento (`1+long*0.8 → 1+long*0.45`), `alpha` legato alla distanza (`0.20+0.18·falloff`), ellisse di contatto più stretta/scura | `dropShadow` | tutti | aggancio-a-terra di tutti i prop/figure; sostiene la leggibilità delle figure |
+
+> **Nota tecnica.** La formula `falloff()` (esponente 1.6) **non** è il problema: è il **layering delle immagini** `fx_light` a tradire l'effetto. Il fix #2 è di composizione delle immagini, non di matematica.
+
+### ✅ Stato roadmap: IMPLEMENTATA (e ri-validata a schermo)
+
+Tutti e 6 i fix sono in codice ([HubEnvironment.ts](../src/HubEnvironment.ts) + [Locations.ts](../src/Locations.ts); `StopScene.ts` **non toccato**), `tsc` verde, e i 5 hub sono stati **ri-catturati** dalla Galleria. Esito del secondo pass:
+
+| Hub | prima | dopo (osservato) |
+|---|---|---|
+| `garage` | near | **insegna OFFICINA emissiva** dichiara il luogo; pozza a falloff morbido; figure staccate dal buio |
+| `depot` | fail | **freddo-industriale** (pozza desaturata, arancio solo bande-pericolo + fascio conico); **serbatoi leggibili**; resta vuoto (transito) |
+| `camp` | near | **fiamme stratificate** + nucleo bianco-caldo (no cartone); **tende leggibili**; volti scaldati dal rim |
+| `checkpoint` | fail | **cono di luce** sulla sbarra + **torretta visibile** coi vetri illuminati |
+| `market` | fail | **muro di container** leggibile (3 colori a gradoni); pozza magenta non più "decalcomania"; rim magenta sulle figure |
+
+Implementazione per fix: **#1** `drawBackdropFeature` riscritta (faccia chiara + cresta-rim + insegne/bande/vetri emissivi + mini-bloom di stacco) · **#2** pozza = stack di 3 `fx_light` + `drawLightCone` per depot/checkpoint + bloom abbassato/ri-saturato · **#3** `buildFigure` testa meno chibi + helper `litFigure` (alone-rim color-firma) + NPC-eroe 1.3×, ambientali vincolate nella reach e contate per-luogo (depot=0) · **#4** fill-light di raccordo veicolo↔stazione in `renderHub` · **#5** `warmth` depot 0.42 / market 0.62 + `warm` derivato da `warmth ≥ 0.6` + pozza depot desaturata + pulviscolo caldo per i luoghi caldi · **#6** `dropShadow` allungamento ridotto + alpha∝falloff.
+
+> **Polish residuo (eventuale v1.1, NON bloccante):** esposizione globale ancora un filo bassa (camp/market scuri ai bordi); le figure sono migliorate ma restano piccole; il veicolo a sinistra è illuminato ma tenue. Le **schede §5 "Reso reale"** qui sotto fotografano la diagnosi **PRE-fix** (il *perché* di ogni intervento) — non riscritte apposta, restano il razionale.
 
 ---
 
@@ -70,6 +125,8 @@ y=600  └───────────────────────�
 
 > **Mai** un hub a tinta unita, statico, senza una fonte di luce che lo definisca. Mai.
 
+> 🎯 **Regola di differenziazione (target v1.0) — il muro deve dichiarare il luogo.** Il pass visivo ha dato verdetto **"5 posti distinti? NO"**: i 5 hub condividono lo stesso scheletro (muro a tetto seghettato, scaletta nello stesso punto, layout veicolo-sinistra/stazione-66%) e si distinguono **quasi solo per il colore della luce** — garage/depot/checkpoint hanno muri quasi pixel-identici. La causa è che la **feature-firma** del muro (serranda, serbatoi, tende, torretta, container) è sempre disegnata troppo scura per leggersi. **Regola:** l'identità di un luogo nasce dall'**architettura** del muro di fondo (silhouette + feature emissiva leggibile), **non** dalla sola tinta della pozza. Un hub deve essere riconoscibile **anche in bianco e nero**.
+
 ---
 
 ## 2. Vincoli tecnici (non negoziabili)
@@ -101,6 +158,10 @@ Ogni hub ha **una luce-firma** (`StopLocation.hubLight`) che lo definisce e ne d
 2. **Bloom-sorgente stretto** (`fx_light` tint = `mix(accent, bianco, 0.4)`, alla sorgente): scala **caldo `1.9` α0.85** · **freddo `1.5` α0.60**. È il punto che "accende", non un disco scenico.
 3. **Penombra globale** (rettangolo `#000000` **α0.18**) su tutta la scena: il luogo è buio, la luce-firma è l'unica isola calda.
 
+> 🎯 **Regola anti-disco-piatto (target v1.0, da pass visivo).** Oggi la pozza è **due ellissi impilate** (pozza larga + bloom-core stretto quasi-bianco) → legge come "disco-core su disco" / "macchia + lampadina" / "decalcomania a bordo duro": **il difetto-killer ripetuto in tutti e 5 gli hub**. La pozza deve essere un **volume con falloff continuo**, costruito come **stack di 3 `fx_light` concentriche** a scala crescente / alpha decrescente (core ~1.1·α0.42 → medio ~2.6·α0.22 → ampio ~4.2–6.0·α0.10), col **core più basso** così non spicca come lampadina. La **direzionalità** (depot generatore, checkpoint faro) si rende con un **ramo conico** — un triangolo/fan additivo orientato dalla sorgente verso il cortile — **non** con un'ellisse radiale. *La formula `falloff()` (esp. 1.6) resta valida: il fix è il layering delle immagini, non la matematica.*
+
+> 🎯 **Coerenza di esposizione (target v1.0).** Il pass ha trovato l'esposizione **incoerente**: garage/depot tendono al **piatto/neutro** (luce larga, core spinto verso il bianco), camp/market sono **troppo bui** (cortile quasi nero con un solo nucleo + vuoto morto). Target: un **range condiviso** — la luce-firma domina sempre, ma esiste un **fill-light di raccordo** nel corridoio centrale e il **veicolo non è mai sotto-esposto** (oggi annega nel nero in tutti e 5).
+
 **Rim & ombre (regola di luce del titolo).** `drawLitProp` orienta il rim verso la sorgente (`lightDir`) e ne scala l'intensità col `falloff` (più vicino alla luce = rim più acceso). `dropShadow` stampa un'**ombra lunga direzionale** (`fx_shadow`) che si **allunga con la distanza dalla luce** (lozenge ruotato lungo `atan2(ny,nx)`) + un'ellisse di contatto.
 
 **Flicker (solo luoghi "caldi").** Per `camp` e `market` il bloom pulsa a **somma di seni incommensurabili** (rumore organico, no loop percepibile):
@@ -109,7 +170,12 @@ f = 0.82 + 0.10·sin(11.3·t) + 0.06·sin(23.7·t) + 0.04·sin(37.1·t)
 ```
 applicato a `scale` e `alpha` del bloom-sorgente.
 
-> ⚠️ **Deriva nota da risolvere (design decision).** Il flag `warm` che attiva flicker+brace è oggi `key === 'camp' || 'market'`, **scollegato** dal campo `warmth`. Risultato: il `depot` ha `warmth 0.70` (tinte calde) ma riceve **pulviscolo freddo e nessun flicker** — coerente col brief "generatore freddo" di SOSTE §4, ma **incoerente col suo stesso `warmth`**. Da decidere: abbassare `depot.warmth` (≈0.30) **oppure** derivare `warm` da `warmth ≥ 0.6`. Finché non deciso, la tabella 🔒 §6 fotografa lo stato attuale.
+> ✅ **DECISIONE (v1.0, post pass visivo) — la temperatura deriva dal CAMPO completo.** Il pass ha **confermato a schermo** una deriva speculare: il `depot` (warmth 0.70 + pozza arancio puro) legge **caldo-da-falò**, indistinguibile dal `camp`, invece che freddo-industriale; il `market` (flag `warm` ma pulviscolo azzurro-grigio `0x99a4b8`) legge **gelido** invece che caldo-sporco. Causa: la temperatura è decisa dal solo numero `warmth` + tint della pozza, **scollegata** da pulviscolo/particelle/cielo. **Decisione presa:**
+> 1. **`depot.warmth` 0.70 → 0.42** (sotto 0.5 → ramo cielo freddo) e **pozza desaturata** verso bianco-freddo (`tint = mix(L.color, 0x8fb4d8, 0.45)`): l'arancio resta solo come **accento-pericolo** sulle valvole, non come bagno globale.
+> 2. **`market.warmth` 0.45 → 0.62** + **pulviscolo/particelle caldi** (`0xbfa090` + emettitore-brace `[0xffaa55, 0xcc7733]`).
+> 3. **Derivare `warm` da `warmth ≥ 0.6`** (unica fonte di verità), eliminando il cablaggio `key === 'camp' || 'market'`. Esito: caldi = camp (1.0) + market (0.62); freddi = garage (0.30) + depot (0.42) + checkpoint (0.55) → **coincide con l'intento** e fixa il depot.
+>
+> Finché il fix non è in codice, la tabella 🔒 §6.2 **fotografa lo stato attuale** (0.70/0.45); i valori-target sono qui e nella roadmap (fix #5). Principio generale: **pozza + pulviscolo + particelle + cielo seguono SEMPRE il flag `warm` in modo coerente.**
 
 ---
 
@@ -127,6 +193,12 @@ Ogni volume passa per uno di questi helper (mai fill piatto):
 
 **Palette materiali metallo** (stazioni): `M=0x4a4a52` (mezzotono) · `MD=0x26262c` (ombra) · `ML=0x70707a` (luce). Legno arredo: `0x4a3a24`/`0x3a2c18`. Gomma: `0x16161c`. Sacchi: `0x6a6244`/`0x7a7050`.
 
+> 🎯 **Dottrina figure (target v1.0) — persone, non giocattoli.** Il pass ha bocciato le figure in **tutti e 5** gli hub (`figureReadability 1–2/5`): testone chibi a `1/OVERSAMPLE`, troppo piccole, spesso **fuori dalla luce** e **senza rim-light**. Regole:
+> - **Silhouette meno chibi**: testa più piccola e gambe più lunghe in `buildFigure` (oggi testa Ø~5.4 su corpo ~12 largo = testone). La proporzione testa/corpo è ciò che fa "bambola".
+> - **NPC-eroe ingrandito** (~1.25–1.4/OVERSAMPLE) e **dentro la pozza**; ambientali **ridotte** e **vincolate entro la `reach`** della luce (mai macchie scure che galleggiano nel buio).
+> - **Rim-light per-figura** color-firma sul lato verso la sorgente (in `falloff`): i volti del `camp` devono essere **scaldati dal fuoco**, il soldato del `checkpoint` avere un rim oliva, il mercante un rim magenta. È ciò che trasforma una sagoma piazzata in "qualcuno che vive qui".
+> - **Conteggio NPC per-luogo**: il `depot` per brief è **vuoto** (`hubNpcs=[]`, transito) — il loop ambientale **non** deve aggiungervi figure (oggi ne mette 2). Derivare il numero da `hubNpcs.length`.
+
 ---
 
 ## 5. Schede dei cinque luoghi
@@ -141,6 +213,7 @@ Ogni volume passa per uno di questi helper (mai fill piatto):
 - **Arredo & NPC.** Gomme, pallet, taniche; il **meccanico** (`mechanic`) accanto al mezzo.
 - **Focal point.** Il banco illuminato sotto l'insegna; il veicolo entra nella pozza.
 - **Criterio key-art.** "Un garage dove qualcuno *ripara per vivere*": metallo graffiato, luce di lavoro, profondità data dalla serranda.
+- **Reso reale (v1.0 · verdetto: NEAR).** Il focal sul banco verde **regge** e la temperatura fredda è centrata. Da fixare: la **serranda OFFICINA è invisibile** (no insegna emissiva, neon verticale spento → non additivo); **pozza a due dischi** (core verso il bianco-verde neutro → de-satura il verde); banco **3-toni piatto** senza graffi/usura, morsa minuscola; veicolo **fuori dalla pozza** → vuoto centrale. *Fix: roadmap #1 (insegna OFFICINA + neon additivo), #2, #4; graffi+morsa più grande sul banco.*
 
 ### 5.2 `depot` — DEPOSITO (rifornimento)
 - **Identità.** Stazione di servizio post-collasso: arancio-fuoco dei serbatoi, ronzio di generatore. Solo core (rifornisci/ripara/munizioni) + pompa diegetica. **Due** stazioni (pompa a sx, banco a dx).
@@ -150,6 +223,7 @@ Ogni volume passa per uno di questi helper (mai fill piatto):
 - **Arredo & NPC.** Barili, taniche, casse; **nessun NPC fisso** (luogo di transito, pit-stop rapido).
 - **Focal point.** Le pompe gemelle nella pozza arancio; i serbatoi che bucano il muro.
 - **Criterio key-art.** "Una pompa nel buio che potrebbe esplodere": tubi, valvole, l'arancio come avvertimento.
+- **Reso reale (v1.0 · verdetto: FAIL).** Le pompe gemelle **vincono il focal**, ma il deposito legge **caldo-da-falò**, indistinguibile dal `camp` — **deriva temperatura confermata** (warmth 0.70 + pozza arancio puro). La pozza è **radiale, non conica** (manca il "fascio di generatore"); i **serbatoi-firma** del muro spariscono nel buio; figure-giocattolo e — contro brief — il loop ambientale piazza 2 NPC dove dovrebbe essere **vuoto**. *Fix: roadmap #5 (warmth→0.42 + pozza fredda + arancio solo accento), #1 (serbatoi con `shadeCyl` + banda-pericolo), #2 (ramo conico), #3 (depot vuoto).*
 
 ### 5.3 `camp` — ACCAMPAMENTO (il recupero)
 - **Identità.** L'unico luogo *caldo e umano*: fuoco, voci, fiducia. Il posto del morale (+8 alla sosta, §BALANCE). Recluta · cura · razioni.
@@ -159,6 +233,7 @@ Ogni volume passa per uno di questi helper (mai fill piatto):
 - **Arredo & NPC.** Il **medico** (`medic`) e l'**esploratrice** (`explorer`) accanto al fuoco; più figure ambientali (luogo "caldo" → 3 ambientali).
 - **Focal point.** Il fuoco — l'unica vera sorgente calda del gioco; i volti scaldati intorno.
 - **Criterio key-art.** "Un fuoco a cui vorresti sederti": calore credibile (non "diorama"), persone che lo circondano, buio premuto ai bordi.
+- **Reso reale (v1.0 · verdetto: NEAR).** Miglior **umore** dei 5: il fuoco È il focal giusto e la scena è correttamente calda. Ma le **fiamme sono 2 triangoli di cartone** ("diorama" confermato): servono 4-5 lingue irregolari + **nucleo bianco-caldo** `0xfff0c0` + jitter delle punte nel flicker. I **volti NON sono scaldati** dal fuoco (manca rim-light per-figura); pozza-disco piatta; **tende-firma** invisibili; braci/pietre del focolare si perdono. *Fix: fiamme stratificate + nucleo caldo; roadmap #3 (volti scaldati), #2, #1 (tende con cresta chiara).*
 
 ### 5.4 `checkpoint` — POSTO DI BLOCCO (lo stallo teso)
 - **Identità.** Autorità militare residua: faro accecante, sacchi, sbarra. Verde-oliva firma. Armi · munizioni + (futuro) pedaggio/stallo.
@@ -168,6 +243,7 @@ Ogni volume passa per uno di questi helper (mai fill piatto):
 - **Arredo & NPC.** Sacchi, casse, coni; il **soldato** (`soldier`) di guardia.
 - **Focal point.** La sbarra sotto il faro; la torretta che incombe dal muro.
 - **Criterio key-art.** "Un confine che non ti fiderai di attraversare": sacchi, ferro, luce che acceca e nasconde.
+- **Reso reale (v1.0 · verdetto: FAIL).** La sbarra a strisce rosse **legge** come confine, ma la **torretta-firma è invisibile** (`backdropIdentity 1/5`, il peggiore) e il faro legge come **"macchia + lampadina"**, non come **cono accecante**. Manca il "bianco che acceca" (warmth 0.55 dà un tiepido-neutro indeciso → core a `0xffffff` puro). Sacchi minuscoli; figure-giocattolo (soldato-eroe indistinto); banding ai bordi della pozza. *Fix: roadmap #1 (torretta più alta + vetri additivi), #2 (ramo conico verticale), #3 (soldato in pozza + rim oliva); sacchi più grandi su 3 file.*
 
 ### 5.5 `market` — MERCATO NERO (la tentazione)
 - **Identità.** Bazar al neon, merce che ruota, etica sospesa. Magenta firma. Potenziamenti · armi · veicoli.
@@ -177,6 +253,7 @@ Ogni volume passa per uno di questi helper (mai fill piatto):
 - **Arredo & NPC.** Casse, teli, merce; il **saccheggiatore/mercante** (`looter`); 3 figure ambientali.
 - **Focal point.** Il tendone illuminato a festoni; la merce nelle lanterne magenta.
 - **Criterio key-art.** "Un mercato dove tutto ha un prezzo, anche le persone": neon sporco, container, abbondanza inquietante.
+- **Reso reale (v1.0 · verdetto: FAIL).** Il magenta-firma è **unico e riconoscibile** a colpo d'occhio, ma la pozza è una **"decalcomania" a bordo duro** (difetto-killer); il **muro di container** è invisibile (3 colori non si separano); le figure sono **puntini** (`figureReadability 1/5`, il peggiore); **deriva fredda** (flag `warm` ma pulviscolo azzurro-grigio); i festoni del tendone sono **triangoli piatti** indistinti (servono 6 lanterne a cerchi distinti con micro-glow ciascuna). *Fix: roadmap #2 (pozza stratificata), #1 (container a gradoni + stacchi chiari), #5 (pulviscolo/brace caldi), #3 (mercante ingrandito + rim magenta).*
 
 ---
 
@@ -197,10 +274,12 @@ Ogni volume passa per uno di questi helper (mai fill piatto):
 | Luogo | `warmth` | `reach` | `offX` | `offY` | flicker (`warm`) |
 |---|---|---|---|---|---|
 | `garage` | 0.30 | 200 | -6 | -40 | no |
-| `depot` | 0.70 | 230 | 0 | -30 | no ⚠️ (vedi deriva §3) |
+| `depot` | 0.42 | 230 | 0 | -30 | no (freddo-industriale) |
 | `camp` | 1.00 | 210 | 0 | -22 | **sì** |
 | `checkpoint` | 0.55 | 240 | 0 | -34 | no |
-| `market` | 0.45 | 220 | 0 | -28 | **sì** |
+| `market` | 0.62 | 220 | 0 | -28 | **sì** |
+
+> ✅ **Implementato (fix #5).** Il flag `warm` è **derivato da `warmth ≥ 0.6`** (in `renderHub`), non più cablato `key === 'camp'||'market'`. Con i valori sopra: caldi = camp (1.0) + market (0.62); freddi = garage (0.30) + depot (0.42) + checkpoint (0.55). La pozza del `depot` è inoltre desaturata verso bianco-freddo (`mix(L.color, 0x8fb4d8, 0.45)`) → l'arancio resta accento sulle valvole.
 
 ### 6.3 Geometria-firma della scena (costanti `HubEnvironment`)
 | Costante | Valore | Ruolo |
@@ -250,34 +329,35 @@ Catalogo riusabile (`HubEnvironment`), con dimensione-firma per coerenza di scal
 
 ---
 
-## 9. Gancio `validate:art` (proposto, NON ancora attivo)
+## 9. Gancio `validate:art` ✅ ATTIVO
 
-Oggi `scripts/validate-art-bible.mjs` **non scansiona** `HubEnvironment.ts`/`Locations.ts` → gli hub sono l'unica area visiva **non protetta** dall'anti-deriva. Proposta per chiudere il buco, sul modello del blocco boss esistente:
+`scripts/validate-art-bible.mjs` (blocco **5c. SOSTE**) confronta `STOP_LOCATIONS` con le tabelle 🔒 di questo documento → `npm run validate:art` riporta "**N soste verificati**" e **fallisce la build** sulla deriva. Coperto:
 
-1. `const locations = readFileSync('src/Locations.ts')`; `const hubenv = readFileSync('src/HubEnvironment.ts')`.
-2. `sliceObject(locations, 'STOP_LOCATIONS')` → per ogni chiave, confronta `accent`/`hubGround`/`hubSky` (esadecimali) con la **§6.1**; `warmth`/`reach`/`offX`/`offY` (dentro `hubLight:{…}`, serve un estrattore *nested-aware* come per `BOSS_CONFIG`) con la **§6.2**.
-3. Estrai le costanti `HUB_HORIZON`/`WALL_TOP`/`FAR_SHEAR`/`HUB_WALK`/`CAR_FW`/`CAR_FH` da `hubenv` → confronta con la **§6.3**.
-4. Le righe usano la prima cella in backtick → riusa `bibleRow(bibleS, key)`.
+1. **§6.1 palette** — `accent` · `hubGround` · `hubSky` (esadecimali) per i 5 luoghi.
+2. **§6.2 luce-firma** — `hubLight` `warmth` · `reach` · `offX` · `offY` per i 5 luoghi.
 
-**Vincolo:** perché il parser testuale funzioni, le entry di `STOP_LOCATIONS` **devono restare mono-riga** (già così oggi). Le §6.4/§7 (parametri di resa, dim-prop) restano **documentate ma non lockate** in questa v0.1 (vivono in chiamate inline dentro le funzioni di disegno, non in una tabella-dati): lockabili in seguito estraendole in costanti nominate.
+Implementazione: ogni entry di `STOP_LOCATIONS` è **mono-riga** → estrazione per-riga (`stopLine(key)` + `lineHexF`/`lineNumF`); le righe della tabella si leggono col `bibleRow` esistente, distinguendo §6.1 da §6.2 via `sliceSection('### 6.1')`/`sliceSection('### 6.2')`. **`ART_BIBLE_SOSTE.md` è in Regola n.1 di [CLAUDE.md](../CLAUDE.md).**
 
-> Quando il gancio diventa attivo, aggiungere `ART_BIBLE_SOSTE.md` alla **Regola n.1** di [CLAUDE.md](../CLAUDE.md) e a `npm run validate:art`.
+**Non ancora lockato** (documentato ma fuori dal validatore): §6.3 (geometria-firma — costanti in `HubEnvironment.ts`), §6.4/§7 (parametri di resa luce e dim-prop — vivono in chiamate inline; lockabili estraendoli in costanti nominate). **Vincolo:** le entry di `STOP_LOCATIONS` **devono restare mono-riga** o il parser testuale non le legge.
 
 ---
 
-## 10. Stato & problemi aperti (da risolvere a schermo)
+## 10. Stato & problemi aperti
 
-> v0.1 **bozza**: i target visivi qui **non sono ancora stati giudicati a schermo** (SOSTE §13: "verificato con build verde, **non ancora a schermo**"). Vanno validati nella **Galleria Luoghi** ([DebugScene](../src/scenes/DebugScene.ts) → tasti 1-5).
+> ✅ **Pass visivo eseguito (v1.0).** I 5 hub sono stati catturati dalla **Galleria Luoghi** ([DebugScene](../src/scenes/DebugScene.ts) → tasti 1-5) a 1600×1200 e giudicati a schermo (diagnosi adversariale per-hub + coerenza cross-hub). Il **verdetto, i 7 difetti sistemici e la roadmap prioritizzata** sono in testa al documento (⭐ Verdetto). Aggiorna il quadro di [SOSTE_DIEGETICHE §13](SOSTE_DIEGETICHE.md) ("verificato con build verde, **non ancora a schermo**"): **ora è a schermo**.
 
-Rischi noti già sospettati (da confermare/risolvere col pass visivo):
-- **Banding della pozza** di luce additiva (gradienti a scalini sul terreno scuro).
-- **Ombre lunghe a "lozenge"** (l'allungamento direzionale può leggersi come losanga, non come ombra).
-- **Fuoco "diorama"** all'accampamento (le fiamme a triangoli possono sembrare cartone, non fuoco).
-- **Deriva `warm`↔`warmth`** del depot (§3) — decisione di design pendente.
-- **NPC "teste fluttuanti"** se le figure full-body non staccano dal fondo (SOSTE §13 v0.2).
-- **Vuoto centrale** del cortile fra stazione e veicolo (le figure ambientali lo popolano: verificare che bastino).
+**Rischi sospettati → esito del pass (tutti CONFERMATI):**
+- **Banding/disco-piatto della pozza** → confermato, in *tutti* e 5 (difetto sistemico #2). È il difetto-killer.
+- **Ombre a "lozenge"** → confermato, in tutti e 5 (#7).
+- **Fuoco "diorama"** (camp) → confermato (2 triangoli di cartone); il festone del market ha lo stesso vizio.
+- **Deriva `warm`↔`warmth`** → confermata e **speculare**: depot caldo (doveva essere freddo) **e** market gelido (doveva essere caldo). **Risolta come decisione in §3 / fix #5.**
+- **Figure "teste fluttuanti"/giocattolo** → confermato, in tutti e 5 (#4); peggiore al market (1/5).
+- **Vuoto centrale + veicolo annegato** → confermato, in tutti e 5 (#3).
+- **(nuovo dal pass) Muro-firma invisibile** → il difetto **n.1**: i 5 luoghi non leggono come distinti (#1, #6).
 
-**Prossimo passo raccomandato:** pass nella Galleria → screenshot dei 5 hub → diagnosi puntuale → questa bozza diventa v1.0 con i target tarati su ciò che si vede (e, in parallelo, attivazione del gancio §9).
+**Stato:** ✅ **roadmap #1-#6 implementata e ri-validata a schermo** (vedi "Stato roadmap" nel ⭐ Verdetto). Tabelle 🔒 §6 allineate al codice (warmth depot 0.42 / market 0.62).
+
+**Prossimo passo raccomandato:** (a) eventuale **polish v1.1** (esposizione globale + scala figure, vedi nota nel ⭐ Verdetto); (b) **attivare il gancio §9** + aggiungere il file alla Regola n.1 di [CLAUDE.md](../CLAUDE.md) — così gli hub entrano sotto `validate:art` come il resto del titolo.
 
 ---
 

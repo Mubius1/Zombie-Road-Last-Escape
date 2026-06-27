@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import MenuScene from './scenes/MenuScene';
+import NewRunScene from './scenes/NewRunScene';
+import CutsceneScene from './scenes/CutsceneScene';
 import GameScene from './scenes/GameScene';
 import ShopScene from './scenes/ShopScene';
 import StopScene from './scenes/StopScene';
@@ -30,7 +32,7 @@ export default class Game {
       // Gamepad: schema di input alternativo (tastiera+mouse restano il default). La Gamepad API del
       // browser non espone i pad finché l'utente non preme un tasto dopo il load → si attiva al primo input.
       input: { gamepad: true },
-      scene: [MenuScene, GameScene, StopScene, ShopScene, RouteScene, SettingsScene, PauseScene],
+      scene: [MenuScene, NewRunScene, CutsceneScene, GameScene, StopScene, ShopScene, RouteScene, SettingsScene, PauseScene],
       // Post-processing GLSL (WebGL): Phaser instrada le sottoclassi PostFXPipeline
       // al registro post-pipeline al boot. Su Canvas (fallback AUTO) viene ignorato.
       // `as any`: PipelineConfig vuole `typeof WebGLPipeline`, qui passiamo le classi PostFX.

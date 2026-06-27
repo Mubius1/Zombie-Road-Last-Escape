@@ -54,13 +54,17 @@ export interface SettingsData {
   /** Tutorial di onboarding già visto/saltato? false = lo mostra a inizio Missione 1 (vedi docs/TUTORIAL.md).
    *  È una PREFERENZA (non stato di partita) → sopravvive a "Nuova Partita". */
   tutorialSeen: boolean;
+  /** Fase R (R2): difficoltà PREFERITA (0=Normale·1=Difficile·2=Incubo) — il default del pick a Nuova Partita.
+   *  La difficoltà ATTIVA della corsa vive in `RunData.difficulty` (questa è solo l'ultima scelta ricordata). */
+  difficulty: number;
 }
 
 const STORAGE_KEY = 'zombieRoad.settings.v1';
-const DEFAULTS: SettingsData = { volume: 1, vignetteFx: true, grainFx: true, scanlineFx: true, gradingFx: true, aberrationFx: true, bloom: true, shadows: true, asphaltDetail: true, resolution: 0, fullscreen: false, colorblind: false, language: 'it', brightness: 1, tutorialSeen: false };
+const DEFAULTS: SettingsData = { volume: 1, vignetteFx: true, grainFx: true, scanlineFx: true, gradingFx: true, aberrationFx: true, bloom: true, shadows: true, asphaltDetail: true, resolution: 0, fullscreen: false, colorblind: false, language: 'it', brightness: 1, tutorialSeen: false, difficulty: 0 };
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const clampBright = (v: number) => (v < 0.6 ? 0.6 : v > 1.4 ? 1.4 : v);
+const clampDiff = (v: number) => (v < 0 ? 0 : v > 2 ? 2 : v | 0);
 
 function loadSettings(): SettingsData {
   try {
@@ -85,6 +89,7 @@ function loadSettings(): SettingsData {
       brightness: typeof p.brightness === 'number'  ? clampBright(p.brightness) : DEFAULTS.brightness,
       language:   isLang(p.language)                ? p.language                : detectLang(),
       tutorialSeen: typeof p.tutorialSeen === 'boolean' ? p.tutorialSeen         : DEFAULTS.tutorialSeen,
+      difficulty:  typeof p.difficulty === 'number'    ? clampDiff(p.difficulty)  : DEFAULTS.difficulty,
     };
   } catch {
     return { ...DEFAULTS };
@@ -145,6 +150,9 @@ export default class Settings {
 
   static get tutorialSeen(): boolean { return this.data.tutorialSeen; }
   static set tutorialSeen(v: boolean) { this.data.tutorialSeen = v; this.save(); }
+
+  static get difficulty(): number { return this.data.difficulty; }
+  static set difficulty(v: number) { this.data.difficulty = clampDiff(v); this.save(); }
 
   private static save() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data)); } catch { /* storage non disponibile */ }

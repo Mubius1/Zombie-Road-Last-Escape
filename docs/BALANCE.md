@@ -18,9 +18,9 @@ Fonte: costanti in testa a `GameScene.ts`. La colonna **Valore** è validata (un
 | `costante` | Valore | Effetto |
 |---|---|---|
 | `SCROLL_SPEED` | 240 | velocità di scorrimento del mondo (u/s) = ritmo base |
-| `MISSION_DIST` | 6000 | lunghezza missione in u (~60 km mostrati · `KM_PER_UNIT`, ~25 s di guida base) — **pivot "This War of Mine su ruote"**: la tratta è un transito BREVE e teso, non il cuore (era 18000/~180 km) |
+| `MISSION_DIST` | 6000 | lunghezza missione in u (~180 km mostrati · `KM_PER_UNIT`, ~25 s di guida base) — **pivot "This War of Mine su ruote"**: la tratta è un transito BREVE e teso, non il cuore (era 18000 u) |
 | `BOSS_TRIGGER` | 0.82 | frazione di missione a cui appare il boss (82% → 14 760 u) |
-| `BASE_FUEL_DRAIN` | 0.5 | consumo carburante base /s (serbatoio integro) — × il `fuelEff` per-veicolo (§3 bis). Lento: il carburante PERSISTE tra le missioni (un pieno ≈ 3 missioni) |
+| `BASE_FUEL_DRAIN` | 1.5 | consumo carburante base /s (serbatoio integro) — × il `fuelEff` per-veicolo (§3 bis). Logistica: il carburante PERSISTE tra le missioni (un pieno ≈ 3 tratte) → un *Rifornimento* al garage ogni ~3 soste, non una morte al secondo |
 | `MAX_FUEL` | 100 | carburante massimo (+30 con upgrade) |
 | `GIANT_SPAWN_INTERVAL` | 22000 | spawn del Gigante errante (ms) |
 | `COMBO_WINDOW` | 2500 | finestra per mantenere la catena (ms) |
@@ -37,7 +37,7 @@ Fonte: costanti in testa a `GameScene.ts`. La colonna **Valore** è validata (un
 | `ENGINE_SCROLL_MIN` | 0.45 | M1 motore onesto: ritmo di avanzamento a motore distrutto (45%); a 100% = pieno |
 | `ARMOR_MULT_FLOOR` | 0.40 | M2 corazza passiva: moltiplicatore danno minimo (riduzione max 60%) |
 
-> *Non validati (valori inline):* tanica su strada = **+15** carburante (top-up modesto); intervallo tanica **15000 ms** (**10000 ms** con Esploratore); convoglio salvato = **+18**; `KM_PER_UNIT = 0.01` (`World.ts`) = fattore distanza→km mostrati (**solo display**: il gameplay resta in unità). Il **pieno vero** si fa al garage (negozio → *Rifornimento*, §8). Carburante **persistente** tra le missioni: `RunData.fuel` (caricato a inizio missione, persistito a fine, ripristinato alla morte — modello B).
+> *Non validati (valori inline):* convoglio salvato = **+18** carburante; *(taniche su strada **rimosse** — unica ricarica al garage, §3 bis/§8)*; `KM_PER_UNIT = 0.03` (`World.ts`) = fattore distanza→km mostrati (**solo display**: il gameplay resta in unità). Il **pieno vero** si fa al garage (negozio → *Rifornimento*, §8). Carburante **persistente** tra le missioni: `RunData.fuel` (caricato a inizio missione, persistito a fine, ripristinato alla morte — modello B).
 
 > **Sovraccarico (Overdrive, A3).** La barra (`OVERDRIVE_MAX`) si carica a ogni uccisione di `OVERDRIVE_CHARGE_BASE + OVERDRIVE_CHARGE_COMBO · moltiplicatore_combo` (→ ~15-20 kill per riempirla a combo media). A barra piena, **F** attiva il Sovraccarico per `OVERDRIVE_DURATION` ms: cadenza di fuoco ×`OVERDRIVE_FIRE_MULT`, veicolo-ariete (il contatto uccide senza danni ai componenti) e onda d'urto frontale da `OVERDRIVE_SHOCK_DMG` all'attivazione. *Da tarare a playtest.*
 
@@ -96,10 +96,11 @@ Fonte: costanti in testa a `GameScene.ts`. La colonna **Valore** è validata (un
 |---|---|---|
 | `CALM_INTERVAL` | 3300 | ms tra spawn nella **quiete** (cala ~110/missione, pavimento 1500) → sagome isolate |
 | `BURST_INTERVAL` | 760 | ms tra spawn nell'**ondata** (cala ~40/missione, pavimento 300 → densità piena ~M12) → sciami serrati |
-| `CALM_MS_MIN`/`CALM_MS_MAX` | 6500 / 10000 | durata della quiete (ms, random nel range) |
-| `BURST_MS_BASE` | 3000 | durata base dell'ondata a M1 (+170 ms/missione) |
+| `CALM_MS_MIN`/`CALM_MS_MAX` | 3500 / 5500 | durata della quiete (ms, random nel range) — accorciata per la tratta breve (~25 s) |
+| `BURST_MS_BASE` | 4000 | durata base dell'ondata a M1 (+170 ms/missione) |
+| `BURST_MS_CAP` | 7000 | **tetto** durata ondata: su 31 tratte da ~25 s l'ondata non può durare più della tratta (coerente col tetto di difficoltà per atto) |
 
-- **Fasi** (`advanceSpawnPhase`): si parte in **quiete** (a **M1 piena** = intro gentile; dalle missioni successive dimezzata, l'azione entra prima). Allo scadere, **quiete → ondata**: parte lo **stinger** (`playWaveStinger`), il **drone d'angoscia va al massimo** per tutta l'ondata (`burstDreadUntil`), e si genera un **batch d'apertura** di `min(8, 2 + ⌊(missione−1)/2⌋)` spawn (M1 = 2). Allo scadere dell'ondata, **ondata → quiete** (respiro). Sospeso durante il boss.
+- **Fasi** (`advanceSpawnPhase`): si parte in **quiete** (a **M1 piena** = intro gentile; dalle missioni successive dimezzata, l'azione entra prima). Allo scadere, **quiete → ondata**: parte lo **stinger** (`playWaveStinger`), il **drone d'angoscia va al massimo** per tutta l'ondata (`burstDreadUntil`), e si genera un **batch d'apertura** di `min(4, 1 + ⌊(missione−1)/3⌋)` spawn (M1 = 1, alleggerito per la tratta-transito). Allo scadere dell'ondata, **ondata → quiete** (respiro). Sospeso durante il boss.
 - **Intento:** il **silenzio è minaccia**, non riposo — sai che l'ondata arriverà. La difficoltà cresce **con la missione** (proxy della potenza accumulata): a M1 ondate rade/corte, da metà gioco serrate. Gli intervalli (e ogni `spawnZombie`, che per i *fodder* è uno **sciame** 1-3) scalano anche col nodo di percorso (`routeSpawnMult`, B1).
 
 ---
@@ -107,20 +108,21 @@ Fonte: costanti in testa a `GameScene.ts`. La colonna **Valore** è validata (un
 ## §2 · Economia — flusso delle monete
 
 ```
-   uccisioni ──▶ PUNTEGGIO ──(fine missione)──▶ MONETE  +  ricompensa BOSS
-                  ×combo          ⌊score/8⌋                 (400–650)
+   uccisioni ──▶ PUNTEGGIO ──┐
+       │          ×combo      ├─(fine tratta)─▶ MONETE ──▶ SOSTA / NEGOZIO ──▶ tratta+1
+       └──────────────────────┘  ⌊score/5⌋ + (uccisioni×4)   ripara · rifornisci · potenzia · recluta
                                        │
-                                       ▼
-                                   NEGOZIO  ──▶  ripara · potenzia · arma · veicolo
-                                       │
-                                  GAME OVER ──▶  reset a 0 (niente sopravvive)
+                                  GAME OVER ──▶  checkpoint: rigiochi la tratta (−25% monete), build intatto
 ```
 
 ### Sorgenti di guadagno
 | Sorgente | Monete | Note |
 |---|---|---|
-| Completamento missione | `⌊punteggio / 8⌋` | unica conversione del punteggio in valuta |
-| Boss sconfitto | `reward` del boss (§6) | accreditato subito, **in aggiunta** |
+| Conversione punteggio | `⌊punteggio / 5⌋` | la combo gonfia il punteggio (≈ efficienza), poi si converte a fine tratta |
+| Quota per uccisione | `uccisioni × 4` | **fissa, svincolata dalla combo**: ogni kill vale qualcosa anche a combo 1 |
+| ~~Boss sconfitto~~ | **OFF** | `BOSSES_ENABLED=false`: la ricompensa 400-650★ (§6) NON è accreditata — le due gambe sopra la rimpiazzano (divisore più generoso + quota per-kill) |
+
+> **Pavimento Atto 1-2 (`EARLY_TRATTA_FLOOR=90★`):** nei primi due atti (`actIndex ≤ 1`) l'incasso per tratta ha un **pavimento garantito** — l'inizio campagna era near-break-even (~10★/tratta netti), troppo povero proprio quando vuoi le compere economiche (Pickup 300, Fucile 350). Dagli atti centrali in poi **nessun pavimento** → la tensione logistica di metà/fine gioco resta intatta. Derivato/in taratura.
 
 ### Pozzi di spesa (tutti al Negozio)
 Riparazioni, potenziamenti, armi, veicoli (§7–§8). I **sopravvissuti sono gratis**.
@@ -171,7 +173,7 @@ Il consumo **non è più uguale per tutti**: ogni veicolo brucia in proporzione 
 fuelEff = 0.62 + weight/15000 + horsepower/4200      // × sul consumo base BASE_FUEL_DRAIN
 ```
 
-**Modello "viaggio" (carburante persistente).** Il pieno **NON** si ricarica a ogni missione: `RunData.fuel` si porta avanti (un singolo tratto-missione mostra **~180 km** credibili, ma un pieno copre **~3 missioni**). Così l'autonomia mostrata è da auto vera (centinaia di km) **senza** uccidere la scarsità: il carburante è un **bene di campagna** da gestire sul lungo viaggio. Si rabbocca con taniche rare su strada (+15) e soprattutto al **garage** (negozio → *Rifornimento*, fa il pieno; §8). Autonomia stimata mostrata nella **scheda veicolo** del negozio (`vehicleRangeKm`).
+**Modello "viaggio" (carburante persistente).** Il pieno **NON** si ricarica a ogni missione: `RunData.fuel` si porta avanti (un singolo tratto-missione mostra **~180 km** credibili, ma un pieno copre **~3 missioni**). Così l'autonomia mostrata è da auto vera (centinaia di km) **senza** uccidere la scarsità: il carburante è un **bene di campagna** da gestire sul lungo viaggio. Si rabbocca **solo al garage** (negozio → *Rifornimento*, fa il pieno; §8) — le taniche su strada sono **rimosse**. Autonomia stimata mostrata nella **scheda veicolo** del negozio (`vehicleRangeKm`).
 
 Autonomia di display ≈ `serbatoio · KM_PER_FUEL / fuelEff` con `KM_PER_FUEL = 4.8` (= `SCROLL_SPEED·KM_PER_UNIT/BASE_FUEL_DRAIN`):
 
@@ -187,6 +189,8 @@ Autonomia di display ≈ `serbatoio · KM_PER_FUEL / fuelEff` con `KM_PER_FUEL =
 
 > ¹ A velocità di crociera (throttle 1), serbatoio e motore integri, tanica base 100 (senza upgrade *Serbatoio* +30).
 > ² Missioni (~180 km) coperte da un pieno. Il **Mezzo Pesante** è l'estremo "logistica": scambia autonomia per corazza/potenza. **In taratura:** burn (`BASE_FUEL_DRAIN`) e costo *Rifornimento* al garage (§8) sono i dial di scarsità — le taniche su strada sono state **rimosse** (il garage è l'unica ricarica) — da rifinire a playtest.
+>
+> **Anti-softlock (RIMORCHIO).** Il Mezzo Pesante (`fuelEff 1.54`) sulla tratta più assetata (deserto, `fuelDrainMult 1.5 × lengthMult 1.5`) consuma **~130** a crociera > serbatoio max **100** (non monta *Serbatoio extra*): un pieno **non basta**. Per questo finire la benzina **non è game over** ma un **RIMORCHIO** alla sosta successiva che **AVANZA il leg** (`GameScene.strandLeg`), così nessun leg resta invincibile per nessun mezzo/stato-serbatoio (il fattore serbatoio danneggiato arriva a ×3). Pedaggio `STRAND_MONEY_PENALTY 0.20` (< morte 0.25) + crollo morale, **niente sopravvissuto perso**; arrivi con `STRAND_TOW_FUEL 25`. Sul leg terminale si resta sul leg con pieno + serbatoio riparato (corto, sempre completabile). Derivati, **non 🔒**.
 
 ---
 
@@ -198,7 +202,7 @@ I **4 componenti** (salute 0–100) si danneggiano per aggancio zombi (14/1,6 s)
 |---|---|---|---|
 | **Motore** → ritmo avanz. | `SCROLL_SPEED · (ENGINE_SCROLL_MIN + (1−ENGINE_SCROLL_MIN)·mot/100)` | pieno (240 u/s) | 45% (108 u/s) — **NON game over** |
 | **Ruote** → velocità vert. | `230 · speedMult · (0.15 + 0.85·ruote/100) · max(0.3, 1 − agganciati·0.12)` | piena | 15% (× malus aggancio) |
-| **Serbatoio** → consumo | `0.5 · (1 + (1 − serb/100)·2) · (0.5 + 0.5·throttle) · fuelEff` | 0.5/s¹ ² | 1.5/s (3×)¹ ² |
+| **Serbatoio** → consumo | `1.5 · (1 + (1 − serb/100)·2) · (0.5 + 0.5·throttle) · fuelEff` | 1.5/s¹ ² | 4.5/s (3×)¹ ² |
 | **Torretta** → cooldown | `(base/fireMult) · (1 + (1 − torr/100)·1.4)` | base | +140% · **a 0 = non spara** |
 
 > ¹ **Throttle (pivot horror):** il consumo è ora moltiplicato dal fattore `0.5 + 0.5·throttle` → **crociera (throttle=1) = invariato** (le colonne "A 100%/0%" valgono a crociera), **gas (1.6) ≈ ×1.3**, **freno/fermo (0) = ×0.5** (drena comunque: fermarsi non è gratis). Vedi §1bis.
@@ -247,26 +251,16 @@ Fonte: `ZOMBIE_STATS` (velocità/HP/danno/punteggio) e `SPAWN_POOL` (peso pool).
 - **Peso pool** = occorrenze in `SPAWN_POOL` (12 voci totali): Comune ~33% · Corridore ~17% · Tossico ~17% · Corazzato ~8% · Saltatore ~8% · Caricatore ~8% · Sputatore ~8%. Il **Gigante** è fuori pool (timer 22 s) → peso `—` (non validato).
 - **Caricatore (A2):** la colonna *Velocità* (60) è la velocità di **avvicinamento**. A `CHARGER_TRIGGER_X` (360 u) dal veicolo si **impenna** per `CHARGER_TELEGRAPH` (700 ms, telegrafo), poi **carica** orizzontalmente a `CHARGER_CHARGE_SPEED` (420, oltre lo scroll) puntando la corsia del veicolo: va schivato o attraversato con lo Scatto. Le tre costanti di carica sono *derivate/da tarare*, non validate a numero.
 - **Sputatore (A2):** nemico a **distanza**. Avanza lento (40) e ogni `SPITTER_FIRE_INTERVAL` (2000 ms) lancia un proiettile di bile verso la posizione corrente del veicolo a `SPITTER_PROJECTILE_SPEED` (260, schivabile): la colonna *Danno* (12) è il danno del proiettile (e del contatto). Costringe a non restare fermi in corsia. Le due costanti sono *derivate/da tarare*, non validate.
-- **Hazard di corsia (A1):** ostacoli che scorrono col mondo, da schivare (non sono nemici, non sono nel pool). Spawn ogni `HAZARD_SPAWN_INTERVAL` (4500 ms); tipo pesato: relitto 40% · olio 35% · mina 25%. **Relitto** → danno 20 + corazza −15. **Mina** → danno 15 + motore −10 + scoppio. **Olio** → nessun danno ma velocità verticale ×`OIL_SLOW_MULT` (0.5) per `OIL_SLOW_DURATION` (1500 ms). ~40% delle taniche escono nella corsia dell'ultimo hazard (rischio/ricompensa). Valori *derivati/da tarare*, non validati a numero (le dimensioni texture sì, lato arte: [ART_BIBLE_OGGETTI §4.8 bis](ART_BIBLE_OGGETTI.md)).
+- **Hazard di corsia (A1):** ostacoli che scorrono col mondo, da schivare (non sono nemici, non sono nel pool). Spawn ogni `HAZARD_SPAWN_INTERVAL` (4500 ms); tipo pesato: relitto 40% · olio 35% · mina 25%. **Relitto** → danno 20 + corazza −15. **Mina** → danno 15 + motore −10 + scoppio. **Olio** → nessun danno ma velocità verticale ×`OIL_SLOW_MULT` (0.5) per `OIL_SLOW_DURATION` (1500 ms). Valori *derivati/da tarare*, non validati a numero (le dimensioni texture sì, lato arte: [ART_BIBLE_OGGETTI §4.8 bis](ART_BIBLE_OGGETTI.md)).
 - Il **Tossico** rilascia una nube velenosa alla morte; il danno tabellato è quello da contatto.
 - *Rapporto rischio/ricompensa:* punteggio ∝ pericolosità (HP×danno), così la combo premia l'aggressività verso i bersagli grossi.
 - Il **danno** in tabella è il valore nominale: passa sempre dalla mitigazione corazza (§4).
 
 ### Curva di difficoltà (frequenza di spawn)
 
-> ⚠️ *Derivata, non validata* — rivista col **combat reboot** per la densità "orda" (mira col mouse → più nemici sullo schermo). Valori in taratura.
+> ⚠️ *Derivata, non validata.* La frequenza **non** è più una rampa lineare per-missione: è governata dal **director dread→burst** (§1 bis) — quiete rade (`calmInterval`) alternate a ondate serrate (`burstInterval`), con durate di fase (`CALM_MS`, `BURST_MS_BASE`+`BURST_MS_CAP`) tarate per la **tratta breve** (~25 s). Gli intervalli di spawn calano col progredire (pavimenti **1500**/**300** ms) e scalano con tappa (C2) × nodo (B1). La vecchia formula lineare `max(330, 1350 − …)` è stata **rimossa** con l'arrivo del director a fasi.
 
-- Intervallo iniziale per missione: `max(330, 1350 − (missione−1)·80)` ms *(prima: `max(700, 2100 − …)`)*.
-- A ogni spawn l'intervallo cala di **3 ms**, con pavimento a **290 ms** entro la missione *(prima: 500 ms)*.
-
-| Missione | Intervallo iniziale |
-|---|---|
-| 1 | 1350 ms |
-| 5 | 1030 ms |
-| 10 | 630 ms |
-| 13+ | 330 ms (pavimento iniziale) |
-
-- **Sciami:** ogni `spawnZombie()` non genera più un singolo nemico per i *fodder* — Comune e Corridore arrivano in gruppo di **1-3**, Tossico **1-2**; tutti gli altri tipi restano **singoli**. Combinato con le sferzate (§1 bis) il risultato è un ritmo a picchi molto più affollato di prima (quando solo il Comune, al 25%, usciva a 2-3).
+- **Sciami:** ogni `spawnZombie()` non genera più un singolo nemico per i *fodder* — Comune e Corridore arrivano in gruppo di **1-3**, Tossico **1-2**; tutti gli altri tipi restano **singoli**. Combinato col director dread→burst (§1 bis) il risultato è un ritmo a **picchi** (ondate affollate ↔ quiete rade), non una pressione costante.
 
 ### Scaling di difficoltà — campagna "IL CONVOGLIO" (F1, derivato/non validato)
 
@@ -296,7 +290,7 @@ Fonte: `BOSS_CONFIG`. Appaiono all'82%; mentre vivi congelano l'avanzamento.
 | `armored_colossus` | Colosso Corazzato | 150 | 28 | 650 |
 | `radioactive_beast` | Bestia Radioattiva | 95 | 50 | 450 |
 
-- La sconfitta dà **due** accrediti: la **ricompensa in monete** del boss (`reward`, accreditata subito) **più** `+500 punteggio` (× combo) che a fine missione si converte in altre monete (⌊score/8⌋). Doppio accredito voluto (G10).
+- La sconfitta dà **due** accrediti: la **ricompensa in monete** del boss (`reward`, accreditata subito) **più** `+500 punteggio` (× combo) che a fine missione si converte in altre monete (⌊score/5⌋). Doppio accredito voluto (G10). *Inerte finché `BOSSES_ENABLED=false`.*
 - **HP scalati col ciclo** (NG+, vedi §5): `hp_effettivo = hp · diffMult`. Gli HP base in tabella restano la baseline (ciclo 1).
 - **2ª fase sotto il 40% HP** (G4): il boss accelera gli attacchi (~1.8×) con un telegrafo visivo/sonoro ("⚠ FURIA").
 - *Coerenza:* ricompensa ∝ HP (tankiness) → il Colosso paga di più perché impegna più a lungo.
@@ -360,9 +354,12 @@ Fonte: `SHOP_ITEMS` (`ShopScene.ts`).
 | `filters` | Filtri NBC | 90 | una tantum | danno nube tossica ×0.5 (−50%) |
 | `overcharge` | Sovraccarico esteso | 140 | una tantum | durata overdrive ×1.3 (+30%) |
 
-> **Potenziamenti per-veicolo:** ogni potenziamento si applica al SOLO veicolo su cui è comprato
-> (`RunData.upgrades` = `Record<vehicleKey, Upgrades>`). Il negozio mostra solo il catalogo del mezzo
-> selezionato (`VEHICLES[key].upgrades` in `GameData.ts`); `repair` è universale per tutti i veicoli, e `restock` (munizioni) è universale ma compare solo se possiedi un'arma finita.
+> **Potenziamenti portabili (globali del convoglio):** un potenziamento si compra **una volta** e resta tuo
+> (`RunData.upgrades: Upgrades`) — **non si ri-paga** al cambio mezzo (uccide la "tassa di ri-acquisto" da 400-680★/cambio).
+> Ma ogni veicolo **applica** solo gli upgrade nel suo catalogo (`VEHICLES[key].upgrades` in `GameData.ts`) → identità
+> del mezzo preservata. Il negozio mostra il catalogo del mezzo selezionato e segna come già posseduti quelli globali;
+> `repair` è universale per tutti i veicoli, e `restock` (munizioni) è universale ma compare solo se possiedi un'arma finita.
+> I salvataggi vecchi (forma per-veicolo) sono fusi al volo da `migrateUpgrades` (OR su tutti i mezzi).
 >
 > | Veicolo | Catalogo |
 > |---|---|
@@ -391,8 +388,8 @@ Reclutare non è più "prendili tutti": è un loop di gestione (recluta · sfama
 | Leva | Valore | Dove |
 |---|---|---|
 | Reclutamenti per sosta | **1** | `recruitLockMission` (M1) |
-| Cibo: scorta max · iniziale | **120 · 40** | `FOOD.max` · `FOOD.start` (M2) |
-| Fabbisogno per sopravvissuto / missione | **10** | `FOOD.perSurvivor` |
+| Cibo: scorta max · iniziale | **120 · 60** | `FOOD.max` · `FOOD.start` (M2) |
+| Fabbisogno per sopravvissuto / missione | **6** | `FOOD.perSurvivor` — un convoglio pieno (4) consuma 24/tratta: la fame è una spesa periodica, non una tassa a ogni sosta |
 | Razione (negozio) | **+40 cibo / 100★** | `FOOD.rationFood` · `FOOD.rationCost` |
 | Ferimento: prob. · soglia colpo · soglia salute | **25% · ≥8 danno · <35%** | `INJURY_CHANCE` · `INJURY_HEAVY_DMG` · `INJURY_HP_THRESHOLD` (M3) |
 | Cura ferito (negozio; ½ col Medico) | **60★** | `HEAL_COST` |
@@ -406,7 +403,7 @@ Reclutare non è più "prendili tutti": è un loop di gestione (recluta · sfama
 
 ### Letture economiche di riferimento
 - **"Ripara tutto" (80)** è il pozzo ricorrente: a corazza/serbatoio rovinati è quasi sempre il miglior acquisto (rompe la spirale di §4).
-- Costo primo veicolo utile (Pickup 300) ≈ punteggio **2400** in una missione (`300·8`). Utile come metro per tarare la generosità degli spawn.
+- Costo primo veicolo utile (Pickup 300) ≈ punteggio **1500** (`300·5`) **più** la quota per-kill (~4★/uccisione). Utile come metro per tarare la generosità degli spawn.
 - I sopravvissuti gratis sono il motore di **potenza composta** della corsa: più a lungo sopravvivi, più ne accumuli.
 
 ---
@@ -415,7 +412,7 @@ Reclutare non è più "prendili tutti": è un loop di gestione (recluta · sfama
 
 - **Tasti debug** (in `GameScene`): `G` god-mode, `H` cura salute+carburante, `N` completa missione. Galleria modelli in `DebugScene`.
 - **Dove mettere mano per ribilanciare:**
-  - generosità economica → divisore `⌊score/8⌋` in `triggerMissionComplete`;
+  - generosità economica → `COIN_DIVISOR` (⌊score/N⌋) + `COIN_PER_KILL` (quota fissa per-kill) in `triggerMissionComplete`;
   - ritmo → `SCROLL_SPEED`, `MISSION_DIST`, formula `spawnInterval`;
   - letalità → `ZOMBIE_STATS[*].damage`, soglie corazza in `dealDamage`;
   - pressione carburante → `BASE_FUEL_DRAIN`, costo *Rifornimento* al garage (niente taniche su strada);
@@ -494,7 +491,7 @@ Km diegetici per tratta = `180 · lengthMult` (`MISSION_DIST·KM_PER_UNIT·lengt
 | Leva | Valore | Dove |
 |---|---|---|
 | Iniziale · max | **60 · 100** | `MORALE.start` · `MORALE.max` |
-| Soglia crollo (abilità OFF sotto) | **40** | `MORALE.break` (gate `hasActiveSurvivor`) |
+| Soglia crollo (abilità OFF sotto) | **25** | `MORALE.break` (gate `hasActiveSurvivor`) — abbassata da 40: con start 60 le abilità restano ON nei cali normali; OFF solo in crisi vera (perdite/fame ripetute) |
 | Soglia rotto (diserzione, gancio) | **15** | `MORALE.rout` |
 | Perdita di un sopravvissuto (morte/abbandono) | **−25** | `MORALE.dLoss` |
 | Salvataggio su strada riuscito | **+12** | `MORALE.dRescue` |
@@ -513,6 +510,17 @@ Riusa lo scheletro del **Gigante** (timer `GIANT_SPAWN_INTERVAL`): negli atti ce
 
 Decisioni morali alle soste (`StopScene`, una per tipo di luogo), con conseguenza persistente in `RunData.choices`. L'epilogo le legge: ≥2 fra `sold`/`looted`/`forced` declassano *Il convoglio regge* → *Pochi ma vivi*. Mostrati **una volta per sosta** (guard `encounterDoneLeg` nel registry, azzerato a Nuova Partita). Stringhe in i18n ×6 (`enc.*`).
 
+### Diramazioni giocabili d'arco (scaffold `World.detourStage` + `resolveDetour` — implementate, derivate/NON 🔒)
+
+Una scelta d'arco con campo `detour` marca `RunData.pendingDetour=<kind>` → la **tratta successiva** è una DEVIAZIONE (override del descrittore, tema/tensione del kind, intro dedicata). A fine deviazione `resolveDetour()` tira un **esito pesato e amaro** (speranza fragile *by design*); il flag-esito `<kind>_<esito>` va in `choices` e l'**epilogo** del personaggio mostra la carta dell'esito (priorità sui finali base). Stringhe i18n ×6 (`detour.<kind>.*`, `campaign.detour.<kind>.*`, `campaign.ending.<chi>.<kind>_*`).
+
+- **«Cerca Lena»** (Sara, `kind=lena`): bioma `city`, `lengthMult 0.7`. Esito: *trovata* (morale **+25**) · *troppo tardi* (**−20**) · *esca/trappola* (**−12**, **−60★**, **−15 cibo**). La probabilità di **trovata SCALA col morale** (`0.20 + (morale−40)/100·0.5`, clamp 0.15–0.55) e ×0.7 se la medica è affamata/ferita/sfinita; `trap` fisso 0.30; il resto è `late`. **Effetto duraturo:** con `lena_found` in `choices`, Lena è "a bordo" → **+2 morale a ogni tratta** (`MORALE.dLena`).
+- **«Il valico»** (Nadia, `kind=valico`): bioma `forest`, `lengthMult 0.8`, più hazard, scarso di munizioni. Esito: *passate pulite* **35%** (morale **+18**) · *la frana* **35%** (morale **−12**, **−30 carburante**) · *le tracce* **30%** (morale **−16**).
+
+### Stanchezza per-persona (bisogni "vivi" — implementata, derivata/NON 🔒)
+
+`FATIGUE` (`GameData.ts`): ogni sopravvissuto a bordo ha una fatica 0..**100**. A inizio tratta (guardia `foodMission`, retry-safe): accumula **+14** (`perLeg`) **+8 se affamato** (`hungryPenalty` — fame e fatica si rinforzano), e recupera in base alla sosta da cui arriva: **−9** sosta normale (`stopRest`), **−40** se è un **campo** (`campRest`, "dormi"). Netto base ≈ **+5/tratta** (ben nutriti) → la stanchezza è un **lento accumulo** che i campi azzerano; senza campi (atti 4-5) diventa la pressione "a secco" del finale. Oltre **50** (`tired`) è **SFINITO** → abilità spenta (via `hasActiveSurvivor`, come fame/ferita) finché non riposa. Stato **SOFT e recuperabile** (≠ fame, che fa andar via). Visibile ovunque: pannello-stato alla sosta (*Sfiniti: …*), pastiglia **azzurra** sopra la testa, anello azzurro nel pannello-crew dell'HUD, figura spenta.
+
 | Luogo | Opzione | Effetto |
 |---|---|---|
 | **camp** | Dividi le razioni | −20 cibo · +10 morale |
@@ -524,6 +532,36 @@ Decisioni morali alle soste (`StopScene`, una per tipo di luogo), con conseguenz
 | **market** | Rifiuta | — |
 | **checkpoint** | Paga il pedaggio | −60★ |
 | **checkpoint** | Forza il blocco | −5 morale |
+
+---
+
+## §12 · Fase R — Rigiocabilità (difficoltà & sblocchi · derivati, NON 🔒)
+
+> ⚠️ **Documentati, NON lockati** (come `diffMult` §5): valori di *feel/progressione* in taratura, non letti dal validatore. Vivono in `src/GameData.ts` (`DIFFICULTIES`) e `src/MetaProfile.ts` (`UNLOCKS`). Regole in [`CAMPAGNA_CONVOGLIO.md` §10](CAMPAGNA_CONVOGLIO.md) + [`GAME_DESIGN.md` §11](GAME_DESIGN.md).
+
+### Livelli di difficoltà (R2 — `DIFFICULTIES`)
+
+Strato **globale** che modula i moltiplicatori esistenti — niente sistema nuovo. `enemyMult` × `difficultyMult` (HP+danno da contatto, §5); `spawnMult` × `spawnMultCombined` (densità: <1 = intervalli più corti = più fitto, §1bis); `fuelMult` × `getEffectiveFuelDrain` (scarsità, §4). Indice in `RunData.difficulty`; pick a Nuova Partita (`NewRunScene`); Incubo gated dietro `MetaProfile.bestDifficulty ≥ 1`.
+
+| Difficoltà | `enemyMult` | `spawnMult` | `fuelMult` |
+|---|---|---|---|
+| Normale (0) | ×1.00 | ×1.00 | ×1.00 |
+| Difficile (1) | ×1.18 | ×0.88 | ×1.12 |
+| Incubo (2) | ×1.38 | ×0.78 | ×1.25 |
+
+> Si **compone** con la curva per-atto (§5): es. nemici all'Atto 6 in Incubo = `1.75 × 1.38 ≈ ×2.42` HP/danno. Da tarare a playtest.
+
+### Sblocchi cross-corsa (R3 — `MetaProfile.UNLOCKS`)
+
+**VARIETÀ, non potenza.** Kit di partenza completo e vincibile; gli sblocchi aggiungono stili. Due gate: meta-sblocco (predicato sul profilo) **+** monete in-run (modello FTL/Hades). Soglie derivate dai fatti grezzi del meta-profilo (corse, atto raggiunto, archi, difficoltà, salvataggi, monete cumulative).
+
+| | Kit di partenza | Sblocco ← soglia |
+|---|---|---|
+| **Veicoli** | Auto Civile · Pickup | SUV ← `furthestAct≥2` · Furgone ← `lifetimeRescues≥3` · Camion ← `furthestAct≥4` · Pesante ← `runsCompleted≥1` · Sperimentale ← `bestDifficulty≥1` |
+| **Armi** | MG · Doppia MG · Fucile | Razzi ← `furthestAct≥3` · Lanciafiamme ← `arcsCompleted≥1` |
+| **Sopravvissuti** | Bruno · Sara · Marcus | Nadia ← `furthestAct≥2` · Vince ← `lifetimeMoney≥3000` · Eva ← `runsCompleted≥1` · Karim ← `bestDifficulty≥1` |
+
+> Pacing atteso: ~3-5 corse per aprire il grosso del catalogo. Soglie in taratura.
 
 ---
 

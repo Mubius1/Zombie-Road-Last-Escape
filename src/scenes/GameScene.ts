@@ -1,15 +1,17 @@
 import Phaser from 'phaser';
-import { VEHICLES, vehicleFuelEff, Upgrades, WeaponType, WEAPONS, WEAPON_KEYS, WEAPON_AMMO, weaponInfiniteAmmo, FOOD, MORALE, SURVIVORS } from '../GameData';
+import { VEHICLES, vehicleFuelEff, Upgrades, WeaponType, WEAPONS, WEAPON_KEYS, WEAPON_AMMO, weaponInfiniteAmmo, FOOD, MORALE, FATIGUE, SURVIVORS, DIFFICULTIES, type DifficultyData } from '../GameData';
 import SoundManager from '../SoundManager';
 import Juice from '../Juice';
+import { EPILOGUE_ENABLED } from './CutsceneScene';
 import { enterScreen, pulse, rampSpeed, resetKinetics } from '../PostFx';
 import Shadows from '../Shadows';
 import Environment from '../Environment';
 import Settings from '../Settings';
 import Ui, { UI } from '../Ui';
 import { setupCamera, DESIGN_W, OVERSAMPLE } from '../Config';
-import { resetRunState, getRun, setRun, snapshotRun, restoreRun } from '../RunState';
+import { resetRunState, getRun, setRun, snapshotRun, restoreRun, migrateUpgrades } from '../RunState';
 import SaveData from '../SaveData';
+import MetaProfile from '../MetaProfile';
 import { routeNode } from '../Routes';
 import { SURVIVOR_ARCS, RADIO_ACTS } from '../Convoy';
 import { locationForLeg, accentCss } from '../Locations';
@@ -22,9 +24,9 @@ import { t } from '../i18n';
 import {
   ROAD_TOP, ROAD_BOTTOM, ROAD_CENTER, distanceKm,
   stageAt, stageForRun, envIndexForBiome, isTerminalLeg, ACT_NAME_KEYS,
-  odometerKm, CAMPAIGN_TOTAL_KM,
+  odometerKm, CAMPAIGN_TOTAL_KM, detourStage, DETOUR_OUTCOMES, isDetourKind,
 } from '../World';
-import type { ZombieType, ComponentKey, SetPieceKey } from '../World';
+import type { ZombieType, ComponentKey, SetPieceKey, DetourKind } from '../World';
 
 // Spazio di design: l'altezza è fissa (H), la larghezza varia col formato (designW,
 // più ampia in 16:9). La camera in zoom adatta tutto alla risoluzione nativa — vedi Config.ts.
@@ -45,7 +47,7 @@ const PAD_TRIGGER_MIN = 0.1;
 const PAD_AIM_DIST = 220;    // distanza fissa del mirino lungo l'angolo di mira (stick destro = direzione)
 // Indici standard mapping (Phaser Standard Gamepad) — nomi espliciti, non numeri magici sparsi.
 const PAD = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, START: 9, DUP: 12, DDOWN: 13, DLEFT: 14, DRIGHT: 15 } as const;
-const BASE_FUEL_DRAIN = 0.5;  // consumo lento: il carburante PERSISTE tra le missioni (un pieno ≈ 3 missioni). Vedi RunData.fuel + BALANCE §3 bis.
+const BASE_FUEL_DRAIN = 1.5;  // consumo "logistica" (pivot TWoM: il carburante è un bene di campagna da gestire, non una morte al secondo): un pieno ≈ 3 tratte. PERSISTE tra le missioni. Vedi RunData.fuel + BALANCE §3 bis.
 const MAX_FUEL = 100;
 const AMMO_PICKUP = 0.5;   // frazione di capacità ricaricata da una cassa di munizioni (mezzo caricatore)
 const BULLET_SPEED = 680;
@@ -53,7 +55,7 @@ const STRIPE_W = 48, STRIPE_GAP = 82;
 const ATTACH_DAMAGE_INTERVAL = 1600;
 const ATTACH_DAMAGE_AMOUNT = 14;
 const RAM_DMG = 6; // potenziamento 'ariete': danno da speronamento a chi tenta l'aggancio (per-veicolo)
-const MISSION_DIST = 6000; // pivot "This War of Mine su ruote": la TRATTA è un transito BREVE e teso (~60 km, ~25 s base), non il cuore del gioco — il cuore è la SOSTA (persone/scelte). Vedi docs/CAMPAGNA_CONVOGLIO.md.
+const MISSION_DIST = 6000; // pivot "This War of Mine su ruote": la TRATTA è un transito BREVE e teso (~180 km mostrati, ~25 s base), non il cuore del gioco — il cuore è la SOSTA (persone/scelte). Vedi docs/CAMPAGNA_CONVOGLIO.md.
 const GIANT_SPAWN_INTERVAL = 22000;
 const BOSS_TRIGGER = 0.82; // % missione a cui appare il boss (quando i boss sono attivi)
 // Boss di fine regione DISATTIVATI (scelta di design). Il codice boss resta TUTTO intatto
@@ -63,6 +65,19 @@ const BOSS_TRIGGER = 0.82; // % missione a cui appare il boss (quando i boss son
 // Vedi docs/GAME_DESIGN.md.
 const BOSSES_ENABLED: boolean = false;
 const DEATH_MONEY_PENALTY = 0.25; // pedaggio di recupero alla morte (campagna a checkpoint, modello B)
+// ── Anti-softlock carburante (RIMORCHIO): finire la benzina NON è game over (pivot TWoM — il carburante è
+// logistica, non morte al secondo). Si viene TRAINATI alla sosta successiva: la tratta AVANZA comunque, così
+// NESSUN leg può restare invincibile — nemmeno quando un pieno non basterebbe per quel mezzo/tratta (es.
+// Mezzo Pesante sul deserto: serve >130, serbatoio max 100). Pedaggio monete + morale, SENZA perdere
+// sopravvissuti (più mite della morte). Derivati/in taratura (BALANCE §3 bis), NON 🔒.
+const STRAND_MONEY_PENALTY = 0.20; // pedaggio del traino (< morte 0.25: arrancare costa meno che morire)
+const STRAND_TOW_FUEL = 25;        // benzina "di traino" lasciata all'arrivo (clamp al serbatoio) → puoi sempre ripartire
+// ── Economia senza boss (BALANCE §2): con BOSSES_ENABLED=false la ricompensa boss (~450★/tratta) è sparita.
+// L'incasso a fine tratta si regge su due gambe: conversione punteggio (divisore) + QUOTA FISSA per uccisione,
+// svincolata dalla combo (la combo è "contatore di efficienza", non più la valuta-dopamina). Derivati/in taratura.
+const COIN_DIVISOR = 5;   // ⌊score/divisore⌋ → monete (era /8 coi boss attivi; più generoso ora che la ricompensa boss è OFF)
+const COIN_PER_KILL = 4;  // monete fisse per uccisione, indipendenti dalla combo
+const EARLY_TRATTA_FLOOR = 90; // pavimento d'incasso garantito a fine tratta SOLO nei primi DUE atti (actIndex ≤ 1 = Atti 1-2): l'inizio era un deserto di monete (~10★/tratta netti) → respiro early senza ingrassare la coda mid/late
 const ENGINE_SCROLL_MIN = 0.45;   // M1 motore onesto: a motore distrutto avanzi al 45% (no morte)
 const ARMOR_MULT_FLOOR = 0.40;    // M2 corazza passiva: moltiplicatore danno minimo (riduzione max 60%)
 const COMBO_WINDOW = 2500;  // ms: finestra per mantenere la catena di uccisioni
@@ -147,8 +162,9 @@ interface TutorialState {
 // fino alla densità piena verso metà gioco (quando hai mezzi/armi/upgrade). Costanti derivate/in taratura (non 🔒).
 const CALM_INTERVAL = 3300;   // ms tra spawn nella quiete a M1 (cala ~110/missione, pavimento 1500)
 const BURST_INTERVAL = 760;   // ms tra spawn nell'ondata a M1 (cala ~40/missione, pavimento 300 → densità piena ~M12)
-const CALM_MS_MIN = 6500, CALM_MS_MAX = 10000; // durata della quiete (ms)
-const BURST_MS_BASE = 3000;   // durata base dell'ondata a M1 (+170 ms/missione)
+const CALM_MS_MIN = 3500, CALM_MS_MAX = 5500; // durata della quiete (ms) — accorciata per la TRATTA breve (~25 s): la tensione monta in fretta, ~2-3 fasi a tratta
+const BURST_MS_BASE = 4000;   // durata base dell'ondata a M1 (+170 ms/missione, col TETTO BURST_MS_CAP)
+const BURST_MS_CAP = 7000;    // tetto durata ondata: su 31 tratte da ~25 s l'una, l'ondata non deve mai durare più della tratta (coerente col tetto di difficoltà per atto)
 
 interface EnvConfig {
   name: string;
@@ -269,19 +285,24 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private distance = 0;
   private alive = true;
   private missionDone = false;
+  private isDetour = false; // DIRAMAZIONE: questa tratta è una deviazione d'arco (override + esito a fine corsa)
+  private detourKind: DetourKind | '' = ''; // 'lena' (Sara) | 'valico' (Nadia)
+  private detourOutcome = ''; // esito risolto a fine deviazione (per-kind)
 
   private vehicleKey = 'civilian_car';
   private vehicleFireMult = 1.0;
   private vehicleSpeedMult = 1.0;
   private fuelEff = 1.0;         // consumo carburante per-veicolo (× su BASE_FUEL_DRAIN) — da massa/potenza reali
   private vehicleArmorBonus = 0;
-  private upgrades: Upgrades = {};       // set del VEICOLO CORRENTE (RunData.upgrades è per-veicolo)
+  private upgrades: Upgrades = {};       // upgrade APPLICABILI al mezzo corrente = posseduti-globali ∩ catalogo del veicolo (vedi create())
   private vehicleDamageBonus = 0;        // +1 con 'ammo'
   private dashCooldownMs = DASH_COOLDOWN; // ×0.7 con 'nitro'
   private overdriveMult = 1;             // ×1.3 durata con 'overcharge'
   private toxicResist = 1;               // ×0.5 danno tossico con 'filters'
   private hungry: string[] = [];         // M2: sopravvissuti affamati questa missione (abilità spenta)
   private injured: string[] = [];        // M3: sopravvissuti feriti (abilità spenta finché non curati)
+  private fatigue: Record<string, number> = {}; // stanchezza per-persona 0..100 (accumula viaggiando)
+  private tired: string[] = [];          // derivato: fatigue >= FATIGUE.tired → abilità spenta finché non riposa
   private lostSurvivor = '';             // M3: sopravvissuto perso all'ultima morte (per l'overlay)
   private pendingSurvivorLeft = '';      // M3: nome di chi se n'è andato per fame (toast differito in create)
   private activeSurvivors: string[] = [];
@@ -301,6 +322,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private legIndex = 0;  // campagna "IL CONVOGLIO": posizione sul manifest finito (F1)
   private actIndex = 0;  // atto corrente 0-based (cacheato per la curva di difficoltà + banner)
   private missionNumber = 1; // numero di missione corrente (per scaling NG+ e vittoria di ciclo)
+  private missionKills = 0;  // uccisioni-con-punteggio della tratta corrente → quota fissa per-kill a fine tratta (economia senza boss, BALANCE §2)
   private deathToll = 0;     // monete perse al pedaggio dell'ultima morte (per l'overlay)
   private debugRun = false;  // run di Debug (prova veicolo/arma): NON persiste il checkpoint reale
   private debugEventIdx = 0; // debug: ciclo deterministico degli eventi B2 (tasto E)
@@ -310,6 +332,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private stageSpawnMult = 1;                                      // ×intervalli director (densità ondata)
   private stageBurstMult = 1;                                      // ×durata ondata
   private stageFuelMult = 1;                                       // ×consumo carburante (This War of Mine)
+  private diff: DifficultyData = DIFFICULTIES[0]!;                 // Fase R (R2): difficoltà della corsa (strato globale)
   private stagePoolBias: Partial<Record<ZombieType, number>> = {}; // pesi-moltiplicatore sul SPAWN_POOL
   private stageSetPiece: SetPieceKey = 'none'; // F4: evento di set-piece forzato della tratta-climax
   private setPieceFired = false;               // F4: il set-piece forzato è già scattato in questa missione
@@ -397,7 +420,11 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.designW = setupCamera(this).designW;
     this.vehicleKey        = getRun(this.registry, 'vehicle')       ?? 'civilian_car';
     this.activeSurvivors   = getRun(this.registry, 'survivors')     ?? [];
-    this.upgrades          = (getRun(this.registry, 'upgrades') ?? {})[this.vehicleKey] ?? {}; // set per-veicolo
+    // Upgrade POSSEDUTI = set GLOBALE del convoglio (portabili, non si ri-pagano al cambio mezzo); il veicolo
+    // corrente APPLICA solo quelli nel suo catalogo (VEHICLES[key].upgrades) → identità del mezzo preservata.
+    const ownedUpg = migrateUpgrades(getRun(this.registry, 'upgrades'));
+    this.upgrades = {};
+    for (const k of (VEHICLES[this.vehicleKey]?.upgrades ?? [])) if (ownedUpg[k]) (this.upgrades as Record<string, boolean>)[k] = true;
     const missionNum: number = getRun(this.registry, 'missionNumber') ?? 1;
     this.missionNumber = missionNum;
     const savedComp        = getRun(this.registry, 'components')    ?? null;
@@ -408,6 +435,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.morale = getRun(this.registry, 'morale') ?? MORALE.start; // F5: morale del convoglio
     let food = getRun(this.registry, 'food') ?? FOOD.start;
     this.hungry = getRun(this.registry, 'hungry') ?? [];
+    this.fatigue = { ...(getRun(this.registry, 'fatigue') ?? {}) }; // stanchezza per-persona tramandata
     if (getRun(this.registry, 'foodMission') !== this.missionNumber) {
       const fed = Math.min(this.activeSurvivors.length, Math.floor(food / FOOD.perSurvivor));
       food = Math.max(0, food - fed * FOOD.perSurvivor);
@@ -431,12 +459,27 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       }
       // F5: almeno un affamato a fine consumo → morale giù (una volta per missione, dentro la guardia foodMission).
       if (this.hungry.length > 0) this.morale = Math.max(0, this.morale + MORALE.dHungry);
+      // STANCHEZZA: ogni persona a bordo accumula fatica viaggiando; recupera poco a ogni sosta, MOLTO dormendo
+      // al campo (la sosta da cui arrivi = quella della tratta precedente). Solo gli a-bordo restano nel record.
+      // NB: `this.legIndex` viene sincronizzato dal registry più sotto (riga ~499) e su scene.restart gli
+      // inizializzatori di campo NON rigirano → qui sarebbe STALE (= tratta precedente). Leggi l'indice
+      // corrente dal registry, così «sosta da cui arrivi» = locationForLeg(corrente − 1) com'è inteso.
+      const legIdx = getRun(this.registry, 'legIndex') ?? 0;
+      const restedAtCamp = legIdx > 0 && locationForLeg(legIdx - 1).key === 'camp';
+      const rest = restedAtCamp ? FATIGUE.campRest : FATIGUE.stopRest;
+      // Un affamato si stanca di PIÙ (bisogni interconnessi): fame e fatica si rinforzano. Ben nutriti ≈ equilibrio.
+      const nextFatigue: Record<string, number> = {};
+      for (const k of this.activeSurvivors) nextFatigue[k] = Phaser.Math.Clamp((this.fatigue[k] ?? 0) + FATIGUE.perLeg + (this.hungry.includes(k) ? FATIGUE.hungryPenalty : 0) - rest, 0, FATIGUE.max);
+      this.fatigue = nextFatigue;
+      setRun(this.registry, 'fatigue', this.fatigue);
       setRun(this.registry, 'starveStreak', streak);
       setRun(this.registry, 'food', food);
       setRun(this.registry, 'hungry', this.hungry);
       setRun(this.registry, 'foodMission', this.missionNumber);
       setRun(this.registry, 'morale', this.morale);
     }
+    // Derivato (ogni create, anche al retry): chi è oltre soglia è SFINITO → abilità spenta finché non riposa.
+    this.tired = this.activeSurvivors.filter(k => (this.fatigue[k] ?? 0) >= FATIGUE.tired);
 
     const vData = VEHICLES[this.vehicleKey]!;
     this.maxHealth       = 100 + vData.healthBonus + (this.upgrades.plating ? 30 : 0);
@@ -480,7 +523,13 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // Campagna "IL CONVOGLIO" (F1): la posizione è `legIndex` sul manifest finito, NON più mod-7 su
     // missionNumber. Bioma e atto vengono dal descrittore della tratta corrente.
     this.legIndex = getRun(this.registry, 'legIndex') ?? 0;
-    const stage = stageForRun(this.legIndex, getRun(this.registry, 'branchTaken') ?? {}); // F3: ramo scelto al bivio
+    const baseStage = stageForRun(this.legIndex, getRun(this.registry, 'branchTaken') ?? {}); // F3: ramo scelto al bivio
+    // DIRAMAZIONE d'arco (Sara→'lena', Nadia→'valico'): se in sospeso, questa tratta diventa la DEVIAZIONE
+    // (tema/tensione propri del kind), e l'esito si risolve a fine corsa (`resolveDetour`/`showDetourOutcome`).
+    const pend = getRun(this.registry, 'pendingDetour') ?? '';
+    this.isDetour = this.registry.get('debugRun') !== true && isDetourKind(pend);
+    this.detourKind = this.isDetour ? (pend as DetourKind) : '';
+    const stage = this.isDetour ? detourStage(baseStage, pend as DetourKind) : baseStage;
     this.actIndex = stage.act - 1;
     setRun(this.registry, 'actIndex', this.actIndex);
     this.envIndex = envIndexForBiome(stage.biome);
@@ -489,6 +538,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.stageSpawnMult  = stage.spawnMult;
     this.stageBurstMult  = stage.burstMult;
     this.stageFuelMult   = stage.fuelDrainMult;
+    // Fase R (R2): difficoltà della corsa (Normale/Difficile/Incubo) — strato globale su nemici/densità/carburante.
+    this.diff = DIFFICULTIES[Phaser.Math.Clamp(getRun(this.registry, 'difficulty') ?? 0, 0, DIFFICULTIES.length - 1)]!;
     this.stagePoolBias   = stage.poolBias;
     this.stageSetPiece   = stage.setPiece; // F4
     this.setPieceFired   = false;
@@ -498,8 +549,11 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     const nemState = this.actIndex === 0 ? 0 : this.actIndex <= 2 ? 1 : this.actIndex <= 4 ? 2 : 3;
     this.nemesisActive = nemState >= 1;
     setRun(this.registry, 'nemesisState', nemState);
-    // Radio (This War of Mine): bollettino del mondo all'INIZIO di ogni atto. Tace se il testo non c'è ancora.
-    if (this.legIndex === 0 || stageAt(this.legIndex - 1).act !== stage.act) {
+    // Intro della DIRAMAZIONE «Cerca Lena» (al posto della radio): banner che annuncia la deviazione.
+    if (this.isDetour) {
+      this.time.delayedCall(800, () => this.showDetourIntro());
+    } else if (this.legIndex === 0 || stageAt(this.legIndex - 1).act !== stage.act) {
+      // Radio (This War of Mine): bollettino del mondo all'INIZIO di ogni atto. Tace se il testo non c'è ancora.
       this.time.delayedCall(900, () => this.showRadio(RADIO_ACTS[this.actIndex] ?? ''));
     }
     this.currentWeapon = getRun(this.registry, 'currentWeapon') ?? 'mg';
@@ -823,6 +877,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       activeSurvivors: this.activeSurvivors,
       hungry: this.hungry,
       injured: this.injured, // equipaggio: stato ferito per i ritratti del pannello-crew (HUD)
+      tired: this.tired,     // equipaggio: stato sfinito (stanchezza) per i ritratti del pannello-crew (HUD)
       armorReductionPct: Math.round((1 - Math.max(ARMOR_MULT_FLOOR, 1 - this.vehicleArmorBonus / 100)) * 100),
       ownedWeapons: this.ownedWeapons,
       currentWeapon: this.currentWeapon,
@@ -1346,7 +1401,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
    * l'escalation è leggibile e si ferma (campagna finibile, non rampa NG+ illimitata). Vedi BALANCE §5.
    */
   private difficultyMult(): number {
-    return 1 + 0.15 * Math.min(this.actIndex, 5);
+    // Curva finita per atto × strato difficoltà della corsa (Fase R/R2): scala HP e danno da contatto.
+    return (1 + 0.15 * Math.min(this.actIndex, 5)) * this.diff.enemyMult;
   }
 
   /**
@@ -1366,6 +1422,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   addKillScore(base: number) {
     if (this.tut?.step === 'aim') this.tut.kills++; // tutorial: conta i bersagli-scuola abbattuti
     this.combo++;
+    this.missionKills++; // economia senza boss: quota fissa per-kill a fine tratta (BALANCE §2)
     this.comboTimer = COMBO_WINDOW;
     this.score += base * this.comboMultiplier();
     // Carica il Sovraccarico (A3): più alta la combo, più in fretta si riempie la barra.
@@ -1384,7 +1441,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     const fuelPct = this.fuel / this.maxFuel;
     if (fuelPct < 0.25 && !this.lowFuelWarned) { this.lowFuelWarned = true; this.sfx?.playLowFuel(); }
     else if (fuelPct >= 0.30) { this.lowFuelWarned = false; }
-    if (this.fuel <= 0) { this.fuel = 0; this.endGame(t('game.over.fuel')); }
+    if (this.fuel <= 0) { this.fuel = 0; this.strandLeg(); } // benzina a 0 = RIMORCHIO alla sosta (NON game over): vedi strandLeg
   }
 
   private updateDistance(dt: number) {
@@ -1458,7 +1515,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   private advanceSpawnPhase() {
     if (this.spawnPhase === 'calm') {
       this.spawnPhase = 'burst';
-      this.phaseTimer = Math.round((BURST_MS_BASE + (this.missionNumber - 1) * 170) * this.stageBurstMult); // durata ondata × burstMult (F2)
+      this.phaseTimer = Math.round(Math.min(BURST_MS_CAP, BURST_MS_BASE + (this.missionNumber - 1) * 170) * this.stageBurstMult); // durata ondata (col TETTO BURST_MS_CAP) × burstMult (F2)
       this.burstDreadUntil = this.time.now + this.phaseTimer;            // drone d'angoscia al massimo per tutta l'ondata
       this.sfx?.playWaveStinger();                                       // "sta arrivando"
       const batch = Math.min(4, 1 + Math.floor((this.missionNumber - 1) / 3)); // pivot TWoM: ondata d'apertura PIÙ LEGGERA (dread, non sciame) — la tratta è transito, non sparatutto
@@ -1477,7 +1534,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
    * 1.0 così non spinge mai agli estremi incontrollabili.
    */
   private spawnMultCombined(): number {
-    return this.stageSpawnMult * Phaser.Math.Clamp(this.routeSpawnMult, 0.7, 1.3);
+    // Tappa (C2) × nodo (B1, clamp ±30%) × difficoltà della corsa (Fase R/R2: <1 = intervalli più corti = più fitto).
+    return this.stageSpawnMult * Phaser.Math.Clamp(this.routeSpawnMult, 0.7, 1.3) * this.diff.spawnMult;
   }
   /** Quiete: spawn radi (sagome isolate). Più fitti col progredire. (× tappa C2 × nodo B1 clampato.) */
   private calmInterval(): number {
@@ -1559,7 +1617,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
    */
   private hasActiveSurvivor(key: string): boolean {
     if (this.morale < MORALE.break) return false;
-    return this.activeSurvivors.includes(key) && !this.hungry.includes(key) && !this.injured.includes(key);
+    return this.activeSurvivors.includes(key) && !this.hungry.includes(key) && !this.injured.includes(key) && !this.tired.includes(key);
   }
 
   private updateSurvivorEffects(delta: number, _time: number) {
@@ -2138,6 +2196,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
       this.activeSurvivors = [...this.activeSurvivors, key];
       setRun(this.registry, 'survivors', this.activeSurvivors);
       this.morale = Math.min(MORALE.max, this.morale + MORALE.dRescue); // F5: il salvataggio risolleva il morale
+      if (!this.debugRun) MetaProfile.recordRescue(); // Fase R (R1): salvataggi cumulativi → sblocco Furgone
       this.announceEvent('event.rescueOk', '#66ff99', { name: s ? `${s.properName} ${s.surname}` : key });
       this.sfx?.playMissionComplete();
     } else {
@@ -2728,7 +2787,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     if (this.speakerActive || this.activeSurvivors.length === 0) return;
     const who = this.activeSurvivors[Math.floor(Math.random() * this.activeSurvivors.length)]!;
     const mood = this.morale < MORALE.break || this.injured.includes(who) ? 'breaking'
-      : this.hungry.includes(who) || this.morale < MORALE.break + 18 ? 'uneasy'
+      : this.hungry.includes(who) || this.tired.includes(who) || this.morale < MORALE.break + 18 ? 'uneasy'
       : 'calm';
     const key = `bark.idle.${mood}.${Math.floor(Math.random() * 7)}`;
     const line = t(key);
@@ -2834,7 +2893,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // `fuelEff`: consumo REALISTICO per-veicolo (massa+potenza, BALANCE §3 bis) → ogni mezzo ha la sua autonomia.
     const explorerEff = this.hasActiveSurvivor('explorer') ? EXPLORER_FUEL_MULT : 1; // Esploratore: −20% consumo
     // F2: `stageFuelMult` (1.0..1.6) — leva di scarsità This War of Mine (deserto/atti tardi bruciano di più).
-    return BASE_FUEL_DRAIN * (1 + (1 - this.components.tank.health / 100) * 2) * (0.5 + 0.5 * this.throttle) * this.fuelEff * explorerEff * this.stageFuelMult;
+    return BASE_FUEL_DRAIN * (1 + (1 - this.components.tank.health / 100) * 2) * (0.5 + 0.5 * this.throttle) * this.fuelEff * explorerEff * this.stageFuelMult * this.diff.fuelMult;
   }
 
   /** M1 motore onesto: il motore regola il RITMO DI AVANZAMENTO (accumulo di distance/km). Sano →
@@ -2861,7 +2920,12 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.missionDone = true;
 
     const lootMult = this.hasActiveSurvivor('looter') ? LOOTER_MONEY_MULT : 1; // Saccheggiatore: +12% (spento se affamato)
-    const earned = Math.floor(this.score / 8 * this.routeMoneyMult * lootMult); // Track B1 (nodo) × Saccheggiatore
+    // Economia senza boss (BALANCE §2): conversione punteggio (divisore generoso) + quota fissa per-kill (svincolata
+    // dalla combo, così il denaro non oscilla col tuo streak). routeMoneyMult (B1) × Saccheggiatore moltiplicano il totale.
+    const raw = Math.floor((this.score / COIN_DIVISOR + this.missionKills * COIN_PER_KILL) * this.routeMoneyMult * lootMult);
+    // Lift Atto 1: nei primi due atti garantisci un pavimento d'incasso (l'inizio era near-break-even); dagli atti
+    // centrali in poi NESSUN pavimento → la tensione logistica di metà/fine gioco resta intatta. BALANCE §2.
+    const earned = this.actIndex <= 1 ? Math.max(EARLY_TRATTA_FLOOR, raw) : raw;
     setRun(this.registry, 'money',     (getRun(this.registry, 'money') ?? 0) + earned);
     setRun(this.registry, 'lastScore', this.score);
     setRun(this.registry, 'components', {
@@ -2873,7 +2937,8 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     setRun(this.registry, 'ammo', this.ammo); // munizioni: il consumo della missione si porta avanti (checkpoint)
     setRun(this.registry, 'fuel', this.fuel); // carburante "viaggio": il livello residuo si porta avanti (checkpoint)
     // F5: morale — tratta completata (+) e sosta sicura all'accampamento (+); persistito col checkpoint.
-    this.morale = Math.min(MORALE.max, this.morale + MORALE.dTrattaClean + (locationForLeg(this.legIndex).key === 'camp' ? MORALE.dCamp : 0));
+    const lenaAboard = (getRun(this.registry, 'choices') ?? []).includes('lena_found'); // effetto duraturo: la sua presenza solleva
+    this.morale = Math.min(MORALE.max, this.morale + MORALE.dTrattaClean + (locationForLeg(this.legIndex).key === 'camp' ? MORALE.dCamp : 0) + (lenaAboard ? MORALE.dLena : 0));
     setRun(this.registry, 'morale', this.morale);
     // F6: la Nemesi "ricorda" — il heat cresce mentre sei braccato, cala alle soste sicure (camp). Persistito.
     if (this.nemesisActive) {
@@ -2884,6 +2949,10 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     // Campagna "IL CONVOGLIO" (F1): la tratta appena conclusa è `this.legIndex`. Se è il RIFUGIO terminale
     // → epilogo (la corsa chiude, niente missione N+1). Altrimenti avanza legIndex + missionNumber verso la
     // tratta successiva e prosegui col flusso sosta → negozio → percorso.
+    // DIRAMAZIONE «Cerca Lena»: se questa era la deviazione, risolvi l'esito ORA (prima del checkpoint, così
+    // morale/flag/risorse aggiornati vengono persistiti). La CARTA dell'esito si mostra dopo, al posto del box.
+    if (this.isDetour) this.resolveDetour();
+
     const completedLeg = this.legIndex;
     const terminal = isTerminalLeg(completedLeg);
     const prevAct = stageAt(completedLeg).act;
@@ -2897,6 +2966,13 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     }
     // CHECKPOINT: lo stato è avanzato → persisti subito, così chiudere il browser sull'overlay non perde nulla.
     if (!this.debugRun) SaveData.saveRun(snapshotRun(this.registry));
+
+    // Fase R (R1): progressi CROSS-CORSA nel meta-profilo (slot separato, sopravvive a Nuova Partita; mai in
+    // debug). Monete cumulative + atto più alto raggiunto → derivano gli sblocchi (R3). Vedi MetaProfile.ts.
+    if (!this.debugRun) {
+      MetaProfile.recordMoney(earned);
+      if (!terminal) MetaProfile.recordActReached(stageAt(completedLeg + 1).act);
+    }
 
     this.cleanupEvents(); // B2: via velo/debuff a fine missione
     this.sfx?.playMissionComplete();
@@ -2914,6 +2990,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
     // Rifugio raggiunto → EPILOGO (chiude la corsa). Vedi showEpilogue.
     if (terminal) { this.showEpilogue(earned); return; }
+
+    // DIRAMAZIONE: carta dell'esito «Cerca Lena» al posto del box di fine missione standard.
+    if (this.isDetour) { this.showDetourOutcome(earned, completedLeg); return; }
 
     // Banner di transizione d'atto: l'atto cambia entrando nella tratta successiva.
     const nextAct = stageAt(completedLeg + 1).act;
@@ -2960,6 +3039,84 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     this.tweens.add({ targets: [tag, body], alpha: 1, duration: 500, hold: 4200, yoyo: true, onComplete: () => { tag.destroy(); body.destroy(); } });
   }
 
+  /** Banner d'apertura della DIRAMAZIONE (al posto della radio): titolo + sottotitolo del kind, in alto. */
+  private showDetourIntro() {
+    const k = this.detourKind || 'lena';
+    const cx = this.scale.width / 2, topY = Math.round(this.scale.height * 0.17);
+    const tag = Ui.text(this, cx, topY, t(`detour.${k}.title`), { fontSize: '12px', color: '#ffcc66', fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 })
+      .setOrigin(0.5).setScrollFactor(0).setDepth(49).setAlpha(0);
+    const sub = Ui.text(this, cx, topY + 18, t(`detour.${k}.sub`), { fontSize: '12px', color: '#e8d8b0', fontStyle: 'italic', align: 'center', wordWrap: { width: this.scale.width * 0.72 }, stroke: '#000000', strokeThickness: 3 })
+      .setOrigin(0.5, 0).setScrollFactor(0).setDepth(49).setAlpha(0);
+    this.tweens.add({ targets: [tag, sub], alpha: 1, duration: 500, hold: 3600, yoyo: true, onComplete: () => { tag.destroy(); sub.destroy(); } });
+  }
+
+  /**
+   * Risolve l'esito della DIRAMAZIONE (una volta, a fine tratta-detour): esito PESATO e amaro (speranza
+   * fragile, registro This War of Mine). Per 'lena' la probabilità di «trovata» SCALA col morale (agency
+   * alla speranza) e cala se Sara è compromessa; per 'valico' è pesata fissa. Applica gli effetti (morale/
+   * risorse), salva il flag-esito `<kind>_<esito>` (letto dall'epilogo) e consuma `pendingDetour`.
+   */
+  private resolveDetour() {
+    const reg = this.registry;
+    const r = Math.random();
+    if (this.detourKind !== 'lena') { // valico/stash/gates…: esito PESATO fisso dal data table DETOUR_OUTCOMES
+      const k = this.detourKind as DetourKind;
+      const outs = DETOUR_OUTCOMES[k] ?? [];
+      const total = outs.reduce((s, o) => s + o.weight, 0) || 1;
+      let acc = r * total, picked = outs[outs.length - 1];
+      for (const o of outs) { acc -= o.weight; if (acc < 0) { picked = o; break; } }
+      if (picked) {
+        this.detourOutcome = picked.flag;
+        this.morale = Phaser.Math.Clamp(this.morale + picked.morale, 0, MORALE.max);
+        setRun(reg, 'morale', this.morale);
+        if (picked.fuel)  setRun(reg, 'fuel',  Math.max(0, (getRun(reg, 'fuel') ?? 0) + picked.fuel));
+        if (picked.money) setRun(reg, 'money', Math.max(0, (getRun(reg, 'money') ?? 0) + picked.money));
+        if (picked.food)  setRun(reg, 'food',  Phaser.Math.Clamp((getRun(reg, 'food') ?? FOOD.start) + picked.food, 0, FOOD.max));
+        setRun(reg, 'choices', [...(getRun(reg, 'choices') ?? []), `${k}_${picked.flag}`]);
+      }
+      setRun(reg, 'pendingDetour', '');
+      return;
+    }
+    // 'lena': «trovata» pesata dal morale (15%..55%); penalità se la medica è affamata/ferita/sfinita.
+    let found = Phaser.Math.Clamp(0.20 + (this.morale - 40) / 100 * 0.5, 0.15, 0.55);
+    if (this.hungry.includes('medic') || this.injured.includes('medic') || this.tired.includes('medic')) found *= 0.7;
+    const o = r < found ? 'found' : r < found + 0.30 ? 'trap' : 'late';
+    this.detourOutcome = o;
+    const dMor = o === 'found' ? 25 : o === 'late' ? -20 : -12;
+    this.morale = Phaser.Math.Clamp(this.morale + dMor, 0, MORALE.max);
+    setRun(reg, 'morale', this.morale);
+    if (o === 'trap') { // l'esca costa risorse (ne esci a fatica)
+      setRun(reg, 'money', Math.max(0, (getRun(reg, 'money') ?? 0) - 60));
+      setRun(reg, 'food',  Math.max(0, (getRun(reg, 'food') ?? FOOD.start) - 15));
+    }
+    setRun(reg, 'choices', [...(getRun(reg, 'choices') ?? []), `lena_${o}`]);
+    setRun(reg, 'pendingDetour', '');
+  }
+
+  /** Carta dell'esito della deviazione (al posto del box di fine missione): narrazione + bottino + continua. */
+  private showDetourOutcome(earned: number, completedLeg: number) {
+    const k = this.detourKind || 'lena';
+    const outs = DETOUR_OUTCOMES[k];
+    const outcome = this.detourOutcome || (k === 'lena' ? 'late' : (outs?.find(o => o.fallback)?.flag ?? 'blocked'));
+    const positive = k === 'lena' ? outcome === 'found' : (outs?.find(o => o.flag === outcome)?.positive ?? false);
+    Juice.flash(this, positive ? 0xffee44 : 0x882222, 0.35, 240);
+    const cx = this.designW / 2, cy = H / 2, bh = 300;
+    Ui.box(this, cx, cy, 540, bh, { fill: UI.black, fillAlpha: 0.94, radius: 16, stroke: positive ? 0xffcc22 : 0xaa3333, strokeAlpha: 0.6 }).setDepth(30);
+    let y = cy - bh / 2 + 24;
+    Ui.text(this, cx, y, t(`campaign.detour.${k}.${outcome}.title`), { fontSize: '23px', color: positive ? UI.gold : UI.redSoft, fontStyle: 'bold', stroke: '#000000', strokeThickness: 4 }).setOrigin(0.5).setDepth(31); y += 32;
+    Ui.text(this, cx, y, t(`campaign.detour.${k}.${outcome}.line`), { fontSize: '12px', color: UI.greenSoft, align: 'center', wordWrap: { width: 500 } }).setOrigin(0.5, 0).setDepth(31); y += 92;
+    Ui.text(this, cx, y, t('game.scoreLine', { n: this.score }), { fontSize: '14px', color: UI.white }).setOrigin(0.5).setDepth(31); y += 22;
+    Ui.text(this, cx, y, t('game.coinsEarned', { n: earned }), { fontSize: '13px', color: UI.gold }).setOrigin(0.5).setDepth(31); y += 24;
+    const stop = locationForLeg(completedLeg);
+    Ui.text(this, cx, y, t('game.arrivingAt', { place: t(stop.nameKey) }), { fontSize: '11px', color: accentCss(stop.accent) }).setOrigin(0.5).setDepth(31); y += 22;
+    this.outcomeText(cx, y, 'game.toShop', { fontSize: '13px', color: UI.faint }); y += 24;
+    this.addMenuReturn(cx, y);
+    this.time.delayedCall(600, () => {
+      this.input.keyboard?.once('keydown-SPACE', () => Juice.go(this, 'StopScene'));
+      this.input.keyboard?.once('keydown-M', () => Juice.go(this, 'MenuScene'));
+    });
+  }
+
   /**
    * Epilogo della campagna "IL CONVOGLIO" (F5) — funzione di stato a 4 finali. Raggiunto il rifugio la
    * corsa CHIUDE (niente missione N+1). Il finale dipende da sopravvissuti vivi × morale finale × integrità
@@ -2989,19 +3146,53 @@ export default class GameScene extends Phaser.Scene implements BossHost {
 
     // Carte-epilogo degli ARCHI: il destino di chi ha avuto una storia con te (scelta ingaggiata o caduto).
     const ch = getRun(this.registry, 'choices') ?? [];
+
+    // Fase R (R1+R3): la corsa è arrivata al rifugio → REGISTRA nel meta-profilo (corse, finale, archi
+    // ingaggiati, difficoltà) da cui DERIVANO gli sblocchi. Le novità sbloccate da questa corsa vanno nel
+    // registry come nomi localizzati → mostrate al ritorno al MenuScene. Mai in debug.
+    if (!this.debugRun) {
+      const engagedArcs = Object.entries(SURVIVOR_ARCS)
+        .filter(([, arc]) => arc.options.some(o => ch.includes(o.flag)))
+        .map(([k]) => k);
+      const difficulty = getRun(this.registry, 'difficulty') ?? 0;
+      const unlocked = MetaProfile.recordRunComplete({ endKey, arcs: engagedArcs, difficulty });
+      if (unlocked.length > 0) {
+        const names = unlocked.map(u =>
+          u.kind === 'vehicle' ? t(VEHICLES[u.id]?.name ?? u.id)
+          : u.kind === 'weapon' ? t(WEAPONS[u.id as WeaponType]?.name ?? u.id)
+          : t(SURVIVORS.find(s => s.key === u.id)?.name ?? u.id));
+        this.registry.set('pendingUnlocks', names);
+      }
+    }
+
     const cards: string[] = [];
     for (const [k, arc] of Object.entries(SURVIVOR_ARCS)) {
       if (fallen.includes(k)) { const e = arc.endings.find(x => x.flag === 'died'); if (e) cards.push(e.key); continue; }
+      // Un ESITO-diramazione (flag non-opzione presente fra le scelte, es. lena_found) ha priorità sulla scelta base.
+      const optFlags = new Set(arc.options.map(o => o.flag));
+      const outcome = arc.endings.find(x => x.flag !== 'died' && !optFlags.has(x.flag) && ch.includes(x.flag));
       const opt = arc.options.find(o => ch.includes(o.flag));
-      if (opt) { const e = arc.endings.find(x => x.flag === opt.flag); if (e) cards.push(e.key); }
+      const e = outcome ?? (opt ? arc.endings.find(x => x.flag === opt.flag) : undefined);
+      if (e) cards.push(e.key);
     }
     const shown = cards.slice(0, 3);
+
+    // EPILOGO motion-comic (filmati finali): il rifugio all'esito + le carte personali + il referto.
+    // Revertibile via EPILOGUE_ENABLED; i test E2E lo bypassano col flag `skipCutscenes` → overlay statico sotto.
+    if (EPILOGUE_ENABLED && !this.registry.get('skipCutscenes')) {
+      const fallenNames = fallen.map(k => { const s = SURVIVORS.find(sv => sv.key === k); return s ? `${s.properName} ${s.surname}` : k; }).join(' · ');
+      Juice.fadeAndRun(this, () => this.scene.start('CutsceneScene', {
+        cutscene: 'epilogue', next: 'MenuScene',
+        epi: { endKey, cards: shown, survivors: survivors.length, fallen: fallenNames, score: this.score, earned },
+      }));
+      return;
+    }
 
     const bh = 300 + shown.length * 30;
     Ui.box(this, cx, cy, 560, bh, { fill: UI.black, fillAlpha: 0.94, radius: 16, stroke: gold ? 0xffcc22 : 0xaa3333, strokeAlpha: 0.6 }).setDepth(30);
     let y = cy - bh / 2 + 24;
     Ui.text(this, cx, y, t(`campaign.ending.${endKey}.title`), { fontSize:'26px', color: gold ? UI.gold : UI.redSoft, fontStyle:'bold', stroke:'#000000', strokeThickness:4 }).setOrigin(0.5).setDepth(31); y += 34;
-    Ui.text(this, cx, y, t(`campaign.ending.${endKey}.line`), { fontSize:'13px', color: UI.greenSoft, align:'center', wordWrap:{width:500} }).setOrigin(0.5, 0).setDepth(31); y += 44;
+    Ui.text(this, cx, y, t(endKey === 'alone' && fallen.length === 0 ? 'campaign.ending.alone.lineNoLoss' : `campaign.ending.${endKey}.line`), { fontSize:'13px', color: UI.greenSoft, align:'center', wordWrap:{width:500} }).setOrigin(0.5, 0).setDepth(31); y += 44;
     Ui.text(this, cx, y, t('campaign.survivorsArrived', { n: survivors.length }), { fontSize:'15px', color:UI.white }).setOrigin(0.5).setDepth(31); y += 22;
     if (fallen.length > 0) {
       const names = fallen.map(k => { const s = SURVIVORS.find(sv => sv.key === k); return s ? `${s.properName} ${s.surname}` : k; }).join(' · ');
@@ -3033,7 +3224,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   // ─── Game over ───────────────────────────────────────────────────────────────
 
   private endGame(reason: string) {
-    if (!this.alive) return;
+    if (!this.alive || this.missionDone) return; // missionDone copre lo strand (RIMORCHIO) e la vittoria nello stesso frame
     this.alive = false;
     this.lostSurvivor = '';
     // Morte durante il tutorial: togli i prompt dallo schermo MA non marcare "visto" (tutorialSeen resta
@@ -3109,6 +3300,91 @@ export default class GameScene extends Phaser.Scene implements BossHost {
         Ui.text(this, cx,cy+98,t('game.deathToll', { n: this.deathToll }),{fontSize:'12px',color:UI.redSoft}).setOrigin(0.5).setDepth(31);
       this.outcomeText(cx, cy+122, 'game.restart', { fontSize:'14px', color:UI.faint });
       this.addMenuReturn(cx, cy+150);
+      this.input.keyboard?.once('keydown-M', () => Juice.go(this, 'MenuScene'));
+    });
+  }
+
+  /**
+   * Carburante a zero: NON è game over (pivot TWoM — il carburante è logistica, non morte al secondo). Si viene
+   * RIMORCHIATI alla sosta: la tratta AVANZA come un completamento "fallito" (così nessun leg resta invincibile,
+   * nemmeno quando un pieno non basterebbe per quel mezzo/tratta), pagando un pedaggio monete + morale, ma SENZA
+   * perdere sopravvissuti (più mite della morte). Tratta `missionDone` (NON `alive=false`) → SPACE/A vanno alla
+   * StopScene come a fine missione, non a scene.restart. Sul leg TERMINALE (niente sosta dopo il rifugio) si
+   * resta sul leg con pieno + serbatoio riparato (corto → sempre completabile da qualsiasi mezzo). Vedi BALANCE §3 bis.
+   */
+  private strandLeg() {
+    if (this.missionDone) return;
+    this.missionDone = true; // = completamento (fallito): blocca triggerMissionComplete/endGame, route a StopScene
+    this.lostSurvivor = '';
+    this.deathToll = 0;
+    if (this.tut) { this.tut.prompt.destroy(); this.tut.skip.destroy(); this.tut = null; }
+
+    SaveData.record(this.missionNumber, this.score);
+
+    const reg = this.registry;
+    const terminal = isTerminalLeg(this.legIndex);
+    if (!this.debugRun) {
+      // Pedaggio del traino (più mite della morte): monete −STRAND_MONEY_PENALTY + crollo morale, niente survivor.
+      const money = getRun(reg, 'money') ?? 0;
+      this.deathToll = Math.floor(money * STRAND_MONEY_PENALTY);
+      setRun(reg, 'money', Math.max(0, money - this.deathToll));
+      setRun(reg, 'morale', Math.max(0, (getRun(reg, 'morale') ?? MORALE.start) + MORALE.dLoss));
+      // DIRAMAZIONE non portata a termine: consumala con esito negativo (epilogo coerente) → non si riattiva sul leg avanzato.
+      if (this.isDetour) {
+        setRun(reg, 'pendingDetour', '');
+        // Esito negativo imposto: 'lena' → late; gli altri → il loro outcome `fallback` dal data table.
+        const failFlag = this.detourKind === 'lena' ? 'lena_late'
+          : `${this.detourKind}_${DETOUR_OUTCOMES[this.detourKind as DetourKind]?.find(o => o.fallback)?.flag ?? 'blocked'}`;
+        setRun(reg, 'choices', [...(getRun(reg, 'choices') ?? []), failFlag]);
+      }
+      if (terminal) {
+        // Niente sosta DOPO il rifugio: NON avanzare. Pieno + serbatoio riparato → il leg finale (corto) è
+        // sempre completabile da QUALSIASI mezzo (anche col serbatoio a pezzi). Torni alla sosta precedente.
+        setRun(reg, 'fuel', this.maxFuel);
+        const comp = getRun(reg, 'components') ?? { engine: 100, wheels: 100, tank: 100, turret: 100 };
+        setRun(reg, 'components', { ...comp, tank: 100 });
+      } else {
+        // Avanza alla tratta successiva (come un completamento): legIndex+1, missionNumber+1, route consumato.
+        setRun(reg, 'missionNumber', (getRun(reg, 'missionNumber') ?? 1) + 1);
+        setRun(reg, 'legIndex', this.legIndex + 1);
+        setRun(reg, 'actIndex', stageAt(this.legIndex + 1).act - 1);
+        setRun(reg, 'routeModifier', 'none');
+        setRun(reg, 'fuel', Math.min(this.maxFuel, STRAND_TOW_FUEL)); // arrivi con un filo di benzina → puoi ripartire
+      }
+      SaveData.saveRun(snapshotRun(reg)); // CHECKPOINT avanzato: un game over SUCCESSIVO riprende dal leg trainato
+    }
+
+    this.cleanupEvents();
+    this.sfx?.playGameOver(); this.sfx?.stopEngine(); this.sfx?.stopAmbience();
+    this.crosshair?.setVisible(false); this.turret?.setVisible(false);
+    this.zombies.setVelocityX(0); this.zombies.setVelocityY(0);
+    this.bullets.setVelocityX(0); this.bullets.setVelocityY(0);
+    this.ammoCrates.setVelocityX(0);
+    this.spitProjectiles.setVelocityX(0); this.spitProjectiles.setVelocityY(0);
+    this.hazards.setVelocityX(0);
+    this.clearAttachedZombies();
+
+    // La sosta mostrata da StopScene = locationForLeg(legIndex−1): non-terminale → la sosta DOPO il leg strandato
+    // (legIndex già avanzato); terminale → la sosta PRECEDENTE (legIndex invariato).
+    const arrivedLeg = terminal ? this.legIndex - 1 : this.legIndex;
+    this.time.delayedCall(700, () => this.showStrandCard(arrivedLeg));
+  }
+
+  /** Carta del RIMORCHIO (al posto del game over): trainati alla sosta, paghi il pedaggio, prosegui (→ StopScene). */
+  private showStrandCard(arrivedLeg: number) {
+    Juice.flash(this, 0x886622, 0.30, 240);
+    const cx = this.designW / 2, cy = H / 2, bh = 290;
+    Ui.box(this, cx, cy, 520, bh, { fill: UI.black, fillAlpha: 0.92, radius: 16, stroke: 0xcc8844, strokeAlpha: 0.6 }).setDepth(30);
+    let y = cy - bh / 2 + 26;
+    Ui.text(this, cx, y, t('game.stranded.title'), { fontSize: '26px', color: UI.amberSoft, fontStyle: 'bold', stroke: '#000000', strokeThickness: 4 }).setOrigin(0.5).setDepth(31); y += 36;
+    Ui.text(this, cx, y, t('game.stranded.line'), { fontSize: '12px', color: UI.greenSoft, align: 'center', wordWrap: { width: 460 } }).setOrigin(0.5, 0).setDepth(31); y += 74;
+    if (this.deathToll > 0) { Ui.text(this, cx, y, t('game.stranded.toll', { n: this.deathToll }), { fontSize: '13px', color: UI.redSoft }).setOrigin(0.5).setDepth(31); y += 24; }
+    const stop = locationForLeg(arrivedLeg);
+    Ui.text(this, cx, y, t('game.towedTo', { place: t(stop.nameKey) }), { fontSize: '13px', color: accentCss(stop.accent) }).setOrigin(0.5).setDepth(31); y += 28;
+    this.outcomeText(cx, y, 'game.toShop', { fontSize: '13px', color: UI.faint }); y += 24;
+    this.addMenuReturn(cx, y);
+    this.time.delayedCall(600, () => {
+      this.input.keyboard?.once('keydown-SPACE', () => Juice.go(this, 'StopScene'));
       this.input.keyboard?.once('keydown-M', () => Juice.go(this, 'MenuScene'));
     });
   }

@@ -48,19 +48,13 @@ Sopravvivi gestendo **salute** *e* **carburante**: a zero dell'uno o dell'altro 
 
 > **Leggi sempre [`CLAUDE.md`](CLAUDE.md) per primo.** È il contratto di lavoro del progetto (regole prioritarie, comandi, convenzioni).
 
-**Design — *cosa* è il gioco**
-- [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) — core loop, progressione, condizioni di vittoria/sconfitta.
-- [`docs/BALANCE.md`](docs/BALANCE.md) — economia, curve di difficoltà, formule, costi.
+📑 **Indice completo e navigabile della documentazione: [`docs/INDEX.md`](docs/INDEX.md)** — ogni doc con scopo, stato e validatore che lo copre. Punti d'ingresso più usati:
 
-**Art bible — *come appare/suona* (fonte di verità estetica, validata)**
-- [`docs/ART_BIBLE_ZOMBIES.md`](docs/ART_BIBLE_ZOMBIES.md) — nemici/boss + Standard di Produzione AAA (vale per tutto il titolo).
-- [`docs/ART_BIBLE_AMBIENTE.md`](docs/ART_BIBLE_AMBIENTE.md) — strada, sfondo a strati, illuminazione.
-- [`docs/ART_BIBLE_OGGETTI.md`](docs/ART_BIBLE_OGGETTI.md) — veicoli, armi/proiettili, pickup, sopravvissuti.
-- [`docs/ART_BIBLE_INTERFACCE.md`](docs/ART_BIBLE_INTERFACCE.md) — UI/HUD: titolo, gioco, negozio, impostazioni, overlay.
-
-**Processo — *come è cucito e come si verifica***
-- [`docs/ARCHITETTURA.md`](docs/ARCHITETTURA.md) — scaling, sovracampionamento, flusso e comunicazione tra le scene.
-- [`docs/TESTING.md`](docs/TESTING.md) — strategia di QA: formule pure, transizioni di stato, checklist di playtest.
+- **Cosa è il gioco** → [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) · numeri in [`docs/BALANCE.md`](docs/BALANCE.md)
+- **Le persone & la campagna** → [`docs/NARRATIVA_PERSONAGGI.md`](docs/NARRATIVA_PERSONAGGI.md) · [`docs/CAMPAGNA_CONVOGLIO.md`](docs/CAMPAGNA_CONVOGLIO.md)
+- **Come appare/suona** → le art bible (`docs/ART_BIBLE_*.md`)
+- **Com'è cucito** → [`docs/ARCHITETTURA.md`](docs/ARCHITETTURA.md) · QA in [`docs/TESTING.md`](docs/TESTING.md)
+- **Verso Steam** → [`docs/RELEASE_STEAM.md`](docs/RELEASE_STEAM.md) · packaging in [`docs/DESKTOP.md`](docs/DESKTOP.md)
 
 ---
 

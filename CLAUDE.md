@@ -8,6 +8,7 @@
 
 - [`docs/ART_BIBLE_ZOMBIES.md`](docs/ART_BIBLE_ZOMBIES.md) — nemici/boss + **Standard di Produzione AAA** (vale per tutto il titolo).
 - [`docs/ART_BIBLE_AMBIENTE.md`](docs/ART_BIBLE_AMBIENTE.md) — strada, sfondo a strati, illuminazione del mondo.
+- [`docs/ART_BIBLE_SOSTE.md`](docs/ART_BIBLE_SOSTE.md) — hub di fine percorso (5 luoghi): muri-firma, luce-firma, stazioni, figure, composizione (`HubEnvironment.ts`).
 - [`docs/ART_BIBLE_OGGETTI.md`](docs/ART_BIBLE_OGGETTI.md) — veicoli, armi/proiettili, pickup, componenti, sopravvissuti.
 - [`docs/ART_BIBLE_INTERFACCE.md`](docs/ART_BIBLE_INTERFACCE.md) — UI/HUD: titolo, HUD di gioco, negozio, impostazioni/pausa, overlay di esito, debug.
 - [`docs/ART_BIBLE_ICONE.md`](docs/ART_BIBLE_ICONE.md) — iconografia: dottrina icona-vs-testo, glifi HUD procedurali (`IconTextures.ts`), teach-once.
@@ -50,6 +51,7 @@ Se cambi una **regola di gioco** (core loop, game over, ruoli) aggiorna `GAME_DE
 - **Audio:** **100% procedurale** (Web Audio API) in `src/SoundManager.ts`. Direzione sonora in [`docs/ART_BIBLE_AUDIO.md`](docs/ART_BIBLE_AUDIO.md).
 - **Risoluzione & scaling:** il gioco è **simulato in spazio di design 800×600** e la camera di ogni scena va in **zoom** per riempire la risoluzione nativa scelta dal giocatore (menu Impostazioni → `Config.RESOLUTIONS`, preset 4:3 e 16:9, + schermo intero). Vedi **Risoluzione & scaling** sotto.
 - **Architettura tecnica:** per il quadro d'insieme non ovvio dal codice (scaling design+zoom, sovracampionamento `OS_G`/`OVERSAMPLE`, flusso e comunicazione tra le scene via `registry`/`Settings`) vedi [`docs/ARCHITETTURA.md`](docs/ARCHITETTURA.md).
+- **Indice della documentazione:** inventario completo di tutti i doc (scopo · stato · validatore che lo copre) in [`docs/INDEX.md`](docs/INDEX.md). Narrativa & personaggi del Convoglio in [`docs/NARRATIVA_PERSONAGGI.md`](docs/NARRATIVA_PERSONAGGI.md); readiness verso Steam in [`docs/RELEASE_STEAM.md`](docs/RELEASE_STEAM.md).
 
 ## Comandi
 

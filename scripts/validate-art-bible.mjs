@@ -367,6 +367,43 @@ for (const name of Object.keys(bibleTokens)) {
 const uiCount = Object.keys(codeTokens).length;
 
 // ════════════════════════════════════════════════════════════════════════════
+// 5c. SOSTE / HUB (ART_BIBLE_SOSTE.md §6.1/§6.2 ↔ src/Locations.ts STOP_LOCATIONS)
+//   - palette per luogo  (accent / hubGround / hubSky      ↔ tabella §6.1)
+//   - luce-firma         (hubLight warmth/reach/offX/offY  ↔ tabella §6.2)
+//   STOP_LOCATIONS = una entry per riga → l'intera riga porta tutti i campi.
+// ════════════════════════════════════════════════════════════════════════════
+const locationsSrc = readFileSync(join(root, 'src/Locations.ts'), 'utf8');
+const bibleS = readFileSync(join(root, 'docs/ART_BIBLE_SOSTE.md'), 'utf8');
+const STOP_KEYS = ['garage', 'depot', 'camp', 'checkpoint', 'market'];
+
+const stopLine = (key) => { const m = new RegExp(`\\bkey:\\s*'${key}'[^\\n]*`).exec(locationsSrc); return m ? m[0] : null; };
+const lineHexF = (line, field) => { const m = new RegExp(`\\b${field}:\\s*0x([0-9a-fA-F]+)`).exec(line); return m ? parseInt(m[1], 16) : NaN; };
+const lineNumF = (line, field) => { const m = new RegExp(`\\b${field}:\\s*(-?[\\d.]+)`).exec(line); return m ? parseFloat(m[1]) : NaN; };
+
+const paletteSec = sliceSection(bibleS, '### 6.1'); // §6.1 (fino a ### 6.2)
+const lightSec   = sliceSection(bibleS, '### 6.2'); // §6.2 (fino a ### 6.3)
+let stopCount = 0;
+for (const key of STOP_KEYS) {
+  const line = stopLine(key);
+  if (!line) { errors.push(`[sosta:${key}] STOP_LOCATIONS: entry non trovata in src/Locations.ts`); continue; }
+  // §6.1: | `key` | `#accent` | `#ground` | `#sky` | npc | station |
+  const p = bibleRow(paletteSec, key);
+  if (!p) errors.push(`Art Bible SOSTE §6.1: riga "${key}" non trovata.`);
+  else for (const [field, di] of [['accent', 0], ['hubGround', 1], ['hubSky', 2]]) {
+    const code = lineHexF(line, field), doc = cellHex(p[di]);
+    if (code !== doc) errors.push(`[sosta:${key}] ${field}: codice #${(code >>> 0).toString(16).padStart(6, '0')} ≠ bible §6.1 ${p[di]}`);
+  }
+  // §6.2: | `key` | warmth | reach | offX | offY | flicker |
+  const l = bibleRow(lightSec, key);
+  if (!l) errors.push(`Art Bible SOSTE §6.2: riga "${key}" non trovata.`);
+  else for (const [field, di] of [['warmth', 0], ['reach', 1], ['offX', 2], ['offY', 3]]) {
+    const code = lineNumF(line, field), doc = cellNum(l[di]);
+    if (!near(code, doc)) errors.push(`[sosta:${key}] hubLight.${field}: codice ${code} ≠ bible §6.2 ${doc}`);
+  }
+  stopCount++;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // 6. Esito
 // ════════════════════════════════════════════════════════════════════════════
 if (errors.length) {
@@ -377,5 +414,5 @@ if (errors.length) {
 }
 console.log(
   `✅ Art Bible allineata: ${TYPES.length} nemici · ${BOSS_TYPES.length} boss · ${VEHICLE_KEYS.length} veicoli · ` +
-  `${WEAPON_KEYS.length} armi · ${OBJECT_TEX.length} texture (dimensioni) · ${uiCount} token UI verificati.`
+  `${WEAPON_KEYS.length} armi · ${OBJECT_TEX.length} texture (dimensioni) · ${uiCount} token UI · ${stopCount} soste verificati.`
 );

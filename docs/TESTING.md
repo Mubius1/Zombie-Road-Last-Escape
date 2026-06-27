@@ -63,7 +63,7 @@ Le formule di gioco vivono come **metodi privati di [`GameScene`](../src/scenes/
 | `getEffectiveVerticalSpeed()` | metodo privato di `GameScene.ts` | [BALANCE §4](BALANCE.md) |
 | `getEffectiveCooldown()` | metodo privato di `GameScene.ts` | [BALANCE §4/§7](BALANCE.md) |
 | `getEffectiveFuelDrain()` | metodo privato di `GameScene.ts` | [BALANCE §1/§4](BALANCE.md) |
-| ricompensa missione `⌊score/8⌋` | calcolo a fine missione in `GameScene.ts` | [BALANCE §2](BALANCE.md) |
+| ricompensa tratta `⌊score/5⌋ + uccisioni×4` | calcolo a fine tratta in `GameScene.ts` (boss OFF) | [BALANCE §2](BALANCE.md) |
 | intervallo di spawn | costanti + scaling dello spawn in `GameScene.ts` | [BALANCE §5](BALANCE.md) |
 
 ### §2.1 · Prerequisito abilitante — estrarre un modulo puro
@@ -85,7 +85,7 @@ export const damageTaken = (nominal: number, armorHealth: number, bonus: number)
   Math.round(nominal * damageMitigation(armorHealth, bonus));
 
 export const fuelDrain   = (tankHealth: number) => 2.2 * (1 + (1 - tankHealth / 100) * 2);
-export const missionCoins = (score: number) => Math.floor(score / 8);
+export const missionCoins = (score: number, kills: number) => Math.floor(score / 5 + kills * 4);
 export const initialSpawnInterval = (mission: number) => Math.max(700, 2100 - (mission - 1) * 80);
 ```
 
@@ -172,7 +172,7 @@ Da percorrere prima di ogni release o dopo modifiche a gameplay/scene. Niente di
 - [ ] Appare a ~82% della missione; mentre è vivo l'avanzamento si congela; la sconfitta dà monete **+** punteggio e un flash a schermo.
 
 **Fine missione & negozio**
-- [ ] `SPAZIO`/conferma → `ShopScene`; monete accreditate = `⌊punteggio/8⌋`.
+- [ ] `SPAZIO`/conferma → `ShopScene`; monete accreditate = `⌊punteggio/5⌋ + uccisioni×4`.
 - [ ] Acquisti: "Ripara" ripetibile; upgrade una-tantum spariscono/disabilitano dopo l'acquisto; soldi scalati; acquisto impossibile se fondi insufficienti.
 - [ ] Scelta di **1** sopravvissuto fra 3; "AVANTI" → missione successiva con componenti/veicolo/arma mantenuti.
 
