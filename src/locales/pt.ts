@@ -7,6 +7,7 @@ const pt: Record<string, string> = {
   'menu.continue': 'CONTINUAR',
   'menu.newGame': 'NOVO JOGO',
   'menu.newGameWarn': 'apaga o progresso atual',
+  'menu.author': 'por {name}',
 
   // ── Novo jogo: configuração (Fase R · dificuldade R2, equipamento R3) ──
   'common.back': 'VOLTAR',

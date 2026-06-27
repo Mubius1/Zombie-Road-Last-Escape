@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import './phaserPatches'; // hotfix Phaser (crash GamepadPlugin a indici sparsi) — DEVE precedere new Phaser.Game
 import MenuScene from './scenes/MenuScene';
 import NewRunScene from './scenes/NewRunScene';
 import CutsceneScene from './scenes/CutsceneScene';

@@ -17,6 +17,7 @@ const it: Record<string, string> = {
   'menu.continue': 'CONTINUA',
   'menu.newGame': 'NUOVA PARTITA',
   'menu.newGameWarn': 'azzera il progresso attuale',
+  'menu.author': 'di {name}',
 
   // ── Nuova Partita: setup (Fase R · difficoltà R2, loadout R3) ────────────────────
   'newrun.title': 'NUOVA PARTITA',

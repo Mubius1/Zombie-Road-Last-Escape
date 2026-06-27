@@ -7,6 +7,7 @@ const de: Record<string, string> = {
   'menu.continue': 'FORTSETZEN',
   'menu.newGame': 'NEUES SPIEL',
   'menu.newGameWarn': 'löscht den aktuellen Fortschritt',
+  'menu.author': 'von {name}',
 
   // ── Neues Spiel: Einrichtung (Phase R · Schwierigkeit R2, Ausrüstung R3) ──
   'common.back': 'ZURÜCK',

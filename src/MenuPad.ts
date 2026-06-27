@@ -68,6 +68,11 @@ export default class MenuPad {
     this.items.push({ go, cx: b.centerX, cy: b.centerY, onLeft: opts.onLeft, onRight: opts.onRight, onActivate: opts.onActivate });
     return this;
   }
+  /** Svuota gli elementi registrati. Per le scene che RI-DISEGNANO i bottoni a ogni selezione
+   *  (es. NewRunScene): chiama `clearItems()` e poi ri-`add()` i nuovi bottoni dentro ogni render.
+   *  Listener/cursore (creati una volta) restano; il focus corrente resta valido se numero e ordine
+   *  degli elementi non cambiano fra un render e l'altro. */
+  clearItems(): this { this.items = []; return this; }
   /** Azione del tasto B (indietro/annulla). Senza, B non fa nulla. */
   setBack(fn: () => void): this { this.backFn = fn; return this; }
   /** Azione del tasto Start (default = attiva l'elemento focalizzato, come "Enter"). */

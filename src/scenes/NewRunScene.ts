@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import Juice from '../Juice';
 import Ui, { UI } from '../Ui';
 import { setupCamera, DESIGN_W } from '../Config';
+import MenuPad from '../MenuPad';
 import { resetRunState, setRun } from '../RunState';
 import SaveData from '../SaveData';
 import MetaProfile from '../MetaProfile';
@@ -23,6 +24,7 @@ export default class NewRunScene extends Phaser.Scene {
   private selDiff = 0;            // difficoltà selezionata (0..2)
   private selVehicle = 'civilian_car'; // mezzo di partenza selezionato (fra gli sbloccati)
   private picker: { destroy(): void }[] = []; // oggetti ridisegnati a ogni selezione
+  private nav!: MenuPad;          // navigazione col gamepad (croce/stick = focus, A = scegli, B = indietro)
 
   constructor() { super({ key: 'NewRunScene' }); }
 
@@ -32,6 +34,9 @@ export default class NewRunScene extends Phaser.Scene {
     this.selDiff = Math.min(Settings.difficulty, maxDiff);
     this.selVehicle = 'civilian_car';
     this.buildBackdrop();
+    // Pad: una sola istanza (i listener si registrano qui), gli elementi si ri-registrano a ogni render.
+    // B = indietro, Start = PARTI (come INVIO); A attiva l'elemento focalizzato riusando il suo onClick.
+    this.nav = new MenuPad(this).setBack(() => this.back()).setStart(() => this.startRun());
     this.render();
 
     this.input.keyboard?.on('keydown-ESC', () => this.back());
@@ -44,13 +49,16 @@ export default class NewRunScene extends Phaser.Scene {
     g.fillGradientStyle(0x07070d, 0x07070d, 0x141320, 0x100c16, 1, 1, 1, 1);
     g.fillRect(0, 0, this.designW, H);
     g.fillStyle(0x7a1e12, 0.30);
-    g.fillRect(0, 150, this.designW, 2);
+    // Linea-orizzonte rosso-sangue: divisore tra la sezione DIFFICOLTÀ (tasti a y=136) e quella del
+    // MEZZO (header a y=214). A y=192 sta nel vuoto tra le due → non taglia più i tasti difficoltà.
+    g.fillRect(0, 192, this.designW, 2);
   }
 
   /** Ridisegna l'intera schermata con la selezione corrente (semplice e senza bug di stato). */
   private render() {
     for (const o of this.picker) o.destroy();
     this.picker = [];
+    this.nav.clearItems(); // i bottoni qui sotto sono nuovi → ri-registra il set navigabile col pad
     const cx = this.designW / 2;
 
     this.add_(Ui.text(this, cx, 60, t('newrun.title'), {
@@ -79,6 +87,7 @@ export default class NewRunScene extends Phaser.Scene {
       });
       b.bg.setDepth(10).setAlpha(sel || locked ? 1 : 0.78); b.txt.setDepth(11);
       this.add_(b.bg); this.add_(b.txt);
+      this.nav.add(b.bg); // navigabile col pad (A = scegli questa difficoltà; il locked non fa nulla)
     }
     // Descrizione della difficoltà selezionata
     const dKey = DIFFICULTIES[this.selDiff]!.key;
@@ -104,22 +113,25 @@ export default class NewRunScene extends Phaser.Scene {
       });
       b.bg.setDepth(10).setAlpha(sel ? 1 : 0.82); b.txt.setDepth(11);
       this.add_(b.bg); this.add_(b.txt);
+      this.nav.add(b.bg); // navigabile col pad (A = scegli questo mezzo)
     });
 
     // ── Avvio / Indietro ──
-    const startBtn = Ui.button(this, cx, 512, 300, 56, t('newrun.start'), {
+    const startBtn = Ui.button(this, cx, 504, 300, 56, t('newrun.start'), {
       fill: 0x13260f, hover: 0x1f3a17, border: UI.greenSig, color: UI.green,
       fontSize: '24px', scaleOnHover: 1.05, onClick: () => this.startRun(),
     });
     startBtn.bg.setDepth(10); startBtn.txt.setDepth(11);
     this.add_(startBtn.bg); this.add_(startBtn.txt);
+    this.nav.add(startBtn.bg);
 
-    const back = Ui.button(this, cx, 562, 180, 38, t('common.back'), {
+    const back = Ui.button(this, cx, 570, 180, 38, t('common.back'), {
       fill: 0x101826, hover: 0x1a2740, border: UI.blueLine, color: UI.blue,
       fontSize: '16px', scaleOnHover: 1.04, onClick: () => this.back(),
     });
     back.bg.setDepth(10); back.txt.setDepth(11);
     this.add_(back.bg); this.add_(back.txt);
+    this.nav.add(back.bg);
   }
 
   /** Traccia un oggetto perché venga distrutto al prossimo render. */

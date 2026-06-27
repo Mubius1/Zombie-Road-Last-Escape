@@ -7,6 +7,7 @@ const fr: Record<string, string> = {
   'menu.continue': 'CONTINUER',
   'menu.newGame': 'NOUVELLE PARTIE',
   'menu.newGameWarn': 'efface la progression actuelle',
+  'menu.author': 'par {name}',
 
   // ── Nouvelle partie : configuration (Phase R · difficulté R2, équipement R3) ──
   'common.back': 'RETOUR',

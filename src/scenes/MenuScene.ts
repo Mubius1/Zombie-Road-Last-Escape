@@ -35,6 +35,11 @@ export default class MenuScene extends Phaser.Scene {
       fontSize: '12px', color: UI.ghost,
     }).setOrigin(0.5).setDepth(10);
 
+    // Firma d'autore (portfolio): nome fisso (non tradotto), solo la preposizione "di/by" è i18n.
+    Ui.text(this, this.designW / 2, 576, t('menu.author', { name: 'Massimo Manda' }), {
+      fontSize: '11px', color: UI.faint, fontStyle: 'italic',
+    }).setOrigin(0.5).setDepth(10);
+
     this.input.keyboard?.on('keydown-ENTER', () => this.hasProgress() ? this.continueGame() : this.newGame());
 
     Ui.enter(this); // sola dissolvenza; i menu NON hanno effetti schermo (vivono solo in GameScene)

@@ -3031,7 +3031,9 @@ export default class GameScene extends Phaser.Scene implements BossHost {
     const txt = t(key);
     if (!txt || txt === key) return; // contenuto radio non ancora disponibile
     this.sfx?.playRadioStatic();      // brusio della trasmissione che si sintonizza
-    const cx = this.scale.width / 2, topY = Math.round(this.scale.height * 0.17); // un po' più giù dell'orlo superiore
+    // y≈0.24·h: sotto la banda HUD (testo MORALE a design y=98) e il banner nome-ambiente (~y=119-127) →
+    // niente più sovrapposizione del bollettino col morale. Rapporto preservato a ogni risoluzione.
+    const cx = this.scale.width / 2, topY = Math.round(this.scale.height * 0.24);
     const tag  = Ui.text(this, cx, topY, t('radio.tag'), { fontSize: '10px', color: '#66cc88', fontStyle: 'bold' })
       .setOrigin(0.5).setScrollFactor(0).setDepth(49).setAlpha(0);
     const body = Ui.text(this, cx, topY + 16, `«${txt}»`, { fontSize: '13px', color: '#9fd8b0', fontStyle: 'italic', align: 'center', wordWrap: { width: this.scale.width * 0.72 }, stroke: '#000000', strokeThickness: 3 })
@@ -3042,7 +3044,7 @@ export default class GameScene extends Phaser.Scene implements BossHost {
   /** Banner d'apertura della DIRAMAZIONE (al posto della radio): titolo + sottotitolo del kind, in alto. */
   private showDetourIntro() {
     const k = this.detourKind || 'lena';
-    const cx = this.scale.width / 2, topY = Math.round(this.scale.height * 0.17);
+    const cx = this.scale.width / 2, topY = Math.round(this.scale.height * 0.24);
     const tag = Ui.text(this, cx, topY, t(`detour.${k}.title`), { fontSize: '12px', color: '#ffcc66', fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 })
       .setOrigin(0.5).setScrollFactor(0).setDepth(49).setAlpha(0);
     const sub = Ui.text(this, cx, topY + 18, t(`detour.${k}.sub`), { fontSize: '12px', color: '#e8d8b0', fontStyle: 'italic', align: 'center', wordWrap: { width: this.scale.width * 0.72 }, stroke: '#000000', strokeThickness: 3 })

@@ -14,8 +14,7 @@ codice) · ✋ sync **manuale** (nessun gate: l'allineamento è solo per discipl
 
 > ⚠️ **Attenzione al falso lucchetto.** Solo i doc con ✅ rompono davvero la build su deriva. Alcune
 > tabelle marcate 🔒 in doc ✋ (es. palette di [`ART_BIBLE_AMBIENTE.md`](ART_BIBLE_AMBIENTE.md), tabelle di
-> [`ART_BIBLE_SOSTE.md`](ART_BIBLE_SOSTE.md)) suggeriscono un lock che **non** è imposto. Vedi
-> [`RELEASE_STEAM.md`](RELEASE_STEAM.md) §1.2.
+> [`ART_BIBLE_SOSTE.md`](ART_BIBLE_SOSTE.md)) suggeriscono un lock che **non** è imposto.
 
 ---
 
@@ -23,7 +22,8 @@ codice) · ✋ sync **manuale** (nessun gate: l'allineamento è solo per discipl
 | Doc | Scopo | Stato | Validatore |
 |---|---|---|---|
 | [`../CLAUDE.md`](../CLAUDE.md) | Istruzioni di sistema: gerarchia fonti-di-verità, regole anti-deriva, mappa del codice, scaling | 🟢 | — |
-| [`../README.md`](../README.md) | Vetrina del repo: pitch, avvio rapido, comandi, indice | 🟡 *(stantio: cita solo `validate:art`, "UI in italiano", combat autofire)* | — |
+| [`../README.md`](../README.md) | **Case-study bilingue (IT/EN)**: landing portfolio del repo — highlight ingegneristici, architettura, qualità, 100% procedurale | 🟢 | — |
+| [`PANORAMICA.md`](PANORAMICA.md) | Panoramica & guida (ex-README): pitch, avvio rapido, controlli, mappa del codice | 🟢 | — |
 | [`INDEX.md`](INDEX.md) | Questo indice | 🟢 | — |
 
 ## Design & bilanciamento
@@ -63,7 +63,6 @@ codice) · ✋ sync **manuale** (nessun gate: l'allineamento è solo per discipl
 | Doc | Scopo | Stato | Validatore |
 |---|---|---|---|
 | [`DESKTOP.md`](DESKTOP.md) | Wrapper desktop Electron / packaging NSIS | 🟢 *(verifica `dist` parziale)* | — |
-| [`RELEASE_STEAM.md`](RELEASE_STEAM.md) | **Readiness verso Steam** (i "due muri"): cruscotto qualità + distribuzione | 🟡 | — |
 
 ## Archivio
 | Doc | Scopo | Stato | Validatore |
@@ -73,13 +72,13 @@ codice) · ✋ sync **manuale** (nessun gate: l'allineamento è solo per discipl
 ---
 
 ## Doc ancora da creare (segnalati dall'audit struttura)
-- `docs/ACCESSIBILITA.md` — scala testo, contrasto, remap, riduci-movimento, **avviso fotosensibilità**, sottotitoli. *(priorità alta — barriera Steam, vedi [`RELEASE_STEAM.md`](RELEASE_STEAM.md) §1.6)*
+- `docs/ACCESSIBILITA.md` — scala testo, contrasto, remap, riduci-movimento, **avviso fotosensibilità**, sottotitoli. *(priorità alta — barriera Steam)*
 - `docs/DIREZIONE_VISIVA.md` — ADR **2D procedurale vs prototipi 3D Babylon** (`prototypes/babylon-*.html`, oggi non documentati).
 - `docs/MARKETING.md` — pagina store, press kit, comparabili, trailer, branding.
 - `docs/RISCHI.md` — risk register unico (rischi oggi sparsi per-doc).
 
 ## Convenzione di stato (da adottare)
 Fonti-di-verità stabili (`ART_BIBLE_*`, `BALANCE`, `GAME_DESIGN`, `NARRATIVA_PERSONAGGI`) e **piani-con-checklist**
-(`ROADMAP_*`, `CAMPAGNA_*`, `SOSTE_*`, `RELEASE_STEAM`) hanno nature diverse: i secondi vanno aperti con
+(`ROADMAP_*`, `CAMPAGNA_*`, `SOSTE_*`) hanno nature diverse: i secondi vanno aperti con
 **una tabella di stato in cima, sincronizzata col corpo** (evitare header narrativi "v0.1" che il corpo
 contraddice). Dove un blocco è superato ma conservato, marcarlo in testa o spostarlo in `archive/`.

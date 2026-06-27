@@ -51,7 +51,7 @@ Se cambi una **regola di gioco** (core loop, game over, ruoli) aggiorna `GAME_DE
 - **Audio:** **100% procedurale** (Web Audio API) in `src/SoundManager.ts`. Direzione sonora in [`docs/ART_BIBLE_AUDIO.md`](docs/ART_BIBLE_AUDIO.md).
 - **Risoluzione & scaling:** il gioco è **simulato in spazio di design 800×600** e la camera di ogni scena va in **zoom** per riempire la risoluzione nativa scelta dal giocatore (menu Impostazioni → `Config.RESOLUTIONS`, preset 4:3 e 16:9, + schermo intero). Vedi **Risoluzione & scaling** sotto.
 - **Architettura tecnica:** per il quadro d'insieme non ovvio dal codice (scaling design+zoom, sovracampionamento `OS_G`/`OVERSAMPLE`, flusso e comunicazione tra le scene via `registry`/`Settings`) vedi [`docs/ARCHITETTURA.md`](docs/ARCHITETTURA.md).
-- **Indice della documentazione:** inventario completo di tutti i doc (scopo · stato · validatore che lo copre) in [`docs/INDEX.md`](docs/INDEX.md). Narrativa & personaggi del Convoglio in [`docs/NARRATIVA_PERSONAGGI.md`](docs/NARRATIVA_PERSONAGGI.md); readiness verso Steam in [`docs/RELEASE_STEAM.md`](docs/RELEASE_STEAM.md).
+- **Indice della documentazione:** inventario completo di tutti i doc (scopo · stato · validatore che lo copre) in [`docs/INDEX.md`](docs/INDEX.md). Narrativa & personaggi del Convoglio in [`docs/NARRATIVA_PERSONAGGI.md`](docs/NARRATIVA_PERSONAGGI.md).
 
 ## Comandi
 
