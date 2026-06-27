@@ -8,7 +8,7 @@
 
 This is a personal side project. I built it to push on the engineering *around* a game, not just the game itself: strict types, a custom code↔spec validation pipeline, deterministic E2E testing, and a multi-target build.
 
-**Play it:** [itch.io — TODO]
+**Play it:** [Web (live)](https://zombie-road-last-escape.vercel.app) · [itch.io](https://massimomanda.itch.io/zombie-road-last-escape)
 **Built with:** TypeScript (strict) · Phaser 3.90 · Vite · WebGL (inline GLSL) · Web Audio API · Playwright · ESLint 9 (typescript-eslint) · Electron
 
 ---
@@ -91,7 +91,7 @@ A personal side project by **Massimo Manda**.
 
 È un progetto personale. L'ho costruito per spingere sull'ingegneria *attorno* a un gioco, non solo sul gioco: tipi stretti, una pipeline custom di validazione codice↔specifica, test E2E deterministici e una build multi-target.
 
-**Gioca:** [itch.io — TODO]
+**Gioca:** [Web (live)](https://zombie-road-last-escape.vercel.app) · [itch.io](https://massimomanda.itch.io/zombie-road-last-escape)
 **Costruito con:** TypeScript (strict) · Phaser 3.90 · Vite · WebGL (GLSL inline) · Web Audio API · Playwright · ESLint 9 (typescript-eslint) · Electron
 
 ---
