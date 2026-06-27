@@ -76,7 +76,7 @@ npm run test:e2e:level2   # deterministic bot + invariant oracle
 ## Credits
 
 A personal side project by **Massimo Manda**.
-[LinkedIn](https://www.linkedin.com/in/massimo-manda/) · [GitHub — TODO]
+[LinkedIn](https://www.linkedin.com/in/massimo-manda/) · [GitHub](https://github.com/Mubius1)
 
 ---
 ---
@@ -159,4 +159,4 @@ npm run test:e2e:level2   # bot deterministico + oracolo a invarianti
 ### Crediti
 
 Un progetto personale di **Massimo Manda**.
-[LinkedIn](https://www.linkedin.com/in/massimo-manda/) · [GitHub — TODO]
+[LinkedIn](https://www.linkedin.com/in/massimo-manda/) · [GitHub](https://github.com/Mubius1)
